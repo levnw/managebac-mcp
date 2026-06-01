@@ -10,7 +10,7 @@ Works with **Claude Desktop** out of the box. The first release is focused on a 
 
 ## What it does
 
-ManageBac is the IB school learning management system where teachers post assignments, grades, and feedback. This server scrapes it over HTTP (no browser needed — all content is server-rendered) and exposes it as structured JSON tools that an AI can call.
+ManageBac is the IB school learning management system where teachers post assignments, grades, and feedback. This server scrapes it over HTTP (no browser needed — all content is server-rendered).
 
 Once set up, you can ask your AI things like:
 
@@ -178,9 +178,25 @@ tests/
 
 ---
 
-## Roadmap and feature ideas
+## Roadmap
 
-Future work is tracked in GitHub Issues instead of being maintained as a static checklist in the README. This keeps planning, discussion, and implementation details in the right place.
+Future work is tracked in GitHub Issues instead of being maintained as a static checklist. This keeps planning, discussion, and implementation details in the right place.
+
+### First release: local Claude setup
+
+The first release is focused on making the MCP work well as a local tool, especially with Claude Desktop. The goal is to keep setup clear, clean up development-only files, and make the current read-only tools reliable.
+
+### Next: better task context
+
+After the first release, the project should improve how AI understands tasks. This includes better unit context, protected task attachments, linked files, and making sure the AI can notice when ManageBac data may have changed.
+
+### Later: broader AI and hosted access
+
+Longer term, the project may move beyond a local-only setup. The goal is to explore support for more AI clients, such as ChatGPT, Claude, Gemini, and personal AI assistants, possibly through a hosted/server version instead of requiring every user to run it on their own machine.
+
+### Product ideas
+
+Bigger product ideas, such as multiple student accounts, hosted access, paid usage, and safe submission workflows, are tracked as separate GitHub Issues so they can be discussed and designed properly.
 
 ---
 
