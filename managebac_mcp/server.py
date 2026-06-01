@@ -1,8 +1,7 @@
-import sys
-from pathlib import Path
-
 import asyncio
 import json
+import sys
+from pathlib import Path
 import time
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -57,24 +56,29 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_tasks",
             description=(
-                "Returns every task (assignment, test, project, homework) posted in a specific class on ManageBac. "
-                "Requires class_id from get_classes. "
-                "Each task has: id, title, url (direct clickable link to the task — always include this "
-                "when telling the student about a task), date (when it was assigned, e.g. 'MAR 15'), "
-                "due_day_time (e.g. 'Friday at 11:59 PM'), type (Summative or Formative), "
+                "Returns every task (assignment, test, project, homework) posted in a class on ManageBac. "
+                "BATCH SUPPORTED: pass a list of class_ids to fetch multiple classes in one call "
+                "(e.g. ['12734244', '12900718']) — all fetched concurrently. "
+                "When batching, result is a dict keyed by class_id. "
+                "Each task has: id, title, url (direct clickable link — always include when mentioning a task), "
+                "date (when assigned, e.g. 'MAR 15'), due_day_time (e.g. 'Friday at 11:59 PM'), "
+                "type (Summative or Formative), "
                 "tags (criteria like 'Criterion A', or labels like 'Homework' / 'Test'), "
                 "status (Pending / Submitted / Complete / Not Submitted / Incomplete / N/A), "
                 "has_submission_box (true if the student needs to upload a file), "
                 "grades (e.g. {A: {score: 7, max: 8}}), and teacher_comment (teacher's written feedback, "
                 "already expanded — no clicking needed). "
-                "To get the full task description, links, and attached files, call get_task_detail next."
+                "To get the full task description, links, and files, call get_task_detail next."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "class_id": {
-                        "type": "string",
-                        "description": "Numeric class ID from get_classes (e.g. '12734244')",
+                        "description": "One class ID (e.g. '12734244') or a list of IDs for batch fetching",
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}},
+                        ],
                     }
                 },
                 "required": ["class_id"],
@@ -83,19 +87,18 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_task_detail",
             description=(
-                "Returns the full detail page for a specific task on ManageBac. "
-                "Requires class_id and task_id (both available from get_tasks). "
-                "Returns: url (direct clickable link to this task), "
-                "description.text (full assignment instructions — CSS 'Show More' is already expanded), "
-                "description.links (external URLs embedded in the instructions, e.g. Google Docs, "
-                "Google Slides, YouTube, Canva — these are the links the teacher wants the student to open), "
-                "description.embedded_files (PDFs or files attached inside the description), "
-                "resources (files and posts added by the teacher to this task), "
-                "submitted_files (files the student already uploaded, with teacher_feedback_token "
-                "if the teacher annotated the submission), "
+                "Returns the full detail page for one or more tasks on ManageBac. "
+                "BATCH SUPPORTED: pass a 'tasks' list of {class_id, task_id} objects to fetch "
+                "multiple tasks in one call — all fetched concurrently. Result is a list. "
+                "Single task: pass class_id and task_id directly. "
+                "Returns per task: url (clickable link), "
+                "description.text (full instructions in Markdown — bold/italic/lists preserved), "
+                "description.links (external URLs the teacher embedded — Google Docs, Slides, YouTube, Canva…), "
+                "description.embedded_files (PDFs or files attached in the description, each with a url), "
+                "resources (teacher-posted files on the task), "
+                "submitted_files (files the student uploaded, with teacher_feedback_token if annotated), "
                 "task_history (created_at, reminder_sent_at, last_updated_at), "
-                "discussions (list of posts — each has author, posted_at, text, links, and replies; "
-                "empty list means no one has posted yet). "
+                "discussions (posts with author, posted_at, text, links, replies). "
                 "Always share the url and any description.links with the student — they are clickable."
             ),
             inputSchema={
@@ -103,14 +106,25 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "class_id": {
                         "type": "string",
-                        "description": "Numeric class ID (e.g. '12734244')",
+                        "description": "Numeric class ID — for single task only",
                     },
                     "task_id": {
                         "type": "string",
-                        "description": "Numeric task ID from get_tasks (e.g. '47617250')",
+                        "description": "Numeric task ID — for single task only",
+                    },
+                    "tasks": {
+                        "type": "array",
+                        "description": "List of tasks for batch fetching — use instead of class_id/task_id",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "class_id": {"type": "string"},
+                                "task_id": {"type": "string"},
+                            },
+                            "required": ["class_id", "task_id"],
+                        },
                     },
                 },
-                "required": ["class_id", "task_id"],
             },
         ),
         types.Tool(
@@ -118,7 +132,8 @@ async def list_tools() -> list[types.Tool]:
             description=(
                 "Returns all resource files uploaded to a class's Files section on ManageBac "
                 "(not task-specific — these are class-wide materials posted by the teacher). "
-                "Requires class_id from get_classes. "
+                "BATCH SUPPORTED: pass a list of class_ids to fetch multiple classes at once. "
+                "When batching, result is a dict keyed by class_id. "
                 "Each file has: name, size, uploaded_by (teacher name), uploaded_at (date). "
                 "Use this when the student asks 'what files are in my Biology class?' or "
                 "'has the teacher uploaded any notes for this unit?'."
@@ -127,8 +142,11 @@ async def list_tools() -> list[types.Tool]:
                 "type": "object",
                 "properties": {
                     "class_id": {
-                        "type": "string",
-                        "description": "Numeric class ID from get_classes",
+                        "description": "One class ID or a list for batch fetching",
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}},
+                        ],
                     },
                 },
                 "required": ["class_id"],
@@ -138,18 +156,22 @@ async def list_tools() -> list[types.Tool]:
             name="get_journal",
             description=(
                 "Returns learner portfolio / reflective journal entries for a class on ManageBac. "
-                "Only certain classes have journals (e.g. Theatre, CAS, ToK). "
-                "If the class has no journal, returns an empty list. "
-                "Check has_journal from get_classes before calling this. "
-                "Each entry has: date, is_read_only, is_starred, files (attachments in the entry). "
+                "Only certain classes have journals (e.g. Theatre, CAS, ToK, Digital Design). "
+                "Check has_journal from get_classes before calling. "
+                "BATCH SUPPORTED: pass a list of class_ids to fetch multiple journals at once. "
+                "When batching, result is a dict keyed by class_id. "
+                "Each entry has: date, time, body (Markdown), learning_outcomes, is_starred, links, files. "
                 "Use this when the student asks about their portfolio, reflections, or journal."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "class_id": {
-                        "type": "string",
-                        "description": "Numeric class ID from get_classes",
+                        "description": "One class ID or a list for batch fetching",
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}},
+                        ],
                     },
                 },
                 "required": ["class_id"],
@@ -224,25 +246,26 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_units",
             description=(
-                "Returns all IB curriculum units for a class, each with the full MYP/DP "
-                "framework: statement of inquiry, key concepts, related concepts, global context, "
-                "conceptual understanding, inquiry questions, ATL skills, start date, and duration. "
-                "Requires class_id from get_classes. "
-                "IMPORTANT: Multiple tasks usually belong to the same unit — call this ONCE per "
-                "class and reuse the data rather than fetching it per-task. "
-                "To match a task to its unit: most task titles are prefixed with the unit name "
-                "(e.g. 'Unit 4: task 2 — Research'), or compare the task due date with the unit's "
-                "start date and duration. The 'status' field tells you if a unit is 'current', "
-                "'completed', or 'upcoming'. "
+                "Returns all IB curriculum units for a class with the full MYP/DP framework: "
+                "statement of inquiry, key concepts (with definitions), related concepts, global context, "
+                "conceptual understanding, inquiry questions (Factual/Conceptual/Debatable), "
+                "ATL skills, start date, duration, and status (current/completed/upcoming). "
+                "BATCH SUPPORTED: pass a list of class_ids to fetch units for multiple classes at once. "
+                "When batching, result is a dict keyed by class_id. "
+                "IMPORTANT: multiple tasks belong to the same unit — call this ONCE per class and reuse. "
+                "Match tasks to units via the task title prefix (e.g. 'Unit 4: task 2') or date range. "
                 "Use this when the student asks about a unit's statement of inquiry, global context, "
-                "key concepts, or needs to understand the bigger IB framework behind their tasks."
+                "key concepts, or the IB framework behind their tasks."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "class_id": {
-                        "type": "string",
-                        "description": "Numeric class ID from get_classes",
+                        "description": "One class ID or a list for batch fetching",
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}},
+                        ],
                     }
                 },
                 "required": ["class_id"],
@@ -277,6 +300,16 @@ async def list_tools() -> list[types.Tool]:
     ]
 
 
+def _is_batch(val) -> bool:
+    return isinstance(val, list)
+
+
+async def _batch(fn, ids: list[str]) -> dict:
+    """Run fn(id) for each id concurrently and return {id: result}."""
+    results = await asyncio.gather(*[fn(i) for i in ids])
+    return dict(zip(ids, results))
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     t0 = time.monotonic()
@@ -284,12 +317,49 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
     if name == "get_classes":
         result = await fetch_classes()
+
     elif name == "get_timetable":
         result = await fetch_timetable()
+
     elif name == "get_tasks":
-        result = await fetch_tasks(arguments["class_id"])
+        cid = arguments["class_id"]
+        if _is_batch(cid):
+            result = await _batch(fetch_tasks, cid)
+        else:
+            result = await fetch_tasks(cid)
+
     elif name == "get_task_detail":
-        result = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
+        tasks_arg = arguments.get("tasks")
+        if tasks_arg:
+            # Batch: [{class_id, task_id}, ...]
+            results = await asyncio.gather(*[
+                fetch_task_detail(t["class_id"], t["task_id"]) for t in tasks_arg
+            ])
+            result = list(results)
+        else:
+            result = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
+
+    elif name == "get_units":
+        cid = arguments["class_id"]
+        if _is_batch(cid):
+            result = await _batch(fetch_units, cid)
+        else:
+            result = await fetch_units(cid)
+
+    elif name == "get_files":
+        cid = arguments["class_id"]
+        if _is_batch(cid):
+            result = await _batch(fetch_files, cid)
+        else:
+            result = await fetch_files(cid)
+
+    elif name == "get_journal":
+        cid = arguments["class_id"]
+        if _is_batch(cid):
+            result = await _batch(fetch_journal, cid)
+        else:
+            result = await fetch_journal(cid)
+
     elif name == "submit_task_file":
         result = await submit_task_file(
             arguments["class_id"],
@@ -297,6 +367,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             arguments["file_path"],
             dry_run=arguments.get("dry_run", True),
         )
+
     elif name == "get_file_content":
         import base64
         file = await fetch_file_bytes(arguments["url"])
@@ -308,7 +379,6 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             if ct.startswith("image/"):
                 return [types.ImageContent(type="image", data=b64, mimeType=ct)]
             else:
-                # Return as embedded resource — AI receives the actual file, not a conversion
                 return [types.EmbeddedResource(
                     type="resource",
                     resource=types.BlobResourceContents(
@@ -317,16 +387,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                         blob=b64,
                     ),
                 )]
-    elif name == "get_units":
-        result = await fetch_units(arguments["class_id"])
-    elif name == "get_files":
-        result = await fetch_files(arguments["class_id"])
-    elif name == "get_journal":
-        result = await fetch_journal(arguments["class_id"])
+
     elif name == "find_task":
         result = await find_task(arguments["query"])
         if result is None:
             result = {"error": "Task not found"}
+
     else:
         result = {"error": f"Unknown tool: {name}"}
 
