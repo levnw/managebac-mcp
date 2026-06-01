@@ -726,7 +726,8 @@ async def fetch_task_detail(class_id: str, task_id: str) -> dict:
 
 def parse_files(html: str) -> list[dict]:
     import json as _json
-    soup = BeautifulSoup(html, "lxml")
+    # lxml strips data-ec3-info attributes — use html.parser here
+    soup = BeautifulSoup(html, "html.parser")
     files = []
 
     # Class files use <div class="row file" data-ec3-info='{...}'> elements
@@ -755,12 +756,14 @@ def parse_files(html: str) -> list[dict]:
             author_el = row.find("a", href=re.compile(r'/users/', re.I))
         author = author_el.get_text(strip=True) if author_el else ""
 
-        # Date from JSON
+        # Date and download URL from JSON
         date = info.get("updated_at", info.get("created_at", ""))
+        url = info.get("download_url", "")
 
         files.append({
             "name": name,
             "size": size,
+            "url": url,
             "uploaded_by": author,
             "uploaded_at": date,
         })

@@ -117,7 +117,8 @@ async def list_tools() -> list[types.Tool]:
                 "Returns all resource files in a class's Files section "
                 "(class-wide materials uploaded by the teacher, not attached to a specific task). "
                 "BATCH SUPPORTED: class_id can be a single ID or a list. "
-                "Each file has: name, size, uploaded_by, uploaded_at."
+                "Each file has: name, size, url (pre-signed download link), uploaded_by, uploaded_at. "
+                "Pass url to get_file_content to read the actual file contents."
             ),
             inputSchema={
                 "type": "object",
