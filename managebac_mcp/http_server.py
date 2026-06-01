@@ -148,7 +148,7 @@ async def _handle_enroll_post(request):
 # App
 # ---------------------------------------------------------------------------
 
-def build_app(*, stateless: bool = True) -> Starlette:
+def build_app(*, stateless: bool = True):
     session_manager = StreamableHTTPSessionManager(
         app=server,
         stateless=stateless,
@@ -164,7 +164,11 @@ def build_app(*, stateless: bool = True) -> Starlette:
             await send({"type": "http.response.body",
                         "body": b'{"error":"unauthorized - unknown or missing token"}'})
             return
-        # Pin this user to the request context for the whole tool dispatch.
+        # The streamable-HTTP transport handles the request at whatever path it
+        # sees; normalize to "/" so /mcp and /mcp/ behave identically.
+        scope = dict(scope)
+        scope["path"] = "/"
+        scope["raw_path"] = b"/"
         ctx = set_current_user(user)
         try:
             await session_manager.handle_request(scope, receive, send)
@@ -179,15 +183,28 @@ def build_app(*, stateless: bool = True) -> Starlette:
         async with session_manager.run():
             yield
 
-    return Starlette(
+    # Starlette handles the human-facing routes (/, /enroll) including form parsing.
+    inner = Starlette(
         routes=[
             Route("/", health, methods=["GET"]),
             Route("/enroll", _handle_enroll_get, methods=["GET"]),
             Route("/enroll", _handle_enroll_post, methods=["POST"]),
-            Mount("/mcp", app=handle_mcp),
         ],
         lifespan=lifespan,
     )
+
+    # Top-level ASGI dispatch: anything under /mcp goes straight to the MCP
+    # handler (raw ASGI, no Mount/redirect — a 307 on POST breaks ChatGPT).
+    # lifespan + everything else falls through to Starlette.
+    async def app(scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path == "/mcp" or path.startswith("/mcp/") or path == "/mcp/":
+                await handle_mcp(scope, receive, send)
+                return
+        await inner(scope, receive, send)
+
+    return app
 
 
 def run(host: str = "127.0.0.1", port: int = 8000) -> None:
