@@ -30,51 +30,38 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_classes",
             description=(
-                "ManageBac is the school's IB (International Baccalaureate) learning management system "
-                "at es.managebac.com — it is where teachers post assignments, grades, resources, and "
-                "feedback for every subject. "
-                "This tool returns all classes the student is currently enrolled in. "
-                "Each class has: id (numeric string, required by other tools), name (e.g. 'Mathematics HL'), "
-                "url (direct clickable link to the class page on ManageBac), "
-                "level_tags (e.g. HL or SL for IB subjects), and has_journal (true if the class "
-                "has a learner portfolio / journal tab). "
-                "ALWAYS call this first — you need the class id to call any other tool."
+                "Returns all classes the student is enrolled in. "
+                "Each class has: id (required by every other tool), name, url, level_tags, "
+                "and has_journal (true if the class has a journal/portfolio tab). "
+                "Call this first to get class IDs."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
         ),
         types.Tool(
             name="get_timetable",
             description=(
-                "Returns the student's full weekly school timetable from ManageBac. "
-                "Each slot has: period (number), day (e.g. Monday), time_start, time_end, "
-                "class_name, teacher, room, and task_count (number of pending tasks for that class). "
-                "Use this to answer questions like 'what do I have tomorrow?', "
-                "'when is my next Biology class?', or 'what room is Math in?'."
+                "Returns the student's full weekly timetable. "
+                "Each slot has: period, day, time_start, time_end, class_name, class_id, teacher, room, "
+                "and task_count (pending tasks for that class)."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
         ),
         types.Tool(
             name="get_tasks",
             description=(
-                "Returns every task (assignment, test, project, homework) posted in a class on ManageBac. "
-                "BATCH SUPPORTED: pass a list of class_ids to fetch multiple classes in one call "
-                "(e.g. ['12734244', '12900718']) — all fetched concurrently. "
-                "When batching, result is a dict keyed by class_id. "
-                "Each task has: id, title, url (direct clickable link — always include when mentioning a task), "
-                "date (when assigned, e.g. 'MAR 15'), due_day_time (e.g. 'Friday at 11:59 PM'), "
-                "type (Summative or Formative), "
-                "tags (criteria like 'Criterion A', or labels like 'Homework' / 'Test'), "
-                "status (Pending / Submitted / Complete / Not Submitted / Incomplete / N/A), "
-                "has_submission_box (true if the student needs to upload a file), "
-                "grades (e.g. {A: {score: 7, max: 8}}), and teacher_comment (teacher's written feedback, "
-                "already expanded — no clicking needed). "
-                "To get the full task description, links, and files, call get_task_detail next."
+                "Returns all tasks for one or more classes. "
+                "BATCH SUPPORTED: class_id can be a single ID or a list — all fetched concurrently. "
+                "Batch result is a dict keyed by class_id. "
+                "Each task has: id, title, url, date, due_day_time, type (Summative/Formative), "
+                "tags, status (Pending/Submitted/Complete/Incomplete/N/A), has_submission_box, "
+                "grades (e.g. {A: {score: 7, max: 8}}), teacher_comment. "
+                "Call get_task_detail for the full description, links, and attached files."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "class_id": {
-                        "description": "One class ID (e.g. '12734244') or a list of IDs for batch fetching",
+                        "description": "A single class ID or a list of class IDs for batch fetching",
                         "oneOf": [
                             {"type": "string"},
                             {"type": "array", "items": {"type": "string"}},
@@ -87,34 +74,31 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_task_detail",
             description=(
-                "Returns the full detail page for one or more tasks on ManageBac. "
-                "BATCH SUPPORTED: pass a 'tasks' list of {class_id, task_id} objects to fetch "
-                "multiple tasks in one call — all fetched concurrently. Result is a list. "
+                "Returns the full detail for one or more tasks. "
+                "BATCH SUPPORTED: pass a 'tasks' list of {class_id, task_id} pairs — all fetched concurrently, result is a list. "
                 "Single task: pass class_id and task_id directly. "
-                "Returns per task: url (clickable link), "
-                "description.text (full instructions in Markdown — bold/italic/lists preserved), "
-                "description.links (external URLs the teacher embedded — Google Docs, Slides, YouTube, Canva…), "
-                "description.embedded_files (PDFs or files attached in the description, each with a url), "
-                "resources (teacher-posted files on the task), "
-                "submitted_files (files the student uploaded, with teacher_feedback_token if annotated), "
-                "task_history (created_at, reminder_sent_at, last_updated_at), "
-                "discussions (posts with author, posted_at, text, links, replies). "
-                "Always share the url and any description.links with the student — they are clickable."
+                "Returns per task: url, "
+                "description.text (full instructions as Markdown — bold/italic/lists preserved), "
+                "description.links (external URLs embedded by the teacher), "
+                "description.embedded_files (attached files, each with name, size, url), "
+                "resources (teacher-posted files), "
+                "submitted_files (student uploads, with teacher_feedback_token if annotated), "
+                "task_history, discussions (posts with author, timestamp, text, links, replies)."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "class_id": {
                         "type": "string",
-                        "description": "Numeric class ID — for single task only",
+                        "description": "Class ID — single task mode only",
                     },
                     "task_id": {
                         "type": "string",
-                        "description": "Numeric task ID — for single task only",
+                        "description": "Task ID — single task mode only",
                     },
                     "tasks": {
                         "type": "array",
-                        "description": "List of tasks for batch fetching — use instead of class_id/task_id",
+                        "description": "Batch mode: list of {class_id, task_id} objects",
                         "items": {
                             "type": "object",
                             "properties": {
@@ -130,19 +114,16 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_files",
             description=(
-                "Returns all resource files uploaded to a class's Files section on ManageBac "
-                "(not task-specific — these are class-wide materials posted by the teacher). "
-                "BATCH SUPPORTED: pass a list of class_ids to fetch multiple classes at once. "
-                "When batching, result is a dict keyed by class_id. "
-                "Each file has: name, size, uploaded_by (teacher name), uploaded_at (date). "
-                "Use this when the student asks 'what files are in my Biology class?' or "
-                "'has the teacher uploaded any notes for this unit?'."
+                "Returns all resource files in a class's Files section "
+                "(class-wide materials uploaded by the teacher, not attached to a specific task). "
+                "BATCH SUPPORTED: class_id can be a single ID or a list. "
+                "Each file has: name, size, uploaded_by, uploaded_at."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "class_id": {
-                        "description": "One class ID or a list for batch fetching",
+                        "description": "A single class ID or a list for batch fetching",
                         "oneOf": [
                             {"type": "string"},
                             {"type": "array", "items": {"type": "string"}},
@@ -155,19 +136,16 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_journal",
             description=(
-                "Returns learner portfolio / reflective journal entries for a class on ManageBac. "
-                "Only certain classes have journals (e.g. Theatre, CAS, ToK, Digital Design). "
-                "Check has_journal from get_classes before calling. "
-                "BATCH SUPPORTED: pass a list of class_ids to fetch multiple journals at once. "
-                "When batching, result is a dict keyed by class_id. "
-                "Each entry has: date, time, body (Markdown), learning_outcomes, is_starred, links, files. "
-                "Use this when the student asks about their portfolio, reflections, or journal."
+                "Returns journal/portfolio entries for a class. "
+                "Only classes where has_journal=true (from get_classes) have entries — returns empty list otherwise. "
+                "BATCH SUPPORTED: class_id can be a single ID or a list. "
+                "Each entry has: id, date, time, body (Markdown), learning_outcomes, is_starred, is_read_only, links, files."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "class_id": {
-                        "description": "One class ID or a list for batch fetching",
+                        "description": "A single class ID or a list for batch fetching",
                         "oneOf": [
                             {"type": "string"},
                             {"type": "array", "items": {"type": "string"}},
@@ -180,36 +158,24 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="submit_task_file",
             description=(
-                "⚠️ WRITE OPERATION — uploads a file to a task's submission dropbox on ManageBac. "
-                "ALWAYS call with dry_run=true first to confirm details with the student before submitting. "
-                "Only submit when the student explicitly says 'yes, submit it'. "
-                "Requires class_id and task_id (from get_tasks or get_classes). "
-                "file_path must be the absolute local path to the file on the student's computer. "
-                "dry_run=true (default): validates the file and task, shows exactly what would be submitted, "
-                "but does NOT upload anything. "
-                "dry_run=false: actually uploads the file. "
-                "Returns success=true with the task URL on success, or an error message on failure. "
-                "Note: ManageBac will mark uploads as late if the deadline has passed — "
-                "this is shown in the server_response field."
+                "⚠️ WRITE OPERATION — uploads a local file to a task's submission dropbox. "
+                "Always call with dry_run=true first to show the student what will be submitted. "
+                "Only set dry_run=false when the student explicitly confirms. "
+                "file_path must be an absolute path on the student's local machine. "
+                "Returns success=true and task url on success."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "class_id": {
-                        "type": "string",
-                        "description": "Numeric class ID from get_classes",
-                    },
-                    "task_id": {
-                        "type": "string",
-                        "description": "Numeric task ID from get_tasks",
-                    },
+                    "class_id": {"type": "string", "description": "Class ID from get_classes"},
+                    "task_id": {"type": "string", "description": "Task ID from get_tasks"},
                     "file_path": {
                         "type": "string",
-                        "description": "Absolute local path to the file to submit (e.g. '/Users/you/Documents/essay.pdf')",
+                        "description": "Absolute local path to the file (e.g. '/Users/you/essay.pdf')",
                     },
                     "dry_run": {
                         "type": "boolean",
-                        "description": "true = preview only, do NOT submit (default). false = actually upload.",
+                        "description": "true = preview only, do not submit (default). false = actually upload.",
                         "default": True,
                     },
                 },
@@ -219,25 +185,17 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_file_content",
             description=(
-                "Downloads a ManageBac attachment and returns it as a native file "
-                "so you can read it directly — no text conversion. "
-                "Use this when a task has a PDF, image, or other file in "
-                "description.embedded_files or resources that you need to read. "
-                "Pass the full URL exactly as it appears in embedded_files[].url. "
-                "The file is fetched using the student's authenticated session. "
-                "PDFs are returned as embedded PDF resources (you can read them natively). "
-                "Images are returned as image content. "
-                "Files are cached on disk for 1 hour — repeated calls for the same URL are instant."
+                "Downloads an attachment URL using the student's authenticated session "
+                "and returns the raw file — PDFs as embedded resources, images as image content. "
+                "Use the url from description.embedded_files[].url or resources[].files[].url. "
+                "Cached on disk for 1 hour."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "url": {
                         "type": "string",
-                        "description": (
-                            "Full ManageBac attachment URL from description.embedded_files[].url "
-                            "or resources[].files[].url"
-                        ),
+                        "description": "Full attachment URL from embedded_files[].url or resources[].files[].url",
                     }
                 },
                 "required": ["url"],
@@ -246,22 +204,20 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_units",
             description=(
-                "Returns all IB curriculum units for a class with the full MYP/DP framework: "
-                "statement of inquiry, key concepts (with definitions), related concepts, global context, "
-                "conceptual understanding, inquiry questions (Factual/Conceptual/Debatable), "
-                "ATL skills, start date, duration, and status (current/completed/upcoming). "
-                "BATCH SUPPORTED: pass a list of class_ids to fetch units for multiple classes at once. "
-                "When batching, result is a dict keyed by class_id. "
-                "IMPORTANT: multiple tasks belong to the same unit — call this ONCE per class and reuse. "
-                "Match tasks to units via the task title prefix (e.g. 'Unit 4: task 2') or date range. "
-                "Use this when the student asks about a unit's statement of inquiry, global context, "
-                "key concepts, or the IB framework behind their tasks."
+                "Returns all curriculum units for a class. "
+                "Each unit has: id, title, status (current/completed/upcoming), start, duration, url, "
+                "and framework fields: statement_of_inquiry, key_concepts (with definitions), "
+                "related_concepts, global_context, conceptual_understanding, "
+                "inquiry_questions (each typed as Factual/Conceptual/Debatable), atl_skills. "
+                "BATCH SUPPORTED: class_id can be a single ID or a list. "
+                "Multiple tasks share the same unit — call once per class and reuse. "
+                "Match tasks to units by title prefix or date range."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "class_id": {
-                        "description": "One class ID or a list for batch fetching",
+                        "description": "A single class ID or a list for batch fetching",
                         "oneOf": [
                             {"type": "string"},
                             {"type": "array", "items": {"type": "string"}},
@@ -274,24 +230,17 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="find_task",
             description=(
-                "Finds a specific task by either a ManageBac URL or a title search across all classes. "
-                "Use this when the student pastes a ManageBac link or mentions a task by name "
-                "without saying which class it is in. "
-                "URL mode: pass the full ManageBac URL (e.g. "
-                "'https://es.managebac.com/student/classes/12734244/core_tasks/47617250') — "
-                "the class_id and task_id are extracted automatically and full task detail is returned. "
-                "Title search mode: pass a task name (e.g. 'biology essay' or 'end of unit reflection') — "
-                "it performs a fuzzy match across every class and returns the best matching task's full detail. "
-                "Returns the same structure as get_task_detail, including the url field."
+                "Finds a task by URL or by fuzzy title search across all classes. "
+                "URL mode: pass a full task URL — class_id and task_id are extracted automatically. "
+                "Title mode: pass a partial title — searches all classes and returns the best match. "
+                "Returns the same structure as get_task_detail."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": (
-                            "Either a full ManageBac task URL, or a task title / partial title to search for"
-                        ),
+                        "description": "A task URL or a partial task title to search for",
                     }
                 },
                 "required": ["query"],
