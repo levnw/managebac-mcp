@@ -17,6 +17,7 @@ from .scraper import (
     fetch_journal,
     fetch_units,
     fetch_file_bytes,
+    submit_task_file,
     find_task,
 )
 from . import cache
@@ -155,6 +156,45 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="submit_task_file",
+            description=(
+                "⚠️ WRITE OPERATION — uploads a file to a task's submission dropbox on ManageBac. "
+                "ALWAYS call with dry_run=true first to confirm details with the student before submitting. "
+                "Only submit when the student explicitly says 'yes, submit it'. "
+                "Requires class_id and task_id (from get_tasks or get_classes). "
+                "file_path must be the absolute local path to the file on the student's computer. "
+                "dry_run=true (default): validates the file and task, shows exactly what would be submitted, "
+                "but does NOT upload anything. "
+                "dry_run=false: actually uploads the file. "
+                "Returns success=true with the task URL on success, or an error message on failure. "
+                "Note: ManageBac will mark uploads as late if the deadline has passed — "
+                "this is shown in the server_response field."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "class_id": {
+                        "type": "string",
+                        "description": "Numeric class ID from get_classes",
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "description": "Numeric task ID from get_tasks",
+                    },
+                    "file_path": {
+                        "type": "string",
+                        "description": "Absolute local path to the file to submit (e.g. '/Users/you/Documents/essay.pdf')",
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "true = preview only, do NOT submit (default). false = actually upload.",
+                        "default": True,
+                    },
+                },
+                "required": ["class_id", "task_id", "file_path"],
+            },
+        ),
+        types.Tool(
             name="get_file_content",
             description=(
                 "Downloads a ManageBac attachment and returns it as a native file "
@@ -250,6 +290,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
         result = await fetch_tasks(arguments["class_id"])
     elif name == "get_task_detail":
         result = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
+    elif name == "submit_task_file":
+        result = await submit_task_file(
+            arguments["class_id"],
+            arguments["task_id"],
+            arguments["file_path"],
+            dry_run=arguments.get("dry_run", True),
+        )
     elif name == "get_file_content":
         import base64
         file = await fetch_file_bytes(arguments["url"])

@@ -1197,6 +1197,124 @@ async def fetch_file_bytes(url: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Task file submission
+# ---------------------------------------------------------------------------
+
+async def submit_task_file(
+    class_id: str,
+    task_id: str,
+    file_path: str,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """
+    Upload a local file to a task's dropbox on ManageBac.
+
+    Workflow:
+      1. GET the dropbox page to get a fresh CSRF token
+      2. POST multipart/form-data to the upload endpoint
+
+    Rails endpoint:
+      POST /student/classes/{class_id}/core_tasks/{task_id}/dropbox/upload
+      _method=patch
+      X-CSRF-Token: <from meta tag>
+      dropbox[assets_attributes][0][file]: <file bytes>
+      dropbox[assets_attributes][0][file_cache]: ""
+
+    If dry_run=True, validates everything (file exists, task has dropbox)
+    but does NOT submit — returns a preview of what would be submitted.
+    """
+    from pathlib import Path as _Path
+    from bs4 import BeautifulSoup as _BS
+    import mimetypes as _mimetypes
+
+    path = _Path(file_path)
+    if not path.exists():
+        return {"success": False, "error": f"File not found: {file_path}"}
+    if not path.is_file():
+        return {"success": False, "error": f"Not a file: {file_path}"}
+
+    file_size = path.stat().st_size
+    if file_size > 500 * 1024 * 1024:
+        return {"success": False, "error": f"File too large ({file_size / 1_048_576:.1f} MB). ManageBac limit is 500 MB."}
+
+    mime_type = _mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+
+    async with await get_client() as client:
+        # Fetch dropbox page to get CSRF token and confirm dropbox exists
+        dropbox_url = f"/student/classes/{class_id}/core_tasks/{task_id}/dropbox"
+        r = await authed_get(client, dropbox_url)
+
+        if r.status_code != 200 or "/login" in str(r.url):
+            return {"success": False, "error": "Could not access the dropbox page — check class_id and task_id."}
+
+        soup = _BS(r.text, "lxml")
+        csrf_el = soup.find("meta", {"name": "csrf-token"})
+        if not csrf_el:
+            return {"success": False, "error": "Could not find CSRF token on the dropbox page."}
+        csrf_token = csrf_el["content"]
+
+        # Confirm the upload form is present
+        form = soup.find("form", id=lambda i: i and "dropbox" in i)
+        if not form:
+            return {"success": False, "error": "No upload form found — this task may not have a submission dropbox."}
+
+        if dry_run:
+            return {
+                "dry_run": True,
+                "would_submit": {
+                    "file": str(path),
+                    "filename": path.name,
+                    "size_bytes": file_size,
+                    "mime_type": mime_type,
+                    "to_task": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}",
+                    "endpoint": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}/dropbox/upload",
+                },
+                "note": "Set dry_run=false to actually submit.",
+            }
+
+        # Read file and POST
+        file_bytes = path.read_bytes()
+        upload_url = f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}/dropbox/upload"
+
+        response = await client.post(
+            upload_url,
+            data={
+                "_method": "patch",
+                "dropbox[assets_attributes][0][file_cache]": "",
+                "commit": "Upload Files",
+            },
+            files={
+                "dropbox[assets_attributes][0][file]": (path.name, file_bytes, mime_type),
+            },
+            headers={
+                "X-CSRF-Token": csrf_token,
+                "X-Requested-With": "XMLHttpRequest",  # Rails UJS sends this
+                "Referer": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}/dropbox",
+            },
+            follow_redirects=True,
+        )
+
+    # Rails data-remote forms respond with JS or JSON on success
+    # A 200 with non-login URL means success
+    if response.status_code in (200, 201, 204):
+        resp_text = response.text[:500] if response.text else ""
+        return {
+            "success": True,
+            "file": path.name,
+            "size_bytes": file_size,
+            "task_url": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}",
+            "http_status": response.status_code,
+            "server_response": resp_text,
+        }
+    else:
+        return {
+            "success": False,
+            "error": f"Upload failed — HTTP {response.status_code}",
+            "server_response": response.text[:300],
+        }
+
+
+# ---------------------------------------------------------------------------
 # find_task
 # ---------------------------------------------------------------------------
 

@@ -229,6 +229,61 @@ def peek(
 # mcp — run the stdio MCP server (Claude Desktop calls this automatically)
 # ---------------------------------------------------------------------------
 
+@app.command()
+def submit(
+    class_id: str = typer.Option(..., "--class", "-c", help="Class ID"),
+    task_id:  str = typer.Option(..., "--task",  "-t", help="Task ID"),
+    file:     str = typer.Option(..., "--file",  "-f", help="Path to the file to submit"),
+    yes:      bool = typer.Option(False, "--yes", "-y", help="Skip dry-run confirmation and submit immediately"),
+):
+    """
+    Submit a file to a ManageBac task's dropbox.
+
+    \b
+    Always does a dry-run first so you can confirm before uploading.
+    Use --yes to skip the confirmation prompt.
+
+    \b
+      managebac-mcp submit --class 12734244 --task 48220527 --file ~/Documents/essay.pdf
+    """
+    import asyncio
+    from . import scraper
+
+    async def _run(dry: bool):
+        return await scraper.submit_task_file(class_id, task_id, file, dry_run=dry)
+
+    # Dry run first
+    preview = asyncio.run(_run(dry=True))
+    if not preview.get("dry_run"):
+        rprint(f"[red]Error:[/red] {preview.get('error', 'Unknown error')}")
+        raise typer.Exit(1)
+
+    w = preview["would_submit"]
+    rprint(Panel.fit(
+        f"[bold]About to submit:[/bold]\n\n"
+        f"  File:  [cyan]{w['filename']}[/cyan]  ({w['size_bytes'] / 1024:.1f} KB)\n"
+        f"  Type:  {w['mime_type']}\n"
+        f"  Task:  [cyan]{w['to_task']}[/cyan]",
+        border_style="yellow", title="Confirm Submission"
+    ))
+
+    if not yes:
+        confirmed = typer.confirm("Submit this file?")
+        if not confirmed:
+            rprint("[dim]Cancelled.[/dim]")
+            raise typer.Exit(0)
+
+    result = asyncio.run(_run(dry=False))
+    if result.get("success"):
+        rprint(f"[green]✓[/green] Submitted [bold]{result['file']}[/bold]")
+        rprint(f"  View task: [cyan]{result['task_url']}[/cyan]")
+    else:
+        rprint(f"[red]✗[/red] Submission failed: {result.get('error')}")
+        if result.get("server_response"):
+            rprint(f"[dim]{result['server_response'][:200]}[/dim]")
+        raise typer.Exit(1)
+
+
 @app.command(hidden=True)
 def mcp_stdio():
     """Run the stdio MCP server (called automatically by Claude Desktop)."""
