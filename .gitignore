@@ -1,0 +1,33 @@
+# Credentials — NEVER commit these
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+
+# macOS
+.DS_Store
+
+# Old code (pre-refactor)
+src/
+
+# Cache & session data (stored in ~/.managebac_mcp/)
+cache.db
+session.json
+
+# Test fixtures (contain scraped HTML from your real account)
+tests/fixtures/
+
+# Editor
+.idea/
+.vscode/
+*.swp
