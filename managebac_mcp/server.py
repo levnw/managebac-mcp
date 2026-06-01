@@ -16,7 +16,7 @@ from .scraper import (
     fetch_files,
     fetch_journal,
     fetch_units,
-    fetch_file_content,
+    fetch_file_bytes,
     find_task,
 )
 from . import cache
@@ -157,18 +157,15 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_file_content",
             description=(
-                "Downloads a ManageBac attachment and returns its text content. "
-                "Use this when you have a file URL from a task's description.embedded_files, "
-                "resources, or submitted_files and the student needs to know what is inside the file. "
-                "Supports PDF (including multi-page documents with tables), DOCX, and plain text. "
-                "Pass the full URL exactly as it appears in the embedded_files or resources list. "
-                "The file is downloaded using the authenticated ManageBac session — "
-                "no separate login is needed. "
-                "Returns: content_type, size_bytes, page_count (for PDFs), text (extracted content), "
-                "truncated (true if the file was too long to return in full — typically novels or "
-                "very long PDFs), and error (null on success). "
-                "Images and unsupported file types return an error message, not a crash. "
-                "Results are cached for 1 hour so the same file is never downloaded twice."
+                "Downloads a ManageBac attachment and returns it as a native file "
+                "so you can read it directly — no text conversion. "
+                "Use this when a task has a PDF, image, or other file in "
+                "description.embedded_files or resources that you need to read. "
+                "Pass the full URL exactly as it appears in embedded_files[].url. "
+                "The file is fetched using the student's authenticated session. "
+                "PDFs are returned as embedded PDF resources (you can read them natively). "
+                "Images are returned as image content. "
+                "Files are cached on disk for 1 hour — repeated calls for the same URL are instant."
             ),
             inputSchema={
                 "type": "object",
@@ -241,7 +238,7 @@ async def list_tools() -> list[types.Tool]:
 
 
 @server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+async def call_tool(name: str, arguments: dict) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     t0 = time.monotonic()
     result: object
 
@@ -254,7 +251,25 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     elif name == "get_task_detail":
         result = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
     elif name == "get_file_content":
-        result = await fetch_file_content(arguments["url"])
+        import base64
+        file = await fetch_file_bytes(arguments["url"])
+        if file["error"]:
+            result = {"error": file["error"]}
+        else:
+            ct = file["content_type"]
+            b64 = base64.standard_b64encode(file["data"]).decode()
+            if ct.startswith("image/"):
+                return [types.ImageContent(type="image", data=b64, mimeType=ct)]
+            else:
+                # Return as embedded resource — AI receives the actual file, not a conversion
+                return [types.EmbeddedResource(
+                    type="resource",
+                    resource=types.BlobResourceContents(
+                        uri=arguments["url"],
+                        mimeType=ct,
+                        blob=b64,
+                    ),
+                )]
     elif name == "get_units":
         result = await fetch_units(arguments["class_id"])
     elif name == "get_files":

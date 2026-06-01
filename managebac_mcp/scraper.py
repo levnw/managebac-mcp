@@ -1119,109 +1119,81 @@ async def fetch_units(class_id: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# File content extraction
+# File download (raw bytes, no conversion)
 # ---------------------------------------------------------------------------
 
-_MAX_FILE_BYTES = 10 * 1024 * 1024   # 10 MB hard limit
-_MAX_TEXT_CHARS = 40_000              # ~8 000 words — fits comfortably in AI context
+_MAX_FILE_BYTES = 20 * 1024 * 1024   # 20 MB hard limit (Anthropic API PDF cap)
+_FILES_CACHE_DIR = None               # set lazily from config
 
 
-async def fetch_file_content(url: str) -> dict:
+def _file_cache_paths(url: str):
+    """Return (meta_path, data_path) for the given URL."""
+    import hashlib
+    from .config import DATA_DIR
+    cache_dir = DATA_DIR / "files"
+    cache_dir.mkdir(exist_ok=True)
+    h = hashlib.md5(url.encode()).hexdigest()
+    return cache_dir / f"{h}.json", cache_dir / f"{h}.bin"
+
+
+async def fetch_file_bytes(url: str) -> dict[str, Any]:
     """
-    Download a ManageBac attachment and extract its text.
+    Download a ManageBac attachment using the authenticated session and
+    return the raw bytes + metadata.  Results are cached to disk for 1 hour.
 
-    Supports:
-      • PDF  — pdfplumber (handles tables, multi-column layouts)
-      • DOCX — python-docx
-      • Plain text — UTF-8 decode
-      • Images / unsupported — returns a clear error, no crash
-
-    Results are cached for 1 hour by URL hash so the same file is
-    never downloaded twice within a session.
+    Returns:
+        {content_type, size_bytes, data (bytes), error (None on success)}
     """
-    import hashlib, io
-    cache_key = f"get_file_content:{hashlib.md5(url.encode()).hexdigest()}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
+    import json as _json, time as _time
+
+    meta_path, data_path = _file_cache_paths(url)
+
+    # --- disk cache hit ---
+    if meta_path.exists() and data_path.exists():
+        try:
+            meta = _json.loads(meta_path.read_text())
+            if _time.time() < meta.get("expires_at", 0):
+                return {
+                    "content_type": meta["content_type"],
+                    "size_bytes": meta["size_bytes"],
+                    "data": data_path.read_bytes(),
+                    "error": None,
+                }
+        except Exception:
+            pass  # stale / corrupt cache — fall through to re-download
 
     async with await get_client() as client:
         try:
             r = await authed_get(client, url)
         except Exception as e:
-            return {"url": url, "error": f"Download failed: {e}", "text": "", "page_count": None}
+            return {"content_type": "", "size_bytes": 0, "data": b"", "error": f"Download failed: {e}"}
 
     if r.status_code != 200:
-        return {"url": url, "error": f"HTTP {r.status_code}", "text": "", "page_count": None}
+        return {"content_type": "", "size_bytes": 0, "data": b"", "error": f"HTTP {r.status_code}"}
 
-    content = r.content
-    content_type = r.headers.get("content-type", "").lower().split(";")[0].strip()
+    content_type = r.headers.get("content-type", "application/octet-stream").split(";")[0].strip()
+    data = r.content
 
-    result: dict[str, Any] = {
-        "url": url,
-        "content_type": content_type,
-        "size_bytes": len(content),
-        "page_count": None,
-        "text": "",
-        "error": None,
-        "truncated": False,
-    }
+    if len(data) > _MAX_FILE_BYTES:
+        return {
+            "content_type": content_type,
+            "size_bytes": len(data),
+            "data": b"",
+            "error": f"File is {len(data) / 1_048_576:.1f} MB — exceeds the 20 MB limit.",
+        }
 
-    if len(content) > _MAX_FILE_BYTES:
-        result["error"] = (
-            f"File is {len(content) / 1_048_576:.1f} MB — exceeds the {_MAX_FILE_BYTES // 1_048_576} MB limit."
-        )
-        cache.set(cache_key, result, "get_file_content")
-        return result
-
-    # --- detect type by content-type header, fall back to URL extension ---
-    ext = url.split("?")[0].rsplit(".", 1)[-1].lower() if "." in url.split("?")[0] else ""
-    is_pdf  = "pdf"  in content_type or ext == "pdf"
-    is_docx = ("wordprocessingml" in content_type or "openxmlformats" in content_type
-                or "msword" in content_type or ext in ("docx", "doc"))
-    is_text = "text/plain" in content_type or ext in ("txt", "md", "csv")
-
+    # --- write disk cache ---
     try:
-        if is_pdf:
-            import pdfplumber
-            pages_text = []
-            with pdfplumber.open(io.BytesIO(content)) as pdf:
-                result["page_count"] = len(pdf.pages)
-                for i, page in enumerate(pdf.pages):
-                    t = page.extract_text()
-                    if t and t.strip():
-                        pages_text.append(f"[Page {i + 1}]\n{t.strip()}")
-            result["text"] = "\n\n".join(pages_text)
+        meta_path.write_text(_json.dumps({
+            "content_type": content_type,
+            "size_bytes": len(data),
+            "expires_at": int(_time.time()) + 3600,
+        }))
+        data_path.write_bytes(data)
+    except Exception:
+        pass  # cache write failure is non-fatal
 
-        elif is_docx:
-            import docx as _docx
-            doc = _docx.Document(io.BytesIO(content))
-            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-            result["text"] = "\n\n".join(paragraphs)
-
-        elif is_text:
-            result["text"] = content.decode("utf-8", errors="replace")
-
-        else:
-            result["error"] = (
-                f"Cannot extract text from this file type ({content_type or ext or 'unknown'}). "
-                "PDF, DOCX, and plain text files are supported."
-            )
-
-    except Exception as e:
-        result["error"] = f"Text extraction failed: {e}"
-
-    # Truncate very long text with a note
-    if len(result["text"]) > _MAX_TEXT_CHARS:
-        result["text"] = (
-            result["text"][:_MAX_TEXT_CHARS]
-            + f"\n\n[Text truncated — showing first {_MAX_TEXT_CHARS:,} of "
-              f"{len(result['text']):,} characters]"
-        )
-        result["truncated"] = True
-
-    cache.set(cache_key, result, "get_file_content")
-    return result
+    return {"content_type": content_type, "size_bytes": len(data), "data": data, "error": None}
 
 
 # ---------------------------------------------------------------------------

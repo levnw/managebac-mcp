@@ -194,7 +194,15 @@ def peek(
         elif tool == "file-content":
             if not url:
                 rprint("[red]--url is required for 'file-content'[/red]"); raise typer.Exit(1)
-            return await scraper.fetch_file_content(url)
+            file = await scraper.fetch_file_bytes(url)
+            # Don't dump raw bytes — show metadata summary
+            return {
+                "content_type": file["content_type"],
+                "size_bytes": file["size_bytes"],
+                "size_human": f"{file['size_bytes'] / 1024:.1f} KB",
+                "error": file["error"],
+                "cached_to_disk": file["error"] is None,
+            }
         elif tool == "files":
             if not class_id:
                 rprint("[red]--class is required for 'files'[/red]"); raise typer.Exit(1)

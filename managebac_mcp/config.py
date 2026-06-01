@@ -18,8 +18,9 @@ BASE_URL = os.environ.get("MANAGEBAC_URL", "https://es.managebac.com")
 EMAIL = os.environ.get("MANAGEBAC_EMAIL", "")
 PASSWORD = os.environ.get("MANAGEBAC_PASSWORD", "")
 
-SESSION_FILE = Path.home() / ".managebac_mcp" / "session.json"
-CACHE_DB = Path.home() / ".managebac_mcp" / "cache.db"
+DATA_DIR = Path.home() / ".managebac_mcp"
+SESSION_FILE = DATA_DIR / "session.json"
+CACHE_DB = DATA_DIR / "cache.db"
 
 # Ensure the config directory exists
-(Path.home() / ".managebac_mcp").mkdir(exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True)
