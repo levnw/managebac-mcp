@@ -164,11 +164,20 @@ def build_app(*, stateless: bool = True):
             await send({"type": "http.response.body",
                         "body": b'{"error":"unauthorized - unknown or missing token"}'})
             return
-        # The streamable-HTTP transport handles the request at whatever path it
-        # sees; normalize to "/" so /mcp and /mcp/ behave identically.
         scope = dict(scope)
         scope["path"] = "/"
         scope["raw_path"] = b"/"
+        # Normalize Accept + Content-Type. The MCP streamable-HTTP transport is
+        # strict (needs Content-Type: application/json and Accept containing both
+        # application/json and text/event-stream). Some clients (ChatGPT) send
+        # application/octet-stream / a narrower Accept, which the SDK rejects with
+        # 400/406. The body is JSON-RPC regardless, so we force the headers the
+        # transport expects.
+        headers = [(k, v) for (k, v) in scope["headers"]
+                   if k.lower() not in (b"accept", b"content-type")]
+        headers.append((b"accept", b"application/json, text/event-stream"))
+        headers.append((b"content-type", b"application/json"))
+        scope["headers"] = headers
         ctx = set_current_user(user)
         try:
             await session_manager.handle_request(scope, receive, send)
@@ -199,7 +208,11 @@ def build_app(*, stateless: bool = True):
     async def app(scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http":
             path = scope.get("path", "")
-            if path == "/mcp" or path.startswith("/mcp/") or path == "/mcp/":
+            # ONLY the exact MCP endpoint goes to the handler. Anything deeper
+            # (e.g. /mcp/.well-known/oauth-authorization-server, which ChatGPT
+            # probes) must fall through to a 404 — NOT 401 — so ChatGPT concludes
+            # the server is no-auth instead of demanding OAuth.
+            if path == "/mcp" or path == "/mcp/":
                 await handle_mcp(scope, receive, send)
                 return
         await inner(scope, receive, send)
