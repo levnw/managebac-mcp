@@ -911,6 +911,214 @@ async def fetch_journal(class_id: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Units
+# ---------------------------------------------------------------------------
+
+def parse_units(html: str, class_id: str) -> list[dict]:
+    """
+    Parse the /units page to get each unit's id, title, start date,
+    duration, and current status.  IB detail fields are filled in later
+    by parse_unit_popup().
+    """
+    soup = BeautifulSoup(html, "lxml")
+    units = []
+
+    prefix = f"ib_class_{class_id}_core_unit_"
+    for div in soup.find_all("div", id=re.compile(rf"^ib_class_{class_id}_core_unit_\d+$")):
+        div_id = div.get("id", "")
+        unit_id = div_id.replace(prefix, "")
+        if not unit_id.isdigit():
+            continue
+
+        # Skip weekly-planner duplicates
+        weekly_id = f"ib_class_{class_id}_weekly_core_unit_{unit_id}"
+        if soup.find("div", id=weekly_id) and div_id != weekly_id:
+            pass  # keep the canonical one
+
+        unit_comp = div.find("div", class_="unit-component")
+        if not unit_comp:
+            continue
+
+        # Title
+        h4 = unit_comp.find("p", class_="h4")
+        title_a = h4.find("a") if h4 else None
+        title = title_a.get_text(strip=True) if title_a else ""
+        if not title:
+            continue
+
+        # Start date — "Starts\n W4 Nov" → "W4 Nov"
+        start_el = unit_comp.find("span", class_="label-start")
+        start = ""
+        if start_el:
+            inner_span = start_el.find("span")
+            if inner_span:
+                raw = inner_span.get_text(" ", strip=True)
+                start = re.sub(r'^Starts\s*', '', raw).strip()
+
+        # Duration — "4 Weeks" (after stripping the clock SVG)
+        duration_el = unit_comp.find("div", class_="unit-duration")
+        duration = ""
+        if duration_el:
+            dur_clone = BeautifulSoup(str(duration_el), "lxml").find("div")
+            for svg in dur_clone.find_all("svg"):
+                svg.decompose()
+            duration = dur_clone.get_text(" ", strip=True)
+
+        # Status: current / completed / upcoming
+        comp_classes = unit_comp.get("class", [])
+        if "current" in comp_classes:
+            status = "current"
+        elif "completed" in comp_classes:
+            status = "completed"
+        else:
+            status = "upcoming"
+
+        units.append({
+            "id": unit_id,
+            "title": title,
+            "start": start,
+            "duration": duration,
+            "status": status,
+            "url": f"{BASE_URL}/student/classes/{class_id}/units/{unit_id}/presentations",
+        })
+
+    return units
+
+
+def parse_unit_popup(html: str) -> dict:
+    """
+    Parse the unit popup fragment (/units/{id}/popup) to extract all IB
+    framework fields: global_context, key_concepts, related_concepts,
+    conceptual_understanding, statement_of_inquiry, inquiry_questions, atl_skills.
+    Also extracts start_date and duration from the <dl> block.
+    """
+    from bs4 import NavigableString
+    soup = BeautifulSoup(html, "lxml")
+    result: dict[str, Any] = {}
+
+    # Basic metadata from dt/dd pairs
+    for dt in soup.find_all("dt"):
+        dd = dt.find_next_sibling("dd")
+        label = dt.get_text(" ", strip=True)
+        value = dd.get_text(" ", strip=True) if dd else ""
+        if "Start date" in label:
+            result["start_date"] = value
+        elif "Duration" in label:
+            result["duration"] = re.sub(r'\s+', ' ', value).strip()
+
+    # IB framework sections
+    for section in soup.find_all("div", class_="section"):
+        header = section.find("div", class_="unit-component-header")
+        if not header:
+            continue
+        header_text = header.get_text(strip=True)
+
+        if "Global Context" in header_text:
+            contexts = []
+            for flex in section.find_all("div", class_="flex"):
+                clone = BeautifulSoup(str(flex), "lxml").find("div")
+                for img in clone.find_all("img"):
+                    img.decompose()
+                t = clone.get_text(" ", strip=True)
+                if t:
+                    contexts.append(t)
+            result["global_context"] = contexts
+
+        elif "Key Concept" in header_text:
+            concepts = []
+            for p in section.find_all("p"):
+                clone = BeautifulSoup(str(p), "lxml").find("p")
+                if not clone:
+                    continue
+                for img in clone.find_all("img"):
+                    img.decompose()
+                name_el = clone.find("strong")
+                name = name_el.get_text(strip=True) if name_el else ""
+                full = clone.get_text(" ", strip=True)
+                if name and name in full:
+                    definition = full[full.index(name) + len(name):].strip()
+                else:
+                    definition = full
+                    name = full
+                if name:
+                    concepts.append({"name": name, "definition": definition})
+            result["key_concepts"] = concepts
+
+        elif "Related Concept" in header_text:
+            for p in section.find_all("p"):
+                t = p.get_text(" ", strip=True)
+                if t:
+                    result["related_concepts"] = [c.strip() for c in t.split(",") if c.strip()]
+                    break
+
+        elif "Conceptual Understanding" in header_text:
+            body = section.find(class_="fix-body-margins")
+            if body:
+                result["conceptual_understanding"] = _html_to_markdown(body)
+
+        elif "Statement of Inquiry" in header_text:
+            body = section.find(class_="fix-body-margins")
+            if body:
+                result["statement_of_inquiry"] = _html_to_markdown(body)
+
+        elif "Inquiry Question" in header_text:
+            questions = []
+            for p in section.find_all("p", class_="mb-1"):
+                label_el = p.find("span", class_=re.compile(r"\blabel\b"))
+                q_type = label_el.get_text(strip=True) if label_el else ""
+                # Get only the direct text nodes (not inside the span)
+                q_text = "".join(
+                    str(s) for s in p.children
+                    if isinstance(s, NavigableString)
+                ).strip()
+                if q_type or q_text:
+                    questions.append({"type": q_type, "question": q_text})
+            result["inquiry_questions"] = questions
+
+        elif "ATL" in header_text:
+            skills = []
+            for flex in section.find_all("div", class_="flex"):
+                clone = BeautifulSoup(str(flex), "lxml").find("div")
+                for img in clone.find_all("img"):
+                    img.decompose()
+                t = clone.get_text(" ", strip=True)
+                if t:
+                    skills.append(t)
+            result["atl_skills"] = skills
+
+    return result
+
+
+async def fetch_units(class_id: str) -> list[dict]:
+    cache_key = f"get_units:{class_id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    import asyncio as _asyncio
+
+    async with await get_client() as client:
+        r = await authed_get(client, f"/student/classes/{class_id}/units")
+        units = parse_units(r.text, class_id)
+
+        if not units:
+            return []
+
+        # Fetch all unit popups concurrently in the same session
+        popup_responses = await _asyncio.gather(*[
+            authed_get(client, f"/student/classes/{class_id}/units/{u['id']}/popup")
+            for u in units
+        ])
+
+    for unit, popup_r in zip(units, popup_responses):
+        ib = parse_unit_popup(popup_r.text)
+        unit.update(ib)
+
+    cache.set(cache_key, units, "get_units")
+    return units
+
+
+# ---------------------------------------------------------------------------
 # find_task
 # ---------------------------------------------------------------------------
 

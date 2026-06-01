@@ -15,6 +15,7 @@ from .scraper import (
     fetch_task_detail,
     fetch_files,
     fetch_journal,
+    fetch_units,
     find_task,
 )
 from . import cache
@@ -153,6 +154,33 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="get_units",
+            description=(
+                "Returns all IB curriculum units for a class, each with the full MYP/DP "
+                "framework: statement of inquiry, key concepts, related concepts, global context, "
+                "conceptual understanding, inquiry questions, ATL skills, start date, and duration. "
+                "Requires class_id from get_classes. "
+                "IMPORTANT: Multiple tasks usually belong to the same unit — call this ONCE per "
+                "class and reuse the data rather than fetching it per-task. "
+                "To match a task to its unit: most task titles are prefixed with the unit name "
+                "(e.g. 'Unit 4: task 2 — Research'), or compare the task due date with the unit's "
+                "start date and duration. The 'status' field tells you if a unit is 'current', "
+                "'completed', or 'upcoming'. "
+                "Use this when the student asks about a unit's statement of inquiry, global context, "
+                "key concepts, or needs to understand the bigger IB framework behind their tasks."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "class_id": {
+                        "type": "string",
+                        "description": "Numeric class ID from get_classes",
+                    }
+                },
+                "required": ["class_id"],
+            },
+        ),
+        types.Tool(
             name="find_task",
             description=(
                 "Finds a specific task by either a ManageBac URL or a title search across all classes. "
@@ -194,6 +222,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         result = await fetch_tasks(arguments["class_id"])
     elif name == "get_task_detail":
         result = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
+    elif name == "get_units":
+        result = await fetch_units(arguments["class_id"])
     elif name == "get_files":
         result = await fetch_files(arguments["class_id"])
     elif name == "get_journal":

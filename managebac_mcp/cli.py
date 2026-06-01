@@ -132,7 +132,7 @@ def install():
 @app.command()
 def peek(
     tool: str = typer.Argument(
-        help="Tool to call: classes | timetable | tasks | task | files | journal | find"
+        help="Tool to call: classes | timetable | tasks | task | units | files | journal | find"
     ),
     class_id: str = typer.Option(None, "--class", "-c", help="Class ID (needed for tasks / task / files / journal)"),
     task_id:  str = typer.Option(None, "--task",  "-t", help="Task ID  (needed for task)"),
@@ -149,6 +149,7 @@ def peek(
       managebac-mcp peek timetable
       managebac-mcp peek tasks   --class 12345
       managebac-mcp peek task    --class 12345 --task 67890
+      managebac-mcp peek units   --class 12345
       managebac-mcp peek files   --class 12345
       managebac-mcp peek journal --class 12345
       managebac-mcp peek find    --query "biology essay"
@@ -160,12 +161,13 @@ def peek(
     # Optional: wipe the relevant cache key before fetching
     if no_cache:
         key_map = {
-            "classes":  "classes",
-            "timetable":"timetable",
-            "tasks":    f"tasks:{class_id}",
-            "task":     f"task_detail:{class_id}:{task_id}",
-            "files":    f"files:{class_id}",
-            "journal":  f"journal:{class_id}",
+            "classes":  "get_classes",
+            "timetable":"get_timetable",
+            "tasks":    f"get_tasks:{class_id}",
+            "task":     f"get_task_detail:{class_id}:{task_id}",
+            "units":    f"get_units:{class_id}",
+            "files":    f"get_files:{class_id}",
+            "journal":  f"get_journal:{class_id}",
         }
         if tool in key_map:
             _cache.invalidate(key_map[tool])
@@ -183,6 +185,10 @@ def peek(
             if not class_id or not task_id:
                 rprint("[red]--class and --task are required for 'task'[/red]"); raise typer.Exit(1)
             return await scraper.fetch_task_detail(class_id, task_id)
+        elif tool == "units":
+            if not class_id:
+                rprint("[red]--class is required for 'units'[/red]"); raise typer.Exit(1)
+            return await scraper.fetch_units(class_id)
         elif tool == "files":
             if not class_id:
                 rprint("[red]--class is required for 'files'[/red]"); raise typer.Exit(1)
@@ -198,7 +204,7 @@ def peek(
             return result if result is not None else {"error": "Task not found"}
         else:
             rprint(f"[red]Unknown tool: {tool}[/red]")
-            rprint("Choose from: classes | timetable | tasks | task | files | journal | find")
+            rprint("Choose from: classes | timetable | tasks | task | units | files | journal | find")
             raise typer.Exit(1)
 
     result = asyncio.run(_run())
