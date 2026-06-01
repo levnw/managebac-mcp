@@ -132,11 +132,12 @@ def install():
 @app.command()
 def peek(
     tool: str = typer.Argument(
-        help="Tool to call: classes | timetable | tasks | task | units | files | journal | find"
+        help="Tool to call: classes | timetable | tasks | task | units | files | journal | find | file-content"
     ),
     class_id: str = typer.Option(None, "--class", "-c", help="Class ID (needed for tasks / task / files / journal)"),
     task_id:  str = typer.Option(None, "--task",  "-t", help="Task ID  (needed for task)"),
     query:    str = typer.Option(None, "--query", "-q", help="Search query (needed for find)"),
+    url:      str = typer.Option(None, "--url",   "-u", help="File URL (needed for file-content)"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Bypass cache and force a fresh scrape"),
 ):
     """
@@ -147,13 +148,14 @@ def peek(
     \b
       managebac-mcp peek classes
       managebac-mcp peek timetable
-      managebac-mcp peek tasks   --class 12345
-      managebac-mcp peek task    --class 12345 --task 67890
-      managebac-mcp peek units   --class 12345
-      managebac-mcp peek files   --class 12345
-      managebac-mcp peek journal --class 12345
-      managebac-mcp peek find    --query "biology essay"
-      managebac-mcp peek find    --query "https://es.managebac.com/student/classes/12345/core_tasks/67890"
+      managebac-mcp peek tasks        --class 12345
+      managebac-mcp peek task         --class 12345 --task 67890
+      managebac-mcp peek units        --class 12345
+      managebac-mcp peek files        --class 12345
+      managebac-mcp peek journal      --class 12345
+      managebac-mcp peek find         --query "biology essay"
+      managebac-mcp peek find         --query "https://es.managebac.com/..."
+      managebac-mcp peek file-content --url "https://es.managebac.com/attachments/..."
     """
     import asyncio
     from . import scraper, cache as _cache
@@ -189,6 +191,10 @@ def peek(
             if not class_id:
                 rprint("[red]--class is required for 'units'[/red]"); raise typer.Exit(1)
             return await scraper.fetch_units(class_id)
+        elif tool == "file-content":
+            if not url:
+                rprint("[red]--url is required for 'file-content'[/red]"); raise typer.Exit(1)
+            return await scraper.fetch_file_content(url)
         elif tool == "files":
             if not class_id:
                 rprint("[red]--class is required for 'files'[/red]"); raise typer.Exit(1)
@@ -204,7 +210,7 @@ def peek(
             return result if result is not None else {"error": "Task not found"}
         else:
             rprint(f"[red]Unknown tool: {tool}[/red]")
-            rprint("Choose from: classes | timetable | tasks | task | units | files | journal | find")
+            rprint("Choose from: classes | timetable | tasks | task | units | files | journal | find | file-content")
             raise typer.Exit(1)
 
     result = asyncio.run(_run())

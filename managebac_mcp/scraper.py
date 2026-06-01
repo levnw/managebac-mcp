@@ -1119,6 +1119,112 @@ async def fetch_units(class_id: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# File content extraction
+# ---------------------------------------------------------------------------
+
+_MAX_FILE_BYTES = 10 * 1024 * 1024   # 10 MB hard limit
+_MAX_TEXT_CHARS = 40_000              # ~8 000 words — fits comfortably in AI context
+
+
+async def fetch_file_content(url: str) -> dict:
+    """
+    Download a ManageBac attachment and extract its text.
+
+    Supports:
+      • PDF  — pdfplumber (handles tables, multi-column layouts)
+      • DOCX — python-docx
+      • Plain text — UTF-8 decode
+      • Images / unsupported — returns a clear error, no crash
+
+    Results are cached for 1 hour by URL hash so the same file is
+    never downloaded twice within a session.
+    """
+    import hashlib, io
+    cache_key = f"get_file_content:{hashlib.md5(url.encode()).hexdigest()}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    async with await get_client() as client:
+        try:
+            r = await authed_get(client, url)
+        except Exception as e:
+            return {"url": url, "error": f"Download failed: {e}", "text": "", "page_count": None}
+
+    if r.status_code != 200:
+        return {"url": url, "error": f"HTTP {r.status_code}", "text": "", "page_count": None}
+
+    content = r.content
+    content_type = r.headers.get("content-type", "").lower().split(";")[0].strip()
+
+    result: dict[str, Any] = {
+        "url": url,
+        "content_type": content_type,
+        "size_bytes": len(content),
+        "page_count": None,
+        "text": "",
+        "error": None,
+        "truncated": False,
+    }
+
+    if len(content) > _MAX_FILE_BYTES:
+        result["error"] = (
+            f"File is {len(content) / 1_048_576:.1f} MB — exceeds the {_MAX_FILE_BYTES // 1_048_576} MB limit."
+        )
+        cache.set(cache_key, result, "get_file_content")
+        return result
+
+    # --- detect type by content-type header, fall back to URL extension ---
+    ext = url.split("?")[0].rsplit(".", 1)[-1].lower() if "." in url.split("?")[0] else ""
+    is_pdf  = "pdf"  in content_type or ext == "pdf"
+    is_docx = ("wordprocessingml" in content_type or "openxmlformats" in content_type
+                or "msword" in content_type or ext in ("docx", "doc"))
+    is_text = "text/plain" in content_type or ext in ("txt", "md", "csv")
+
+    try:
+        if is_pdf:
+            import pdfplumber
+            pages_text = []
+            with pdfplumber.open(io.BytesIO(content)) as pdf:
+                result["page_count"] = len(pdf.pages)
+                for i, page in enumerate(pdf.pages):
+                    t = page.extract_text()
+                    if t and t.strip():
+                        pages_text.append(f"[Page {i + 1}]\n{t.strip()}")
+            result["text"] = "\n\n".join(pages_text)
+
+        elif is_docx:
+            import docx as _docx
+            doc = _docx.Document(io.BytesIO(content))
+            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+            result["text"] = "\n\n".join(paragraphs)
+
+        elif is_text:
+            result["text"] = content.decode("utf-8", errors="replace")
+
+        else:
+            result["error"] = (
+                f"Cannot extract text from this file type ({content_type or ext or 'unknown'}). "
+                "PDF, DOCX, and plain text files are supported."
+            )
+
+    except Exception as e:
+        result["error"] = f"Text extraction failed: {e}"
+
+    # Truncate very long text with a note
+    if len(result["text"]) > _MAX_TEXT_CHARS:
+        result["text"] = (
+            result["text"][:_MAX_TEXT_CHARS]
+            + f"\n\n[Text truncated — showing first {_MAX_TEXT_CHARS:,} of "
+              f"{len(result['text']):,} characters]"
+        )
+        result["truncated"] = True
+
+    cache.set(cache_key, result, "get_file_content")
+    return result
+
+
+# ---------------------------------------------------------------------------
 # find_task
 # ---------------------------------------------------------------------------
 

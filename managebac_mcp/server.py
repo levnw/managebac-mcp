@@ -16,6 +16,7 @@ from .scraper import (
     fetch_files,
     fetch_journal,
     fetch_units,
+    fetch_file_content,
     find_task,
 )
 from . import cache
@@ -154,6 +155,36 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="get_file_content",
+            description=(
+                "Downloads a ManageBac attachment and returns its text content. "
+                "Use this when you have a file URL from a task's description.embedded_files, "
+                "resources, or submitted_files and the student needs to know what is inside the file. "
+                "Supports PDF (including multi-page documents with tables), DOCX, and plain text. "
+                "Pass the full URL exactly as it appears in the embedded_files or resources list. "
+                "The file is downloaded using the authenticated ManageBac session — "
+                "no separate login is needed. "
+                "Returns: content_type, size_bytes, page_count (for PDFs), text (extracted content), "
+                "truncated (true if the file was too long to return in full — typically novels or "
+                "very long PDFs), and error (null on success). "
+                "Images and unsupported file types return an error message, not a crash. "
+                "Results are cached for 1 hour so the same file is never downloaded twice."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": (
+                            "Full ManageBac attachment URL from description.embedded_files[].url "
+                            "or resources[].files[].url"
+                        ),
+                    }
+                },
+                "required": ["url"],
+            },
+        ),
+        types.Tool(
             name="get_units",
             description=(
                 "Returns all IB curriculum units for a class, each with the full MYP/DP "
@@ -222,6 +253,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         result = await fetch_tasks(arguments["class_id"])
     elif name == "get_task_detail":
         result = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
+    elif name == "get_file_content":
+        result = await fetch_file_content(arguments["url"])
     elif name == "get_units":
         result = await fetch_units(arguments["class_id"])
     elif name == "get_files":

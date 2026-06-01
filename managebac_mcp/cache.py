@@ -14,6 +14,7 @@ TTL = {
     "get_files": 3600,           # 1h
     "get_journal": 1800,         # 30 min
     "get_units": 86400,          # 24h (unit plans rarely change mid-year)
+    "get_file_content": 3600,    # 1h
 }
 
 
