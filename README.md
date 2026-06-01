@@ -1,10 +1,10 @@
 # ManageBac MCP
 
-An MCP (Model Context Protocol) server that gives AI assistants full read access to your ManageBac student account — tasks, timetable, grades, teacher comments, files, journal entries, and discussions.
+An MCP (Model Context Protocol) server that gives AI assistants access to your ManageBac student account — tasks, timetable, grades, teacher comments, units, files, journal entries, discussions, and attachment contents. It can also submit work to a task's dropbox.
 
 Works with **Claude Desktop** out of the box. The first release is focused on a local Claude setup, but the project is intended to grow toward broader AI/client support over time.
 
-> ⚠️ **Read-only by design.** The current server never submits, comments, deletes, or modifies anything in ManageBac.
+> ⚠️ **Almost entirely read-only.** Every tool reads data except one: `submit_task_file`, which uploads a file to a task's dropbox. It defaults to a preview-only dry run and only ever uploads when explicitly confirmed. The server never comments, deletes, or modifies anything else.
 
 ---
 
@@ -31,13 +31,34 @@ Once set up, you can ask your AI things like:
 | `get_timetable` | Full weekly timetable — period, day, time, class name, teacher, room, task count, class ID |
 | `get_tasks(class_id)` | All tasks for a class — title, due date/time, type, tags, status, grades, teacher comment (Markdown) |
 | `get_task_detail(class_id, task_id)` | Full task — description (Markdown with bold/italic/lists), embedded file links, external links, submitted files, discussions |
-| `get_files(class_id)` | Resource files the teacher uploaded to the class |
+| `get_units(class_id)` | All curriculum units with the full IB framework — statement of inquiry, key concepts, related concepts, global context, inquiry questions, ATL skills, status |
+| `get_files(class_id)` | Resource files the teacher uploaded to the class, each with a download URL |
 | `get_journal(class_id)` | Learner portfolio / journal entries with body text (Markdown), links, and attached files |
+| `get_file_content(url)` | Downloads any attachment using your session and returns the raw file (PDF, image, …) for the AI to read natively — no text conversion |
+| `submit_task_file(class_id, task_id, file_path)` | ⚠️ Uploads a local file to a task's dropbox. Always previews first; only submits on explicit confirmation |
 | `find_task(query)` | Find a task by pasting a ManageBac URL, or fuzzy-search by title across all classes |
+
+### Batch fetching
+`get_tasks`, `get_units`, `get_files`, and `get_journal` accept either a single
+`class_id` or a **list** of them — all fetched concurrently in one call.
+`get_task_detail` accepts a `tasks` list of `{class_id, task_id}` pairs.
+This lets the AI pull data for every subject at once instead of one call per class.
 
 ### How `find_task` works
 - **URL mode**: paste any ManageBac task URL → extracts the class ID and task ID automatically
 - **Fuzzy title mode**: type part of a task name → searches across all classes and returns the best match
+
+### Reading attachments
+`get_task_detail` and `get_files` expose a `url` on every file. Pass that URL to
+`get_file_content` and the server downloads it through your authenticated session
+and hands the raw file straight to the AI — so the AI can read a teacher's PDF
+worksheet, rubric, or novel without you downloading anything yourself.
+
+### Submitting work
+`submit_task_file` uploads a local file to a task's submission dropbox. It is the
+only **write** operation in the server and is deliberately cautious: it defaults to
+`dry_run=true` (preview only) and only uploads when explicitly told to. Save the
+file to an absolute path (e.g. `/tmp/essay.pdf`) before calling it.
 
 ---
 
@@ -93,15 +114,19 @@ managebac-mcp install
 # Inspect raw tool output in the terminal
 managebac-mcp peek classes
 managebac-mcp peek timetable
-managebac-mcp peek tasks   --class 12734244
-managebac-mcp peek task    --class 12734244 --task 47617250
-managebac-mcp peek files   --class 12734244
-managebac-mcp peek journal --class 12734244
-managebac-mcp peek find    --query "end of unit reflection"
-managebac-mcp peek find    --query "https://es.managebac.com/student/classes/.../core_tasks/..."
+managebac-mcp peek tasks        --class 12734244
+managebac-mcp peek task         --class 12734244 --task 47617250
+managebac-mcp peek units        --class 12734244
+managebac-mcp peek files        --class 12734244
+managebac-mcp peek journal      --class 12734244
+managebac-mcp peek find         --query "end of unit reflection"
+managebac-mcp peek file-content --url "https://es.managebac.com/attachments/..."
 
 # Force a fresh scrape (bypass cache)
 managebac-mcp peek classes --no-cache
+
+# Submit a file to a task's dropbox (previews first, asks before uploading)
+managebac-mcp submit --class 12734244 --task 48220527 --file ~/Documents/essay.pdf
 
 # View what's currently in the cache
 managebac-mcp cache-view
@@ -119,8 +144,10 @@ All responses are cached in SQLite at `~/.managebac_mcp/cache.db` to avoid hamme
 | Timetable | 6 hours |
 | Tasks list | 10 minutes |
 | Task detail | 30 minutes |
+| Units | 24 hours |
 | Files | 1 hour |
 | Journal | 30 minutes |
+| File content | 1 hour (cached to disk at `~/.managebac_mcp/files/`) |
 
 ---
 
@@ -147,7 +174,7 @@ managebac_mcp/
 ├── scraper.py     # All HTTP fetching + HTML parsing
 ├── cache.py       # SQLite cache + TTL management
 ├── server.py      # MCP stdio server + tool definitions
-└── cli.py         # managebac-mcp CLI (setup, install, peek, cache-view)
+└── cli.py         # managebac-mcp CLI (setup, install, peek, submit, cache-view)
 
 tests/
 ├── test_parsers.py   # Unit tests using saved HTML fixtures
@@ -158,6 +185,24 @@ tests/
 ---
 
 ## Changelog
+
+### v1.0.0 — First technical release
+
+The full toolset is in place and working end-to-end against a live account.
+
+**New tools since v0.1.0:**
+- `get_units` — every curriculum unit with the full IB framework (statement of inquiry, key concepts + definitions, related concepts, global context, conceptual understanding, inquiry questions typed Factual/Conceptual/Debatable, ATL skills, status). Fetches all unit detail popups concurrently in one session.
+- `get_file_content` — downloads any attachment through the authenticated session and returns the **raw file** (PDF/image/…) so the AI reads it natively — no lossy text conversion.
+- `submit_task_file` — uploads a local file to a task's dropbox (multipart POST with CSRF). The only write operation; defaults to `dry_run=true` and only uploads on explicit confirmation.
+
+**Improvements:**
+- **Batch fetching** — `get_tasks`, `get_task_detail`, `get_units`, `get_files`, and `get_journal` accept a list of IDs and fetch concurrently (≈3× faster for multi-subject queries).
+- Tool descriptions rewritten to be school-agnostic — no hardcoded URL, no IB/MYP wording — so the server works for any ManageBac school.
+- `get_files` now exposes a `url` (pre-signed download link) on every file, so class-wide files can be read with `get_file_content`.
+
+**Bugs fixed:**
+- `lxml` was silently stripping the `data-ec3-info` attribute that holds class file download URLs → `parse_files` now uses `html.parser`.
+- `submit_task_file` failed on relative paths because the MCP server's working directory differs from where files are created → now resolves/validates paths and returns a clear error telling the caller to use an absolute `/tmp/` path.
 
 ### v0.1.0
 
@@ -182,13 +227,14 @@ tests/
 
 Future work is tracked in GitHub Issues instead of being maintained as a static checklist. This keeps planning, discussion, and implementation details in the right place.
 
-### First release: local Claude setup
+### Done in v1.0.0
+- ✅ Unit context (`get_units`)
+- ✅ Reading protected task attachments and class files (`get_file_content`)
+- ✅ Submitting work to a task (`submit_task_file`)
 
-The first release is focused on making the MCP work well as a local tool, especially with Claude Desktop. The goal is to keep setup clear, clean up development-only files, and make the current read-only tools reliable.
+### Next: keeping data fresh
 
-### Next: better task context
-
-After the first release, the project should improve how AI understands tasks. This includes better unit context, protected task attachments, linked files, and making sure the AI can notice when ManageBac data may have changed.
+Help the AI notice when cached ManageBac data may be stale (a task gets graded, a due date changes, feedback appears) so it knows when to re-check instead of trusting old data.
 
 ### Later: broader AI and hosted access
 
@@ -204,4 +250,4 @@ Bigger product ideas, such as multiple student accounts, hosted access, paid usa
 
 - Credentials are stored in `~/.managebac_mcp/.env`, never in the project directory
 - `.env` is in `.gitignore` — will never be committed
-- The current server is **read-only** — it calls only `GET` endpoints and never submits forms, posts comments, or deletes anything
+- All tools are read-only except `submit_task_file`, which is the only tool that writes. It defaults to a preview-only dry run and uploads only on explicit confirmation. Nothing is ever commented, deleted, or otherwise modified.
