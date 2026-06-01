@@ -172,7 +172,7 @@ async def list_tools() -> list[types.Tool]:
                     "task_id": {"type": "string", "description": "Task ID from get_tasks"},
                     "file_path": {
                         "type": "string",
-                        "description": "Absolute local path to the file (e.g. '/Users/you/essay.pdf')",
+                        "description": "Absolute path to the file. Always save generated files to /tmp/ first (e.g. '/tmp/essay.pdf') then pass that path here.",
                     },
                     "dry_run": {
                         "type": "boolean",

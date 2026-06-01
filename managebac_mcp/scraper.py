@@ -1230,11 +1230,33 @@ async def submit_task_file(
     from bs4 import BeautifulSoup as _BS
     import mimetypes as _mimetypes
 
-    path = _Path(file_path)
+    import os as _os
+    path = _Path(file_path).expanduser()
+    if not path.is_absolute():
+        # Relative paths are ambiguous — the MCP server CWD may differ from where the file was created.
+        # Try to resolve against home dir as a fallback, but tell the caller to use absolute paths.
+        resolved = _Path.home() / path
+        if resolved.exists():
+            path = resolved
+        else:
+            return {
+                "success": False,
+                "error": (
+                    f"Relative path '{file_path}' not found. "
+                    f"Use an absolute path like '/tmp/{path.name}' or '/Users/.../{path.name}'. "
+                    f"Current working directory is: {_os.getcwd()}"
+                )
+            }
     if not path.exists():
-        return {"success": False, "error": f"File not found: {file_path}"}
+        return {
+            "success": False,
+            "error": (
+                f"File not found: {path}. "
+                "Make sure the file was saved to an absolute path like /tmp/blank.pdf before calling this tool."
+            )
+        }
     if not path.is_file():
-        return {"success": False, "error": f"Not a file: {file_path}"}
+        return {"success": False, "error": f"Not a file: {path}"}
 
     file_size = path.stat().st_size
     if file_size > 500 * 1024 * 1024:
