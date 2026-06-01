@@ -1,10 +1,18 @@
+"""
+Response cache — namespaced per user.
+
+The cache key is (user_id, key). The user_id comes from the request context,
+so a read for user A can NEVER return user B's row, even if both cached the
+same logical key (e.g. "get_classes"). This is the isolation guarantee for
+cached data.
+"""
 import json
 import sqlite3
 import time
-from pathlib import Path
 from typing import Any
 
 from .config import CACHE_DB
+from .context import require_user
 
 TTL = {
     "get_classes": 86400,        # 24h
@@ -13,28 +21,49 @@ TTL = {
     "get_task_detail": 1800,     # 30 min
     "get_files": 3600,           # 1h
     "get_journal": 1800,         # 30 min
-    "get_units": 86400,          # 24h (unit plans rarely change mid-year)
+    "get_units": 86400,          # 24h
     "get_file_content": 3600,    # 1h
 }
 
 
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(CACHE_DB)
+    # Migration: a pre-multi-user cache table has no user_id column. The cache
+    # is disposable, so just drop and recreate it with the namespaced schema.
+    existing = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='cache'"
+    ).fetchone()
+    if existing:
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(cache)").fetchall()]
+        if "user_id" not in cols:
+            conn.execute("DROP TABLE cache")
+            conn.commit()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cache (
-            key        TEXT PRIMARY KEY,
+            user_id    TEXT NOT NULL,
+            key        TEXT NOT NULL,
             value      TEXT NOT NULL,
-            expires_at INTEGER NOT NULL
+            expires_at INTEGER NOT NULL,
+            PRIMARY KEY (user_id, key)
         )
     """)
+    rl = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='request_log'"
+    ).fetchone()
+    if rl:
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(request_log)").fetchall()]
+        if "user_id" not in cols:
+            conn.execute("DROP TABLE request_log")
+            conn.commit()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS request_log (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts         INTEGER NOT NULL,
-            tool       TEXT NOT NULL,
-            args       TEXT NOT NULL,
-            response   TEXT NOT NULL,
-            source     TEXT NOT NULL DEFAULT 'mcp',
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts          INTEGER NOT NULL,
+            user_id     TEXT NOT NULL DEFAULT '',
+            tool        TEXT NOT NULL,
+            args        TEXT NOT NULL,
+            response    TEXT NOT NULL,
+            source      TEXT NOT NULL DEFAULT 'mcp',
             duration_ms INTEGER NOT NULL DEFAULT 0
         )
     """)
@@ -43,9 +72,10 @@ def _connect() -> sqlite3.Connection:
 
 
 def get(key: str) -> Any | None:
+    uid = require_user().id
     with _connect() as conn:
         row = conn.execute(
-            "SELECT value, expires_at FROM cache WHERE key = ?", (key,)
+            "SELECT value, expires_at FROM cache WHERE user_id = ? AND key = ?", (uid, key)
         ).fetchone()
     if row is None:
         return None
@@ -56,52 +86,47 @@ def get(key: str) -> Any | None:
 
 
 def set(key: str, value: Any, ttl_key: str) -> None:
+    uid = require_user().id
     ttl = TTL.get(ttl_key, 600)
     expires_at = int(time.time()) + ttl
     with _connect() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)",
-            (key, json.dumps(value), expires_at),
+            "INSERT OR REPLACE INTO cache (user_id, key, value, expires_at) VALUES (?, ?, ?, ?)",
+            (uid, key, json.dumps(value), expires_at),
         )
 
 
 def invalidate(key: str) -> None:
+    uid = require_user().id
     with _connect() as conn:
-        conn.execute("DELETE FROM cache WHERE key = ?", (key,))
+        conn.execute("DELETE FROM cache WHERE user_id = ? AND key = ?", (uid, key))
 
 
-def clear_all() -> None:
+def clear_user() -> None:
+    """Clear all cached data for the current user only."""
+    uid = require_user().id
     with _connect() as conn:
-        conn.execute("DELETE FROM cache")
+        conn.execute("DELETE FROM cache WHERE user_id = ?", (uid,))
 
 
 def log_request(tool: str, args: dict, response: Any, source: str = "mcp", duration_ms: int = 0) -> None:
+    from .context import get_current_user
+    user = get_current_user()
+    uid = user.id if user else ""
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO request_log (ts, tool, args, response, source, duration_ms) VALUES (?,?,?,?,?,?)",
-            (int(time.time()), tool, json.dumps(args), json.dumps(response), source, duration_ms),
+            "INSERT INTO request_log (ts, user_id, tool, args, response, source, duration_ms) VALUES (?,?,?,?,?,?,?)",
+            (int(time.time()), uid, tool, json.dumps(args), json.dumps(response), source, duration_ms),
         )
-        # Keep only last 200 entries
-        conn.execute("DELETE FROM request_log WHERE id NOT IN (SELECT id FROM request_log ORDER BY id DESC LIMIT 200)")
-
-
-def get_request_log(limit: int = 50) -> list[dict]:
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT id, ts, tool, args, response, source, duration_ms FROM request_log ORDER BY id DESC LIMIT ?",
-            (limit,)
-        ).fetchall()
-    return [
-        {"id": r[0], "ts": r[1], "tool": r[2], "args": json.loads(r[3]),
-         "response": json.loads(r[4]), "source": r[5], "duration_ms": r[6]}
-        for r in rows
-    ]
+        conn.execute("DELETE FROM request_log WHERE id NOT IN (SELECT id FROM request_log ORDER BY id DESC LIMIT 500)")
 
 
 def get_cache_entries() -> list[dict]:
+    """All cache rows for the current user (for CLI inspection)."""
+    uid = require_user().id
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT key, value, expires_at FROM cache ORDER BY key"
+            "SELECT key, value, expires_at FROM cache WHERE user_id = ? ORDER BY key", (uid,)
         ).fetchall()
     now = int(time.time())
     return [

@@ -20,9 +20,11 @@ build/
 # Old code (pre-refactor)
 src/
 
-# Cache & session data (stored in ~/.managebac_mcp/)
+# Cache, sessions, user store & encryption key (stored in ~/.managebac_mcp/)
 cache.db
 session.json
+users.db
+secret.key
 
 # Test fixtures (contain scraped HTML from your real account)
 tests/fixtures/

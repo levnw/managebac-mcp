@@ -21,6 +21,18 @@ app = typer.Typer(
 console = Console()
 
 
+def _use_local_user():
+    """Bind a 'local' user (from ~/.managebac_mcp/.env) to the context for CLI use."""
+    from . import config, users
+    from .context import set_current_user
+    if not (config.EMAIL and config.PASSWORD):
+        rprint("[red]No local credentials found.[/red] Run [cyan]managebac-mcp setup[/cyan] first, "
+               "or set MANAGEBAC_EMAIL / MANAGEBAC_PASSWORD in ~/.managebac_mcp/.env")
+        raise typer.Exit(1)
+    user = users.ensure_local_user(config.BASE_URL, config.EMAIL, config.PASSWORD)
+    set_current_user(user)
+
+
 # ---------------------------------------------------------------------------
 # setup — interactive credential setup + install to Claude Desktop
 # ---------------------------------------------------------------------------
@@ -160,6 +172,8 @@ def peek(
     import asyncio
     from . import scraper, cache as _cache
 
+    _use_local_user()
+
     # Optional: wipe the relevant cache key before fetching
     if no_cache:
         key_map = {
@@ -249,8 +263,10 @@ def submit(
     import asyncio
     from . import scraper
 
+    _use_local_user()
+
     async def _run(dry: bool):
-        return await scraper.submit_task_file(class_id, task_id, file, dry_run=dry)
+        return await scraper.submit_task_file(class_id, task_id, file_path=file, dry_run=dry)
 
     # Dry run first
     preview = asyncio.run(_run(dry=True))
@@ -300,51 +316,36 @@ def mcp_stdio():
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", help="Bind address (use 0.0.0.0 to accept from a tunnel)"),
     port: int = typer.Option(8000, "--port", "-p", help="Port to listen on"),
-    public_url: str = typer.Option(None, "--public-url", help="Your public base URL (e.g. https://mb.yourdomain.com) — used only to print the connector URL"),
+    public_url: str = typer.Option(None, "--public-url", help="Your public base URL (e.g. https://mb.yourdomain.com) — used only to print the enroll link"),
 ):
     """
-    Run the HTTP server so remote clients (ChatGPT) can connect.
+    Run the multi-user HTTP server so remote clients (ChatGPT) can connect.
 
     \b
-    Exposes the same tools as Claude Desktop, protected by a secret token.
-    Point a Cloudflare Tunnel (or any reverse proxy) at this port, then add
-    the printed URL as a custom MCP connector in ChatGPT.
+    Each user enrolls their own ManageBac account at /enroll and gets a private
+    connector URL. Point a Cloudflare Tunnel (or any reverse proxy) at this port.
 
     \b
       managebac-mcp serve --host 0.0.0.0 --port 8000 \\
         --public-url https://managebac.yourdomain.com
     """
-    import secrets
-    from pathlib import Path
-    from dotenv import set_key
     from . import config, http_server
 
-    # Ensure a token exists — generate and persist one if not.
-    token = config.HTTP_TOKEN
-    env_file = Path.home() / ".managebac_mcp" / ".env"
-    if not token:
-        token = secrets.token_urlsafe(32)
-        env_file.parent.mkdir(exist_ok=True)
-        if not env_file.exists():
-            env_file.touch()
-        set_key(str(env_file), "MANAGEBAC_MCP_TOKEN", token)
-        rprint(f"[green]✓[/green] Generated a new access token and saved it to {env_file}")
-
     base = (public_url or f"http://{host}:{port}").rstrip("/")
-    connector_url = f"{base}/mcp"
+    invite = "[yellow]required[/yellow]" if config.SIGNUP_CODE else "[dim]not set (anyone can enroll)[/dim]"
 
     rprint(Panel.fit(
-        f"[bold]ManageBac MCP — HTTP server[/bold]\n\n"
-        f"  Listening on:   [cyan]http://{host}:{port}/mcp[/cyan]\n"
-        f"  Access token:   [yellow]{token}[/yellow]\n\n"
-        f"[bold]Add this as a custom connector in ChatGPT:[/bold]\n"
-        f"  URL:    [cyan]{connector_url}?key={token}[/cyan]\n\n"
-        f"[dim]Keep the token private — anyone with it can read your account.\n"
+        f"[bold]ManageBac MCP — multi-user HTTP server[/bold]\n\n"
+        f"  Listening on:  [cyan]http://{host}:{port}[/cyan]\n"
+        f"  Invite code:   {invite}\n\n"
+        f"[bold]Send friends here to connect their account:[/bold]\n"
+        f"  [cyan]{base}/enroll[/cyan]\n\n"
+        f"[dim]Each user gets their own private connector URL after enrolling.\n"
         f"Press Ctrl+C to stop.[/dim]",
         border_style="blue",
     ))
 
-    http_server.run(host=host, port=port, token=token)
+    http_server.run(host=host, port=port)
 
 
 # ---------------------------------------------------------------------------
@@ -353,8 +354,9 @@ def serve(
 
 @app.command()
 def cache_view():
-    """Show all cached data in the terminal."""
+    """Show all cached data in the terminal (local user)."""
     from . import cache as _cache
+    _use_local_user()
     entries = _cache.get_cache_entries()
     if not entries:
         rprint("[dim]Cache is empty.[/dim]")
@@ -373,6 +375,48 @@ def cache_view():
         table.add_row(e["key"], expiry, count)
 
     console.print(table)
+
+
+# ---------------------------------------------------------------------------
+# users — operator admin for the multi-user server
+# ---------------------------------------------------------------------------
+
+@app.command(name="users")
+def list_users_cmd():
+    """List enrolled users (multi-user server)."""
+    from . import users as _users
+    rows = [u for u in _users.list_users() if u["id"] != "local"]
+    if not rows:
+        rprint("[dim]No users enrolled yet. Share the /enroll page.[/dim]")
+        return
+    import datetime as _dt
+    table = Table(title="Enrolled Users", show_lines=True)
+    table.add_column("ID", style="cyan")
+    table.add_column("Email")
+    table.add_column("ManageBac URL")
+    table.add_column("Joined")
+    for u in rows:
+        joined = _dt.datetime.fromtimestamp(u["created_at"]).strftime("%Y-%m-%d")
+        table.add_row(u["id"], u["email"], u["mb_url"], joined)
+    console.print(table)
+
+
+@app.command()
+def deluser(user_id: str = typer.Argument(help="User ID to delete (from `managebac-mcp users`)")):
+    """Remove an enrolled user and all their cached data."""
+    from . import users as _users, cache as _cache
+    from .context import set_current_user
+    u = next((x for x in _users.list_users() if x["id"] == user_id), None)
+    if not u:
+        rprint(f"[red]No user with ID {user_id}[/red]"); raise typer.Exit(1)
+    if not typer.confirm(f"Delete {u['email']} and all their cached data?"):
+        raise typer.Exit(0)
+    # Clear their cache rows, then the user record
+    full = _users.get_user_by_token(_users.get_user_by_email(u["mb_url"], u["email"]).token)
+    set_current_user(full)
+    _cache.clear_user()
+    _users.delete_user(user_id)
+    rprint(f"[green]✓[/green] Deleted {u['email']}")
 
 
 if __name__ == "__main__":

@@ -9,7 +9,14 @@ from bs4 import BeautifulSoup, Tag
 
 from . import cache
 from .auth import authed_get, get_client, login
-from .config import BASE_URL
+from . import config
+from .context import get_current_user
+
+
+def _base() -> str:
+    """Current user's ManageBac base URL (per-user; schools differ)."""
+    u = get_current_user()
+    return u.mb_url if u else config.BASE_URL
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +201,7 @@ def parse_classes(html: str) -> list[dict]:
         classes.append({
             "id": class_id,
             "name": name,
-            "url": f"{BASE_URL}/student/classes/{class_id}",
+            "url": f"{_base()}/student/classes/{class_id}",
             "level_tags": tags,
         })
 
@@ -454,7 +461,7 @@ def parse_tasks(html: str, class_id: str = "") -> list[dict]:
         tasks.append({
             "id": task_id,
             "title": title,
-            "url": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}" if class_id else "",
+            "url": f"{_base()}/student/classes/{class_id}/core_tasks/{task_id}" if class_id else "",
             "date": date_str,
             "due_day_time": due_day_time,
             "type": task_type,
@@ -610,7 +617,7 @@ def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
     return {
         "class_id": class_id,
         "task_id": task_id,
-        "url": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}",
+        "url": f"{_base()}/student/classes/{class_id}/core_tasks/{task_id}",
         "description": {
             "text": desc_text,
             "links": desc_links,
@@ -982,7 +989,7 @@ def parse_units(html: str, class_id: str) -> list[dict]:
             "start": start,
             "duration": duration,
             "status": status,
-            "url": f"{BASE_URL}/student/classes/{class_id}/units/{unit_id}/presentations",
+            "url": f"{_base()}/student/classes/{class_id}/units/{unit_id}/presentations",
         })
 
     return units
@@ -1310,13 +1317,13 @@ async def submit_task_file(
                     "filename": upload_name,
                     "size_bytes": file_size,
                     "mime_type": mime_type,
-                    "to_task": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}",
-                    "endpoint": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}/dropbox/upload",
+                    "to_task": f"{_base()}/student/classes/{class_id}/core_tasks/{task_id}",
+                    "endpoint": f"{_base()}/student/classes/{class_id}/core_tasks/{task_id}/dropbox/upload",
                 },
                 "note": "Set dry_run=false to actually submit.",
             }
 
-        upload_url = f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}/dropbox/upload"
+        upload_url = f"{_base()}/student/classes/{class_id}/core_tasks/{task_id}/dropbox/upload"
         response = await client.post(
             upload_url,
             data={
@@ -1330,7 +1337,7 @@ async def submit_task_file(
             headers={
                 "X-CSRF-Token": csrf_token,
                 "X-Requested-With": "XMLHttpRequest",  # Rails UJS sends this
-                "Referer": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}/dropbox",
+                "Referer": f"{_base()}/student/classes/{class_id}/core_tasks/{task_id}/dropbox",
             },
             follow_redirects=True,
         )
@@ -1340,7 +1347,7 @@ async def submit_task_file(
             "success": True,
             "file": upload_name,
             "size_bytes": file_size,
-            "task_url": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}",
+            "task_url": f"{_base()}/student/classes/{class_id}/core_tasks/{task_id}",
             "http_status": response.status_code,
             "server_response": response.text[:500] if response.text else "",
         }

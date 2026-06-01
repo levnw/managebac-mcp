@@ -369,6 +369,11 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 async def main():
     from mcp.server.models import InitializationOptions
     from mcp.server import NotificationOptions
+    # stdio is single-user — bind the local account from ~/.managebac_mcp/.env
+    from . import config, users
+    from .context import set_current_user
+    if config.EMAIL and config.PASSWORD:
+        set_current_user(users.ensure_local_user(config.BASE_URL, config.EMAIL, config.PASSWORD))
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,

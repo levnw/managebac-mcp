@@ -102,51 +102,80 @@ Then restart Claude Desktop. The tools appear automatically in the 🔨 menu.
 
 ---
 
-## Using it with ChatGPT (remote / HTTP)
+## Multi-user / ChatGPT (remote HTTP)
 
-Claude Desktop runs the server *locally* as a program on your machine. ChatGPT
-can't do that — it connects to a **public URL** instead. So for ChatGPT you run
-the same server in HTTP mode and expose it through a reverse proxy or tunnel.
+> **This is the `multi-user` branch.** It runs the server as a small multi-user
+> web service so you and a few friends can each connect your *own* ManageBac
+> account from ChatGPT. (The `main` branch is the single-user, local Claude
+> Desktop version.)
 
-> ⚠️ The HTTP server is protected by a secret token. Anyone who has the full URL
-> (including the token) can read your account, so treat it like a password.
-> ChatGPT custom connectors require a paid plan with developer mode enabled, and
-> OpenAI changes the exact steps periodically.
+Claude Desktop runs the server locally and reads one account. ChatGPT can't do
+that — it connects to a **public URL**. So here the server runs once (on your
+own machine or server), each user enrolls their own account, and each gets a
+private connector URL.
 
-### 1. Start the HTTP server
+### How isolation works (no user ever sees another's data)
+
+- Each user has a **secret token** — the `?key=` in their connector URL.
+- Every request is pinned to that user via a request-scoped context. Every
+  ManageBac fetch and every cache row is namespaced by user id.
+- **Fail closed:** if a request has no valid user, the tools refuse — there is
+  no global fallback account.
+- Passwords are **encrypted at rest** (`~/.managebac_mcp/secret.key`); each user
+  has their own session cookies. Different users can even be at different schools
+  (different ManageBac URLs).
+
+> ⚠️ Storing other people's ManageBac passwords is a real responsibility. The
+> encryption protects against a stolen database file, but not against a full
+> compromise of the server (the key lives on the same box). Tell your friends
+> honestly that their login sits on your server. Their connector URL is a
+> password — anyone who has it can read their account.
+
+### 1. Run the server
 
 ```bash
 managebac-mcp serve --host 0.0.0.0 --port 8000 \
   --public-url https://managebac.yourdomain.com
 ```
 
-On first run it generates an access token and saves it to `~/.managebac_mcp/.env`.
-It prints the exact connector URL to paste into ChatGPT.
-
-### 2. Expose it with a Cloudflare Tunnel
-
-If you have a Cloudflare domain, point a named tunnel at the local port:
+Optionally set an invite code so only people you invite can enroll:
 
 ```bash
-cloudflared tunnel --url http://localhost:8000
-# or, with a named tunnel mapped to your domain:
-#   managebac.yourdomain.com  ->  http://localhost:8000
+export MANAGEBAC_SIGNUP_CODE=some-secret-code
 ```
 
-This gives `https://managebac.yourdomain.com` a stable HTTPS address that
-forwards to the server running on your machine. Your ManageBac password stays
-on your own hardware — only the proxied requests go through Cloudflare.
+### 2. Expose it with your Cloudflare Tunnel
 
-### 3. Add the connector in ChatGPT
+Point your tunnel at the local port so `https://managebac.yourdomain.com`
+forwards to `http://localhost:8000`. HTTPS is required — the enroll page
+receives passwords.
 
-In ChatGPT → Settings → Connectors → add a custom MCP connector with:
+### 3. Each friend enrolls themselves
+
+Send them to:
 
 ```
-https://managebac.yourdomain.com/mcp?key=YOUR_TOKEN
+https://managebac.yourdomain.com/enroll
 ```
 
-(the `serve` command prints this full URL for you). ChatGPT then sees all the
-same tools Claude does.
+They enter their own ManageBac URL, email, and password. The server verifies the
+login, stores it encrypted, and shows them their personal connector URL:
+
+```
+https://managebac.yourdomain.com/mcp?key=THEIR_OWN_TOKEN
+```
+
+They paste that into ChatGPT → Settings → Connectors → custom MCP connector.
+
+> ChatGPT custom connectors require a paid plan with developer mode enabled, and
+> OpenAI changes the exact steps periodically.
+
+### Managing users (operator)
+
+```bash
+managebac-mcp users          # list enrolled users
+managebac-mcp deluser <id>   # remove a user and wipe their cached data
+```
 
 ### Submitting files from ChatGPT
 
