@@ -1,0 +1,15 @@
+# Cloudflare Tunnel config for the ManageBac MCP server.
+# Copy to /etc/cloudflared/config.yml on the server.
+#
+# `tunnel` and `credentials-file` are filled in for you by deploy/setup-tunnel.sh
+# (it replaces TUNNEL_ID after `cloudflared tunnel create`).
+
+tunnel: TUNNEL_ID
+credentials-file: /etc/cloudflared/TUNNEL_ID.json
+
+ingress:
+  # Public hostname -> the local MCP server
+  - hostname: managebac.822538.xyz
+    service: http://localhost:8000
+  # Everything else gets a 404
+  - service: http_status:404

@@ -1,0 +1,23 @@
+# systemd unit for the ManageBac MCP HTTP server.
+# Copy to /etc/systemd/system/managebac-mcp.service
+#
+# Assumes the project is at /opt/managebac-mcp and installed with `uv sync`.
+# Binds to localhost only — Cloudflare Tunnel reaches it locally, so the port
+# is never exposed to the public internet directly.
+
+[Unit]
+Description=ManageBac MCP server (multi-user HTTP)
+After=network.target
+
+[Service]
+Type=simple
+User=mbmcp
+WorkingDirectory=/opt/managebac-mcp
+# Optional: require an invite code to enroll (recommended)
+# Environment=MANAGEBAC_SIGNUP_CODE=change-me
+ExecStart=/opt/managebac-mcp/.venv/bin/managebac-mcp serve --host 127.0.0.1 --port 8000 --public-url https://managebac.822538.xyz
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
