@@ -2,9 +2,9 @@
 
 An MCP (Model Context Protocol) server that gives AI assistants full read access to your ManageBac student account — tasks, timetable, grades, teacher comments, files, journal entries, and discussions.
 
-Works with **Claude Desktop** out of the box. Any MCP-compatible AI can use it.
+Works with **Claude Desktop** out of the box. The first release is focused on a local Claude setup, but the project is intended to grow toward broader AI/client support over time.
 
-> ⚠️ **Read-only by design.** The server never submits, comments, deletes, or modifies anything in ManageBac.
+> ⚠️ **Read-only by design.** The current server never submits, comments, deletes, or modifies anything in ManageBac.
 
 ---
 
@@ -178,13 +178,9 @@ tests/
 
 ---
 
-## Roadmap / possible additions
+## Roadmap and feature ideas
 
-- [ ] `get_notifications` — unread notification feed
-- [ ] `get_units` — curriculum units per class
-- [ ] Auto-refresh session without full re-login
-- [ ] PyPI release (`pip install managebac-mcp`) for easy sharing
-- [ ] Support for multiple student accounts
+Future work is tracked in GitHub Issues instead of being maintained as a static checklist in the README. This keeps planning, discussion, and implementation details in the right place.
 
 ---
 
@@ -192,4 +188,4 @@ tests/
 
 - Credentials are stored in `~/.managebac_mcp/.env`, never in the project directory
 - `.env` is in `.gitignore` — will never be committed
-- The server is **read-only** — it calls only `GET` endpoints and never submits forms, posts comments, or deletes anything
+- The current server is **read-only** — it calls only `GET` endpoints and never submits forms, posts comments, or deletes anything
