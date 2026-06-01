@@ -2,7 +2,7 @@
 
 An MCP (Model Context Protocol) server that gives AI assistants access to your ManageBac student account — tasks, timetable, grades, teacher comments, units, files, journal entries, discussions, and attachment contents. It can also submit work to a task's dropbox.
 
-Works with **Claude Desktop** out of the box. The first release is focused on a local Claude setup, but the project is intended to grow toward broader AI/client support over time.
+Works with **Claude Desktop** out of the box (local stdio), and with **ChatGPT** or any HTTP MCP client via the built-in HTTP server (`managebac-mcp serve`) behind a tunnel or reverse proxy.
 
 > ⚠️ **Almost entirely read-only.** Every tool reads data except one: `submit_task_file`, which uploads a file to a task's dropbox. It defaults to a preview-only dry run and only ever uploads when explicitly confirmed. The server never comments, deletes, or modifies anything else.
 
@@ -102,6 +102,61 @@ Then restart Claude Desktop. The tools appear automatically in the 🔨 menu.
 
 ---
 
+## Using it with ChatGPT (remote / HTTP)
+
+Claude Desktop runs the server *locally* as a program on your machine. ChatGPT
+can't do that — it connects to a **public URL** instead. So for ChatGPT you run
+the same server in HTTP mode and expose it through a reverse proxy or tunnel.
+
+> ⚠️ The HTTP server is protected by a secret token. Anyone who has the full URL
+> (including the token) can read your account, so treat it like a password.
+> ChatGPT custom connectors require a paid plan with developer mode enabled, and
+> OpenAI changes the exact steps periodically.
+
+### 1. Start the HTTP server
+
+```bash
+managebac-mcp serve --host 0.0.0.0 --port 8000 \
+  --public-url https://managebac.yourdomain.com
+```
+
+On first run it generates an access token and saves it to `~/.managebac_mcp/.env`.
+It prints the exact connector URL to paste into ChatGPT.
+
+### 2. Expose it with a Cloudflare Tunnel
+
+If you have a Cloudflare domain, point a named tunnel at the local port:
+
+```bash
+cloudflared tunnel --url http://localhost:8000
+# or, with a named tunnel mapped to your domain:
+#   managebac.yourdomain.com  ->  http://localhost:8000
+```
+
+This gives `https://managebac.yourdomain.com` a stable HTTPS address that
+forwards to the server running on your machine. Your ManageBac password stays
+on your own hardware — only the proxied requests go through Cloudflare.
+
+### 3. Add the connector in ChatGPT
+
+In ChatGPT → Settings → Connectors → add a custom MCP connector with:
+
+```
+https://managebac.yourdomain.com/mcp?key=YOUR_TOKEN
+```
+
+(the `serve` command prints this full URL for you). ChatGPT then sees all the
+same tools Claude does.
+
+### Submitting files from ChatGPT
+
+`submit_task_file` accepts the file two ways. Locally (Claude) it reads a
+`file_path`. Remotely (ChatGPT) there's no shared filesystem, so it accepts
+`file_base64` + `filename` instead — the AI sends the file's bytes through the
+tool. Both still preview first with `dry_run=true`.
+
+---
+
 ## CLI commands
 
 ```bash
@@ -127,6 +182,9 @@ managebac-mcp peek classes --no-cache
 
 # Submit a file to a task's dropbox (previews first, asks before uploading)
 managebac-mcp submit --class 12734244 --task 48220527 --file ~/Documents/essay.pdf
+
+# Run the HTTP server for ChatGPT / remote clients
+managebac-mcp serve --host 0.0.0.0 --port 8000 --public-url https://mb.yourdomain.com
 
 # View what's currently in the cache
 managebac-mcp cache-view
@@ -173,8 +231,9 @@ managebac_mcp/
 ├── auth.py        # Login, CSRF, session cookie management
 ├── scraper.py     # All HTTP fetching + HTML parsing
 ├── cache.py       # SQLite cache + TTL management
-├── server.py      # MCP stdio server + tool definitions
-└── cli.py         # managebac-mcp CLI (setup, install, peek, submit, cache-view)
+├── server.py      # MCP server + tool definitions (shared by stdio and HTTP)
+├── http_server.py # HTTP/Streamable transport for ChatGPT & remote clients
+└── cli.py         # managebac-mcp CLI (setup, install, peek, submit, serve, cache-view)
 
 tests/
 ├── test_parsers.py   # Unit tests using saved HTML fixtures
@@ -185,6 +244,11 @@ tests/
 ---
 
 ## Changelog
+
+### Unreleased
+
+- **ChatGPT / remote support** — new `managebac-mcp serve` command runs the same tools over Streamable HTTP, protected by a secret token, so ChatGPT (or any HTTP MCP client) can connect through a Cloudflare Tunnel or reverse proxy. Stdio (Claude Desktop) and HTTP share the exact same tool definitions.
+- **`submit_task_file` now works remotely** — accepts `file_base64` + `filename` in addition to a local `file_path`, so clients with no shared filesystem (ChatGPT) can submit too.
 
 ### v1.0.0 — First technical release
 

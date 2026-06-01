@@ -293,6 +293,61 @@ def mcp_stdio():
 
 
 # ---------------------------------------------------------------------------
+# serve — run the HTTP server (for ChatGPT / remote clients)
+# ---------------------------------------------------------------------------
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address (use 0.0.0.0 to accept from a tunnel)"),
+    port: int = typer.Option(8000, "--port", "-p", help="Port to listen on"),
+    public_url: str = typer.Option(None, "--public-url", help="Your public base URL (e.g. https://mb.yourdomain.com) — used only to print the connector URL"),
+):
+    """
+    Run the HTTP server so remote clients (ChatGPT) can connect.
+
+    \b
+    Exposes the same tools as Claude Desktop, protected by a secret token.
+    Point a Cloudflare Tunnel (or any reverse proxy) at this port, then add
+    the printed URL as a custom MCP connector in ChatGPT.
+
+    \b
+      managebac-mcp serve --host 0.0.0.0 --port 8000 \\
+        --public-url https://managebac.yourdomain.com
+    """
+    import secrets
+    from pathlib import Path
+    from dotenv import set_key
+    from . import config, http_server
+
+    # Ensure a token exists — generate and persist one if not.
+    token = config.HTTP_TOKEN
+    env_file = Path.home() / ".managebac_mcp" / ".env"
+    if not token:
+        token = secrets.token_urlsafe(32)
+        env_file.parent.mkdir(exist_ok=True)
+        if not env_file.exists():
+            env_file.touch()
+        set_key(str(env_file), "MANAGEBAC_MCP_TOKEN", token)
+        rprint(f"[green]✓[/green] Generated a new access token and saved it to {env_file}")
+
+    base = (public_url or f"http://{host}:{port}").rstrip("/")
+    connector_url = f"{base}/mcp"
+
+    rprint(Panel.fit(
+        f"[bold]ManageBac MCP — HTTP server[/bold]\n\n"
+        f"  Listening on:   [cyan]http://{host}:{port}/mcp[/cyan]\n"
+        f"  Access token:   [yellow]{token}[/yellow]\n\n"
+        f"[bold]Add this as a custom connector in ChatGPT:[/bold]\n"
+        f"  URL:    [cyan]{connector_url}?key={token}[/cyan]\n\n"
+        f"[dim]Keep the token private — anyone with it can read your account.\n"
+        f"Press Ctrl+C to stop.[/dim]",
+        border_style="blue",
+    ))
+
+    http_server.run(host=host, port=port, token=token)
+
+
+# ---------------------------------------------------------------------------
 # cache — inspect the local cache from the terminal
 # ---------------------------------------------------------------------------
 

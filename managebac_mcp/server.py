@@ -159,11 +159,15 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="submit_task_file",
             description=(
-                "⚠️ WRITE OPERATION — uploads a local file to a task's submission dropbox. "
-                "Always call with dry_run=true first to show the student what will be submitted. "
-                "Only set dry_run=false when the student explicitly confirms. "
-                "file_path must be an absolute path on the student's local machine. "
-                "Returns success=true and task url on success."
+                "⚠️ WRITE OPERATION — uploads a file to a task's submission dropbox. "
+                "Always call with dry_run=true first to show the student what will be submitted; "
+                "only set dry_run=false when the student explicitly confirms. "
+                "Provide the file in ONE of two ways: "
+                "(a) file_path — an absolute local path (e.g. '/tmp/essay.pdf'); use this when running "
+                "locally (Claude Desktop). Save generated files to /tmp/ first. "
+                "(b) file_base64 + filename — the file's bytes base64-encoded plus its name; use this "
+                "when running remotely (ChatGPT) where there is no shared filesystem. "
+                "Returns success=true and the task url on success."
             ),
             inputSchema={
                 "type": "object",
@@ -172,7 +176,15 @@ async def list_tools() -> list[types.Tool]:
                     "task_id": {"type": "string", "description": "Task ID from get_tasks"},
                     "file_path": {
                         "type": "string",
-                        "description": "Absolute path to the file. Always save generated files to /tmp/ first (e.g. '/tmp/essay.pdf') then pass that path here.",
+                        "description": "Absolute local path to the file (local clients). Save to /tmp/ first.",
+                    },
+                    "file_base64": {
+                        "type": "string",
+                        "description": "The file's raw bytes, base64-encoded (remote clients). Requires filename.",
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "File name to upload as (e.g. 'essay.pdf'). Required with file_base64.",
                     },
                     "dry_run": {
                         "type": "boolean",
@@ -180,7 +192,7 @@ async def list_tools() -> list[types.Tool]:
                         "default": True,
                     },
                 },
-                "required": ["class_id", "task_id", "file_path"],
+                "required": ["class_id", "task_id"],
             },
         ),
         types.Tool(
@@ -314,7 +326,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
         result = await submit_task_file(
             arguments["class_id"],
             arguments["task_id"],
-            arguments["file_path"],
+            file_path=arguments.get("file_path"),
+            file_base64=arguments.get("file_base64"),
+            filename=arguments.get("filename"),
             dry_run=arguments.get("dry_run", True),
         )
 

@@ -1206,11 +1206,19 @@ async def fetch_file_bytes(url: str) -> dict[str, Any]:
 async def submit_task_file(
     class_id: str,
     task_id: str,
-    file_path: str,
+    file_path: str | None = None,
+    file_base64: str | None = None,
+    filename: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """
-    Upload a local file to a task's dropbox on ManageBac.
+    Upload a file to a task's dropbox on ManageBac.
+
+    Two ways to provide the file:
+      • file_path  — absolute path to a local file (used by Claude Desktop / CLI,
+                     where the server runs on the same machine as the file)
+      • file_base64 + filename — the file's raw bytes, base64-encoded (used by
+                     remote clients like ChatGPT, where there is no shared filesystem)
 
     Workflow:
       1. GET the dropbox page to get a fresh CSRF token
@@ -1218,51 +1226,62 @@ async def submit_task_file(
 
     Rails endpoint:
       POST /student/classes/{class_id}/core_tasks/{task_id}/dropbox/upload
-      _method=patch
-      X-CSRF-Token: <from meta tag>
-      dropbox[assets_attributes][0][file]: <file bytes>
-      dropbox[assets_attributes][0][file_cache]: ""
+      _method=patch, X-CSRF-Token header, dropbox[assets_attributes][0][file]
 
-    If dry_run=True, validates everything (file exists, task has dropbox)
-    but does NOT submit — returns a preview of what would be submitted.
+    If dry_run=True, validates everything but does NOT submit — returns a preview.
     """
     from pathlib import Path as _Path
     from bs4 import BeautifulSoup as _BS
     import mimetypes as _mimetypes
-
     import os as _os
-    path = _Path(file_path).expanduser()
-    if not path.is_absolute():
-        # Relative paths are ambiguous — the MCP server CWD may differ from where the file was created.
-        # Try to resolve against home dir as a fallback, but tell the caller to use absolute paths.
-        resolved = _Path.home() / path
-        if resolved.exists():
-            path = resolved
-        else:
+    import base64 as _base64
+
+    # --- resolve the file from either source ---
+    if file_base64:
+        if not filename:
+            return {"success": False, "error": "filename is required when sending file_base64."}
+        try:
+            file_bytes = _base64.b64decode(file_base64)
+        except Exception as e:
+            return {"success": False, "error": f"Could not decode file_base64: {e}"}
+        upload_name = filename
+        source = "(in-memory bytes)"
+    elif file_path:
+        path = _Path(file_path).expanduser()
+        if not path.is_absolute():
+            resolved = _Path.home() / path
+            if resolved.exists():
+                path = resolved
+            else:
+                return {
+                    "success": False,
+                    "error": (
+                        f"Relative path '{file_path}' not found. "
+                        f"Use an absolute path like '/tmp/{path.name}'. "
+                        f"Current working directory is: {_os.getcwd()}"
+                    ),
+                }
+        if not path.exists():
             return {
                 "success": False,
                 "error": (
-                    f"Relative path '{file_path}' not found. "
-                    f"Use an absolute path like '/tmp/{path.name}' or '/Users/.../{path.name}'. "
-                    f"Current working directory is: {_os.getcwd()}"
-                )
+                    f"File not found: {path}. "
+                    "Save the file to an absolute path like /tmp/blank.pdf before calling this tool."
+                ),
             }
-    if not path.exists():
-        return {
-            "success": False,
-            "error": (
-                f"File not found: {path}. "
-                "Make sure the file was saved to an absolute path like /tmp/blank.pdf before calling this tool."
-            )
-        }
-    if not path.is_file():
-        return {"success": False, "error": f"Not a file: {path}"}
+        if not path.is_file():
+            return {"success": False, "error": f"Not a file: {path}"}
+        file_bytes = path.read_bytes()
+        upload_name = path.name
+        source = str(path)
+    else:
+        return {"success": False, "error": "Provide either file_path or file_base64 + filename."}
 
-    file_size = path.stat().st_size
+    file_size = len(file_bytes)
     if file_size > 500 * 1024 * 1024:
         return {"success": False, "error": f"File too large ({file_size / 1_048_576:.1f} MB). ManageBac limit is 500 MB."}
 
-    mime_type = _mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    mime_type = _mimetypes.guess_type(upload_name)[0] or "application/octet-stream"
 
     async with await get_client() as client:
         # Fetch dropbox page to get CSRF token and confirm dropbox exists
@@ -1287,8 +1306,8 @@ async def submit_task_file(
             return {
                 "dry_run": True,
                 "would_submit": {
-                    "file": str(path),
-                    "filename": path.name,
+                    "file": source,
+                    "filename": upload_name,
                     "size_bytes": file_size,
                     "mime_type": mime_type,
                     "to_task": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}",
@@ -1297,10 +1316,7 @@ async def submit_task_file(
                 "note": "Set dry_run=false to actually submit.",
             }
 
-        # Read file and POST
-        file_bytes = path.read_bytes()
         upload_url = f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}/dropbox/upload"
-
         response = await client.post(
             upload_url,
             data={
@@ -1309,7 +1325,7 @@ async def submit_task_file(
                 "commit": "Upload Files",
             },
             files={
-                "dropbox[assets_attributes][0][file]": (path.name, file_bytes, mime_type),
+                "dropbox[assets_attributes][0][file]": (upload_name, file_bytes, mime_type),
             },
             headers={
                 "X-CSRF-Token": csrf_token,
@@ -1319,17 +1335,14 @@ async def submit_task_file(
             follow_redirects=True,
         )
 
-    # Rails data-remote forms respond with JS or JSON on success
-    # A 200 with non-login URL means success
     if response.status_code in (200, 201, 204):
-        resp_text = response.text[:500] if response.text else ""
         return {
             "success": True,
-            "file": path.name,
+            "file": upload_name,
             "size_bytes": file_size,
             "task_url": f"{BASE_URL}/student/classes/{class_id}/core_tasks/{task_id}",
             "http_status": response.status_code,
-            "server_response": resp_text,
+            "server_response": response.text[:500] if response.text else "",
         }
     else:
         return {
