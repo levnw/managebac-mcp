@@ -33,3 +33,9 @@ tests/fixtures/
 .idea/
 .vscode/
 *.swp
+
+# Xcode build artifacts
+Server manage/build/
+**/xcuserdata/
+**/DerivedData/
+*.xcuserstate
