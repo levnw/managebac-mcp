@@ -67,7 +67,7 @@ _ENROLL_FORM = """<!doctype html>
  <label>Password</label>
  <input name="password" type="password" required autocomplete="off">
  <label>Invite code</label>
- <input name="invite" placeholder="Ask the admin for a code" autocomplete="off">
+ <input name="invite" value="{invite_value}" placeholder="Ask the admin for a code" autocomplete="off">
  <button type="submit">Connect</button>
 </form>
 <div class="note">Your login is used only to read your own ManageBac data and is
@@ -91,13 +91,14 @@ ManageBac account. If it leaks, re-enroll to get a new one.</div>
 </body></html>"""
 
 
-def _enroll_form(error: str = "") -> str:
+def _enroll_form(error: str = "", code: str = "") -> str:
     err_html = f'<div class="err">{_html.escape(error)}</div>' if error else ""
-    return _ENROLL_FORM.format(error=err_html)
+    return _ENROLL_FORM.format(error=err_html, invite_value=_html.escape(code, quote=True))
 
 
 async def _handle_enroll_get(request):
-    return HTMLResponse(_enroll_form())
+    # A shared invite link carries the code: /enroll?code=XXXX — pre-fill it.
+    return HTMLResponse(_enroll_form(code=request.query_params.get("code", "")))
 
 
 async def _handle_enroll_post(request):
@@ -116,9 +117,9 @@ async def _handle_enroll_post(request):
     # users (already enrolled) can re-enroll to update their password without one.
     if not existing:
         if not invite:
-            return HTMLResponse(_enroll_form("An invite code is required to sign up."), status_code=403)
+            return HTMLResponse(_enroll_form("An invite code is required to sign up.", code=invite), status_code=403)
         if not admin.code_unused(invite):
-            return HTMLResponse(_enroll_form("That invite code is invalid or already used."), status_code=403)
+            return HTMLResponse(_enroll_form("That invite code is invalid or already used.", code=invite), status_code=403)
 
     if existing:
         users.update_password(existing.id, password)
@@ -137,7 +138,7 @@ async def _handle_enroll_post(request):
         if not existing:
             users.delete_user(user.id)
         return HTMLResponse(
-            _enroll_form("Could not log in to ManageBac — check the URL, email, and password."),
+            _enroll_form("Could not log in to ManageBac — check the URL, email, and password.", code=invite),
             status_code=401,
         )
     finally:
@@ -147,7 +148,7 @@ async def _handle_enroll_post(request):
     if not existing:
         if not admin.redeem_code(invite, user.id, email):
             users.delete_user(user.id)
-            return HTMLResponse(_enroll_form("That invite code was just used. Ask for a new one."), status_code=403)
+            return HTMLResponse(_enroll_form("That invite code was just used. Ask for a new one.", code=invite), status_code=403)
 
     # Warm their cache in the background so the first question is instant.
     # Fire-and-forget — the response below returns immediately.

@@ -22,11 +22,18 @@ struct CodesView: View {
                             .buttonStyle(FlatButton(prominent: true)).disabled(busy)
                     }
                     if let c = justCreated {
-                        HStack(spacing: 8) {
-                            Text(c).font(.mono).foregroundStyle(Theme.text)
-                                .padding(.horizontal, 10).padding(.vertical, 6)
-                                .background(Card { Color.clear })
-                            Text("Share this once — it works for a single sign-up.")
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 8) {
+                                Text(c).font(.mono).foregroundStyle(Theme.text)
+                                    .padding(.horizontal, 10).padding(.vertical, 6)
+                                    .background(Card { Color.clear })
+                                Text("works once").font(.rowMeta).foregroundStyle(Theme.faint)
+                            }
+                            ShareLink(item: inviteMessage(c)) {
+                                Text("Share invite link")
+                            }
+                            .buttonStyle(FlatButton(prominent: true))
+                            Text("Sends one link with the code and instructions built in — they just sign in.")
                                 .font(.rowMeta).foregroundStyle(Theme.secondary)
                         }
                     }
@@ -64,11 +71,30 @@ struct CodesView: View {
                 .foregroundStyle(c.used ? Theme.faint : Theme.text)
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(RoundedRectangle(cornerRadius: 6).fill(Theme.goodBg))
+            if !c.used {
+                ShareLink(item: inviteMessage(c.code)) { Text("Share") }
+                    .buttonStyle(FlatButton())
+            }
             Button("Delete") { Task { await remove(c.code) } }
                 .buttonStyle(FlatButton(destructive: true))
         }
         .padding(.vertical, 12)
         .overlay(alignment: .bottom) { Divider().overlay(Theme.hairline) }
+    }
+
+    // One shareable message: the magic enroll link (code built in) + instructions.
+    private func inviteMessage(_ code: String) -> String {
+        let base = session.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        return """
+        You're invited to my ManageBac assistant.
+
+        1. Open this link and sign in with your ManageBac email and password:
+        \(base)/enroll?code=\(code)
+
+        2. You'll get a personal link — add it to ChatGPT as a connector.
+
+        The invite code is built into the link and works once.
+        """
     }
 
     private func create() async {

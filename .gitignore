@@ -39,3 +39,10 @@ Server manage/build/
 **/xcuserdata/
 **/DerivedData/
 *.xcuserstate
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+build/
+DerivedData/
+*.xcscmblueprint
