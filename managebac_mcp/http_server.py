@@ -122,7 +122,8 @@ async def _handle_enroll_post(request):
 
     if existing:
         users.update_password(existing.id, password)
-        user = users.get_user_by_token(existing.token)  # reload with new password
+        users.set_enabled(existing.id, True)            # re-enrolling re-enables
+        user = users.get_user_by_id(existing.id)        # reload with new password
     else:
         user = users.create_user(label=email, mb_url=mb_url, email=email, password=password)
 
@@ -234,6 +235,27 @@ async def _admin_user_delete(request):
     return JSONResponse({"ok": True})
 
 
+async def _admin_user_pause(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    enabled = bool(body.get("enabled", False))
+    users.set_enabled(request.path_params["user_id"], enabled)
+    return JSONResponse({"ok": True, "enabled": enabled})
+
+
+async def _admin_user_regenerate(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    new_token = users.regenerate_token(request.path_params["user_id"])
+    if not new_token:
+        return JSONResponse({"error": "user not found"}, status_code=404)
+    return JSONResponse({"ok": True, "token": new_token})
+
+
 async def _admin_user_activity(request):
     if not _require_admin(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
@@ -308,6 +330,8 @@ def build_app(*, stateless: bool = True):
             Route("/admin/codes/{code}", _admin_code_delete, methods=["DELETE"]),
             Route("/admin/users", _admin_users_get, methods=["GET"]),
             Route("/admin/users/{user_id}", _admin_user_delete, methods=["DELETE"]),
+            Route("/admin/users/{user_id}/pause", _admin_user_pause, methods=["POST"]),
+            Route("/admin/users/{user_id}/regenerate", _admin_user_regenerate, methods=["POST"]),
             Route("/admin/users/{user_id}/activity", _admin_user_activity, methods=["GET"]),
             Route("/admin/activity", _admin_activity, methods=["GET"]),
         ],

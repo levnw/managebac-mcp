@@ -60,6 +60,10 @@ def _connect() -> sqlite3.Connection:
             created_at      INTEGER NOT NULL
         )
     """)
+    # Migration: add the 'enabled' column to older databases.
+    cols = [c[1] for c in conn.execute("PRAGMA table_info(users)").fetchall()]
+    if "enabled" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
     conn.commit()
     return conn
 
@@ -107,14 +111,39 @@ def ensure_local_user(mb_url: str, email: str, password: str) -> User:
 
 
 def get_user_by_token(token: str) -> User | None:
+    """Access-path lookup. Returns None for unknown OR disabled (paused) users."""
     if not token:
         return None
     with _connect() as conn:
         row = conn.execute(
-            "SELECT id, token, label, mb_url, mb_email, mb_password_enc FROM users WHERE token = ?",
+            "SELECT id, token, label, mb_url, mb_email, mb_password_enc FROM users "
+            "WHERE token = ? AND enabled = 1",
             (token,),
         ).fetchone()
     return _row_to_user(row) if row else None
+
+
+def get_user_by_id(user_id: str) -> User | None:
+    """Admin-path lookup. Returns the user regardless of enabled state."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, token, label, mb_url, mb_email, mb_password_enc FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    return _row_to_user(row) if row else None
+
+
+def set_enabled(user_id: str, enabled: bool) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE users SET enabled = ? WHERE id = ?", (1 if enabled else 0, user_id))
+
+
+def regenerate_token(user_id: str) -> str | None:
+    """Rotate a user's secret token. Returns the new token, or None if not found."""
+    new_token = secrets.token_urlsafe(32)
+    with _connect() as conn:
+        cur = conn.execute("UPDATE users SET token = ? WHERE id = ?", (new_token, user_id))
+    return new_token if cur.rowcount == 1 else None
 
 
 def get_user_by_email(mb_url: str, email: str) -> User | None:
@@ -134,10 +163,11 @@ def update_password(user_id: str, password: str) -> None:
 def list_users() -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT id, label, mb_url, mb_email, created_at FROM users ORDER BY created_at"
+            "SELECT id, label, mb_url, mb_email, created_at, token, enabled FROM users ORDER BY created_at"
         ).fetchall()
     return [
-        {"id": r[0], "label": r[1], "mb_url": r[2], "email": r[3], "created_at": r[4]}
+        {"id": r[0], "label": r[1], "mb_url": r[2], "email": r[3],
+         "created_at": r[4], "token": r[5], "enabled": bool(r[6])}
         for r in rows
     ]
 
