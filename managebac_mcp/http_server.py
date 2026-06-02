@@ -46,48 +46,94 @@ def _provided_token(scope: Scope) -> str | None:
 # Enroll page
 # ---------------------------------------------------------------------------
 
+_STYLE = """
+ *{{box-sizing:border-box}}
+ body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+   background:#f9fafb;color:#101828;margin:0;padding:40px 16px;line-height:1.5;
+   -webkit-font-smoothing:antialiased}}
+ .card{{max-width:440px;margin:0 auto;background:#fff;border:1px solid #eaecf0;border-radius:12px;
+   box-shadow:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);padding:32px}}
+ .brand{{font-size:13px;font-weight:600;letter-spacing:.02em;color:#1570ef;margin-bottom:18px}}
+ h1{{font-size:22px;font-weight:600;margin:0 0 6px}}
+ .sub{{color:#475467;font-size:14px;margin:0 0 22px}}
+ .steps{{background:#f9fafb;border:1px solid #eaecf0;border-radius:8px;padding:14px 16px;margin:0 0 22px}}
+ .steps p{{margin:0 0 6px;font-size:13px;font-weight:600;color:#344054}}
+ .steps ol{{margin:0;padding-left:18px;color:#475467;font-size:13px}}
+ .steps li{{margin:3px 0}}
+ label{{display:block;font-size:14px;font-weight:500;color:#344054;margin:14px 0 6px}}
+ input{{width:100%;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font-size:16px;color:#101828;
+   background:#fff;outline:none;transition:border-color .15s,box-shadow .15s}}
+ input:focus{{border-color:#84caff;box-shadow:0 0 0 4px rgba(21,112,239,.15)}}
+ input::placeholder{{color:#98a2b3}}
+ button{{width:100%;margin-top:22px;padding:11px;background:#1570ef;color:#fff;border:0;border-radius:8px;
+   font-size:15px;font-weight:600;cursor:pointer;transition:background .15s}}
+ button:hover{{background:#175cd3}}
+ .note{{margin-top:20px;font-size:12px;color:#667085;text-align:center}}
+ .err{{background:#fef3f2;border:1px solid #fecdca;color:#b42318;padding:10px 12px;border-radius:8px;
+   font-size:13px;margin-bottom:16px}}
+ code{{display:block;background:#f9fafb;border:1px solid #eaecf0;padding:12px;border-radius:8px;
+   word-break:break-all;margin:14px 0;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#101828}}
+ .warn{{background:#fffaeb;border:1px solid #fedf89;color:#b54708;padding:12px;border-radius:8px;font-size:13px}}
+"""
+
 _ENROLL_FORM = """<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Connect your ManageBac</title>
-<style>
- body{{font-family:system-ui,sans-serif;max-width:30rem;margin:3rem auto;padding:0 1rem;color:#222}}
- h1{{font-size:1.4rem}} label{{display:block;margin:1rem 0 .25rem;font-weight:600}}
- input{{width:100%;padding:.6rem;border:1px solid #ccc;border-radius:.4rem;font-size:1rem}}
- button{{margin-top:1.5rem;padding:.7rem 1.2rem;background:#0a7;color:#fff;border:0;border-radius:.4rem;font-size:1rem;cursor:pointer}}
- .note{{background:#f6f6f6;padding:1rem;border-radius:.5rem;font-size:.85rem;color:#555;margin-top:2rem}}
- .err{{background:#fdd;color:#900;padding:.8rem;border-radius:.4rem;margin-bottom:1rem}}
-</style></head><body>
-<h1>Connect your ManageBac account</h1>
-{error}
-<form method="post" action="/enroll">
- <label>ManageBac URL</label>
- <input name="mb_url" value="https://es.managebac.com" required>
- <label>Email</label>
- <input name="email" type="email" required autocomplete="off">
- <label>Password</label>
- <input name="password" type="password" required autocomplete="off">
- <label>Invite code</label>
- <input name="invite" value="{invite_value}" placeholder="Ask the admin for a code" autocomplete="off">
- <button type="submit">Connect</button>
-</form>
-<div class="note">Your login is used only to read your own ManageBac data and is
-stored encrypted. You will get a private URL to paste into ChatGPT. Never share
-that URL — anyone who has it can see your account.</div>
+<title>Connect ManageBac</title>
+<style>""" + _STYLE + """</style></head><body>
+<div class="card">
+ <div class="brand">MANAGEBAC ASSISTANT</div>
+ <h1>Connect your account</h1>
+ <p class="sub">Link your ManageBac to an AI assistant (ChatGPT) so you can just ask
+ about your classes, tasks, deadlines, grades and files.</p>
+
+ <div class="steps">
+  <p>How it works</p>
+  <ol>
+   <li>Sign in below with your ManageBac details and your invite code.</li>
+   <li>You'll get a private link.</li>
+   <li>Paste that link into ChatGPT as a connector — then ask it anything about your schoolwork.</li>
+  </ol>
+ </div>
+
+ {error}
+ <form method="post" action="/enroll">
+  <label>ManageBac URL</label>
+  <input name="mb_url" value="https://es.managebac.com" required>
+  <label>Email</label>
+  <input name="email" type="email" placeholder="you@school.edu" required autocomplete="off">
+  <label>Password</label>
+  <input name="password" type="password" placeholder="Your ManageBac password" required autocomplete="off">
+  <label>Invite code</label>
+  <input name="invite" value="{invite_value}" placeholder="Ask the admin for a code" autocomplete="off">
+  <button type="submit">Connect</button>
+ </form>
+ <p class="note">Read-only. Your login is stored encrypted and used only to read your
+ own ManageBac data. Your link is private — never share it.</p>
+</div>
 </body></html>"""
 
 _SUCCESS_PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Connected</title>
-<style>
- body{{font-family:system-ui,sans-serif;max-width:34rem;margin:3rem auto;padding:0 1rem;color:#222}}
- code{{display:block;background:#f6f6f6;padding:1rem;border-radius:.5rem;word-break:break-all;margin:1rem 0;font-size:.9rem}}
- .warn{{background:#fff3cd;padding:1rem;border-radius:.5rem;font-size:.9rem}}
-</style></head><body>
-<h1>✓ Connected, {label}</h1>
-<p>Add this as a custom MCP connector in ChatGPT:</p>
-<code>{connector_url}</code>
-<div class="warn"><b>Keep this URL private.</b> Anyone who has it can read your
-ManageBac account. If it leaks, re-enroll to get a new one.</div>
+<style>""" + _STYLE + """</style></head><body>
+<div class="card">
+ <div class="brand">MANAGEBAC ASSISTANT</div>
+ <h1>You're connected, {label}</h1>
+ <p class="sub">Here's your personal connector link. Add it to ChatGPT to start.</p>
+
+ <div class="steps">
+  <p>Add it to ChatGPT</p>
+  <ol>
+   <li>ChatGPT → Settings → Connectors → Add custom connector.</li>
+   <li>Paste the link below as the Server URL.</li>
+   <li>Set Authentication to "No authentication", then create.</li>
+  </ol>
+ </div>
+
+ <code>{connector_url}</code>
+ <div class="warn"><b>Keep this link private.</b> Anyone who has it can read your
+ ManageBac account. If it leaks, ask the admin to regenerate it.</div>
+</div>
 </body></html>"""
 
 
