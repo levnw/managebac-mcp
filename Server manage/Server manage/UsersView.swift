@@ -21,7 +21,7 @@ struct UsersView: View {
                 .padding(.horizontal, 24).padding(.top, 8)
             }
             .background(Theme.bg)
-            .navigationDestination(for: AdminUser.self) { UserDetailView(user: $0, onRemoved: { Task { await load() } }) }
+            .navigationDestination(for: AdminUser.self) { UserDetailView(user: $0, refresh: { Task { await load() } }) }
             .refreshable { await load() }
         }
         .task { await load() }
@@ -30,7 +30,10 @@ struct UsersView: View {
     private func row(_ u: AdminUser) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 3) {
-                Text(u.email).font(.rowTitle).foregroundStyle(Theme.text)
+                HStack(spacing: 8) {
+                    Text(u.email).font(.rowTitle).foregroundStyle(u.enabled ? Theme.text : Theme.faint)
+                    if !u.enabled { StatusTag(text: "Paused") }
+                }
                 Text("\(u.mb_url.replacingOccurrences(of: "https://", with: ""))  ·  \(u.request_count) calls  ·  active \(timeAgo(u.last_active))")
                     .font(.rowMeta).foregroundStyle(Theme.secondary)
             }
@@ -48,30 +51,90 @@ struct UsersView: View {
     }
 }
 
+// A small text pill used for status (no icons).
+struct StatusTag: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Theme.secondary)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 5).fill(Theme.goodBg))
+    }
+}
+
 struct UserDetailView: View {
     @EnvironmentObject var session: Session
     @Environment(\.dismiss) private var dismiss
     let user: AdminUser
-    var onRemoved: () -> Void
+    var refresh: () -> Void
+
+    @State private var enabled: Bool
+    @State private var token: String
     @State private var activity: [ActivityItem] = []
     @State private var confirm = false
     @State private var error = ""
+    @State private var busy = false
+    @State private var copied = false
+    @State private var regenerated = false
+
+    init(user: AdminUser, refresh: @escaping () -> Void) {
+        self.user = user
+        self.refresh = refresh
+        _enabled = State(initialValue: user.enabled)
+        _token = State(initialValue: user.token)
+    }
+
+    private var connector: String { connectorURL(base: session.baseURL, token: token) }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 22) {
+                // Header
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(user.email).font(.pageTitle).foregroundStyle(Theme.text)
+                    HStack(spacing: 8) {
+                        Text(user.email).font(.pageTitle).foregroundStyle(Theme.text)
+                        if !enabled { StatusTag(text: "Paused") }
+                    }
                     Text("\(user.request_count) calls  ·  joined \(timeAgo(user.created_at))  ·  active \(timeAgo(user.last_active))")
                         .font(.rowMeta).foregroundStyle(Theme.secondary)
                 }
 
-                Button("Remove this person") { confirm = true }
-                    .buttonStyle(FlatButton(destructive: true))
+                // Connector link
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Connector link").font(.section).foregroundStyle(Theme.secondary)
+                    Text(connector).font(.mono).foregroundStyle(Theme.text)
+                        .textSelection(.enabled)
+                        .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Card { Color.clear })
+                    HStack(spacing: 8) {
+                        Button(copied ? "Copied" : "Copy link") {
+                            copyToClipboard(connector); copied = true
+                        }.buttonStyle(FlatButton())
+                        if regenerated {
+                            Text("New link — old one no longer works. Re-send this.")
+                                .font(.rowMeta).foregroundStyle(Theme.secondary)
+                        }
+                    }
+                }
 
                 if !error.isEmpty { Text(error).font(.rowMeta).foregroundStyle(Theme.danger) }
 
-                Text("Recent activity").font(.section).foregroundStyle(Theme.secondary).padding(.top, 4)
+                // Actions
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Manage").font(.section).foregroundStyle(Theme.secondary)
+                    HStack(spacing: 10) {
+                        Button(enabled ? "Pause access" : "Resume access") { Task { await togglePause() } }
+                            .buttonStyle(FlatButton()).disabled(busy)
+                        Button("Regenerate link") { Task { await regenerate() } }
+                            .buttonStyle(FlatButton()).disabled(busy)
+                    }
+                    Button("Remove this person") { confirm = true }
+                        .buttonStyle(FlatButton(destructive: true)).disabled(busy)
+                }
+
+                // Activity
+                Text("Recent activity").font(.section).foregroundStyle(Theme.secondary).padding(.top, 2)
                 if activity.isEmpty {
                     Text("No activity recorded.").font(.rowMeta).foregroundStyle(Theme.faint)
                 } else {
@@ -92,8 +155,22 @@ struct UserDetailView: View {
         }
     }
 
+    private func togglePause() async {
+        busy = true; error = ""
+        do { try await API(session).pauseUser(user.id, enabled: !enabled); enabled.toggle(); refresh() }
+        catch let err { error = err.localizedDescription }
+        busy = false
+    }
+
+    private func regenerate() async {
+        busy = true; error = ""; copied = false
+        do { token = try await API(session).regenerateToken(user.id); regenerated = true; refresh() }
+        catch let err { error = err.localizedDescription }
+        busy = false
+    }
+
     private func remove() async {
-        do { try await API(session).deleteUser(user.id); onRemoved(); dismiss() }
+        do { try await API(session).deleteUser(user.id); refresh(); dismiss() }
         catch let err { error = err.localizedDescription }
     }
 }

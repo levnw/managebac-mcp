@@ -80,6 +80,14 @@ final class API {
     func userActivity(_ id: String) async throws -> [ActivityItem] {
         try JSONDecoder().decode(ActivityResponse.self, from: await request("/admin/users/\(id)/activity")).activity
     }
+    func pauseUser(_ id: String, enabled: Bool) async throws {
+        _ = try await request("/admin/users/\(id)/pause", method: "POST", body: ["enabled": enabled])
+    }
+    func regenerateToken(_ id: String) async throws -> String {
+        struct R: Codable { let token: String }
+        let data = try await request("/admin/users/\(id)/regenerate", method: "POST")
+        return try JSONDecoder().decode(R.self, from: data).token
+    }
     func activity() async throws -> [ActivityItem] {
         try JSONDecoder().decode(ActivityResponse.self, from: await request("/admin/activity")).activity
     }

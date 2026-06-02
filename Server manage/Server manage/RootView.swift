@@ -1,10 +1,10 @@
 import SwiftUI
 
-enum AdminTab: String, CaseIterable { case users = "People", codes = "Invite codes", activity = "Activity" }
+enum AdminTab: String, CaseIterable { case overview = "Overview", users = "People", codes = "Invite codes", activity = "Activity" }
 
 struct RootView: View {
     @EnvironmentObject var session: Session
-    @State private var tab: AdminTab = .users
+    @State private var tab: AdminTab = .overview
 
     var body: some View {
         ZStack {
@@ -49,6 +49,7 @@ struct RootView: View {
 
     @ViewBuilder private var content: some View {
         switch tab {
+        case .overview: OverviewView()
         case .users:    UsersView()
         case .codes:    CodesView()
         case .activity: ActivityView()

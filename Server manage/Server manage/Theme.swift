@@ -1,4 +1,24 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
+
+// Copy text to the system clipboard (works on iPhone and Mac).
+func copyToClipboard(_ s: String) {
+    #if os(iOS)
+    UIPasteboard.general.string = s
+    #elseif os(macOS)
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(s, forType: .string)
+    #endif
+}
+
+// Build a user's connector URL from the server base + their token.
+func connectorURL(base: String, token: String) -> String {
+    base.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) + "/mcp?key=" + token
+}
 
 // Minimal, Notion-like design system. Text and rules only — no icons, no emoji.
 enum Theme {

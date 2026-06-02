@@ -13,6 +13,8 @@ struct AdminUser: Codable, Identifiable, Hashable {
     let created_at: Int
     let request_count: Int
     let last_active: Int?
+    let token: String
+    let enabled: Bool
 }
 
 struct InviteCode: Codable, Identifiable, Hashable {
