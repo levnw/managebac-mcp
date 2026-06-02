@@ -1366,6 +1366,72 @@ async def fetch_file_bytes(url: str) -> dict[str, Any]:
     return {"content_type": content_type, "size_bytes": len(data), "data": data, "error": None}
 
 
+_MAX_EXTRACT_CHARS = 40_000   # cap so a huge PDF can't blow up the AI's context
+
+
+async def fetch_file_readable(url: str) -> dict[str, Any]:
+    """
+    Download an attachment and return something an AI can actually use without
+    blowing up its context: extracted TEXT for documents (PDF/DOCX/text), or an
+    image for image files. Avoids dumping multi-MB base64 blobs into the chat.
+
+    Returns one of:
+      {"kind": "text",  "text": "...", "truncated": bool, "content_type": ...}
+      {"kind": "image", "data_b64": "...", "content_type": "image/..."}
+      {"kind": "error", "error": "..."}
+    """
+    import io, base64 as _b64
+    f = await fetch_file_bytes(url)
+    if f["error"]:
+        return {"kind": "error", "error": f["error"]}
+
+    data = f["data"]
+    ct = (f["content_type"] or "").lower()
+    ext = url.split("?")[0].rsplit(".", 1)[-1].lower() if "." in url.split("?")[0] else ""
+
+    # Images — return as image content (AI can view it; usually small enough)
+    if ct.startswith("image/") or ext in ("png", "jpg", "jpeg", "gif", "webp"):
+        return {"kind": "image", "data_b64": _b64.standard_b64encode(data).decode(),
+                "content_type": ct or f"image/{ext}"}
+
+    text = ""
+    try:
+        if "pdf" in ct or ext == "pdf":
+            import pdfplumber
+            parts = []
+            with pdfplumber.open(io.BytesIO(data)) as pdf:
+                for i, page in enumerate(pdf.pages, 1):
+                    t = page.extract_text()
+                    if t and t.strip():
+                        parts.append(f"[Page {i}]\n{t.strip()}")
+            text = "\n\n".join(parts)
+        elif "word" in ct or "officedocument" in ct or ext in ("docx",):
+            import docx as _docx
+            doc = _docx.Document(io.BytesIO(data))
+            chunks = [p.text for p in doc.paragraphs if p.text.strip()]
+            # include table cells too (templates are often tables)
+            for tbl in doc.tables:
+                for row in tbl.rows:
+                    cells = [c.text.strip() for c in row.cells if c.text.strip()]
+                    if cells:
+                        chunks.append(" | ".join(cells))
+            text = "\n".join(chunks)
+        elif "text" in ct or ext in ("txt", "md", "csv"):
+            text = data.decode("utf-8", errors="replace")
+        else:
+            return {"kind": "error",
+                    "error": f"Can't read this file type ({ct or ext or 'unknown'}). "
+                             f"Supported: PDF, Word (.docx), text, images."}
+    except Exception as e:
+        return {"kind": "error", "error": f"Could not extract text: {e}"}
+
+    truncated = len(text) > _MAX_EXTRACT_CHARS
+    if truncated:
+        text = text[:_MAX_EXTRACT_CHARS] + "\n\n[…truncated]"
+    return {"kind": "text", "text": text or "(no readable text found in this file)",
+            "truncated": truncated, "content_type": ct}
+
+
 # ---------------------------------------------------------------------------
 # Task file submission
 # ---------------------------------------------------------------------------

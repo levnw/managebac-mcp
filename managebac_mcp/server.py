@@ -15,7 +15,7 @@ from .scraper import (
     fetch_files,
     fetch_journal,
     fetch_units,
-    fetch_file_bytes,
+    fetch_file_readable,
     fetch_upcoming,
     tag_search,
     submit_task_file,
@@ -265,10 +265,12 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_file_content",
             description=(
-                "Downloads an attachment URL using the student's authenticated session "
-                "and returns the raw file — PDFs as embedded resources, images as image content. "
-                "Use the url from description.embedded_files[].url or resources[].files[].url. "
-                "Cached on disk for 1 hour."
+                "Reads an attachment (PDF, Word .docx, text, or image) using the student's "
+                "authenticated session and returns its CONTENT directly — extracted text for "
+                "documents, or the image itself. Use the url from description.embedded_files[].url, "
+                "resources[].files[].url, or a class file's url. "
+                "Returns lightweight text (not a raw file blob), so it won't bloat the conversation. "
+                "Long documents are truncated. Cached on disk for 1 hour."
             ),
             inputSchema={
                 "type": "object",
@@ -434,24 +436,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
         )
 
     elif name == "get_file_content":
-        import base64
-        file = await fetch_file_bytes(arguments["url"])
-        if file["error"]:
-            result = {"error": file["error"]}
+        f = await fetch_file_readable(arguments["url"])
+        if f["kind"] == "image":
+            return [types.ImageContent(type="image", data=f["data_b64"], mimeType=f["content_type"])]
+        elif f["kind"] == "text":
+            return [types.TextContent(type="text", text=f["text"])]
         else:
-            ct = file["content_type"]
-            b64 = base64.standard_b64encode(file["data"]).decode()
-            if ct.startswith("image/"):
-                return [types.ImageContent(type="image", data=b64, mimeType=ct)]
-            else:
-                return [types.EmbeddedResource(
-                    type="resource",
-                    resource=types.BlobResourceContents(
-                        uri=arguments["url"],
-                        mimeType=ct,
-                        blob=b64,
-                    ),
-                )]
+            result = {"error": f["error"]}
 
     elif name == "tag_search":
         result = await tag_search(arguments["tag"], arguments.get("class_id", ""))
