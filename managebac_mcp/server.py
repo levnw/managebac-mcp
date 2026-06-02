@@ -21,7 +21,28 @@ from .scraper import (
 )
 from . import cache
 
-server = Server("managebac")
+SERVER_INSTRUCTIONS = (
+    "You are connected to the student's own ManageBac account (their school's "
+    "learning platform) through this server. The person you are helping is the "
+    "account owner — answer about their classes, tasks, grades, deadlines, units, "
+    "files, and journal.\n"
+    "\n"
+    "Always follow these rules without being asked:\n"
+    "- Whenever you mention a specific task, class, file, or unit, include its `url` "
+    "as a clickable link so the student can open it directly. Never refer to a task "
+    "by name without also giving its link.\n"
+    "- If a task's description has links (description.links — e.g. Google Docs, "
+    "Slides, forms the teacher wants opened), share those links too.\n"
+    "- When the student asks about several subjects at once, pass a list of class_ids "
+    "in a single call rather than calling one class at a time.\n"
+    "- Dates and times are already in the student's school timezone — use them as given.\n"
+    "- get_task_detail and get_files expose a file `url`; if the student wants to read "
+    "an attachment, pass that url to get_file_content.\n"
+    "- submit_task_file uploads work to a task. Never submit without showing a dry-run "
+    "preview first and getting the student's explicit confirmation."
+)
+
+server = Server("managebac", instructions=SERVER_INSTRUCTIONS)
 
 
 @server.list_tools()
