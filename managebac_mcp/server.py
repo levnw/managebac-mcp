@@ -18,7 +18,6 @@ from .scraper import (
     fetch_file_readable,
     fetch_upcoming,
     tag_search,
-    submit_task_file,
     find_task,
 )
 from . import cache
@@ -40,8 +39,6 @@ SERVER_INSTRUCTIONS = (
     "- Dates and times are already in the student's school timezone — use them as given.\n"
     "- get_task_detail and get_files expose a file `url`; if the student wants to read "
     "an attachment, pass that url to get_file_content.\n"
-    "- submit_task_file uploads work to a task. Never submit without showing a dry-run "
-    "preview first and getting the student's explicit confirmation.\n"
     "- Data is cached for speed (tasks ~10 min, classes/units longer). If the student asks "
     "to 'update', 'refresh', 'check again', or is waiting on a new grade/task, call refresh "
     "first and then re-fetch — that pulls live data from ManageBac."
@@ -224,45 +221,6 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
-            name="submit_task_file",
-            description=(
-                "⚠️ WRITE OPERATION — uploads a file to a task's submission dropbox. "
-                "Always call with dry_run=true first to show the student what will be submitted; "
-                "only set dry_run=false when the student explicitly confirms. "
-                "Provide the file in ONE of two ways: "
-                "(a) file_path — an absolute local path (e.g. '/tmp/essay.pdf'); use this when running "
-                "locally (Claude Desktop). Save generated files to /tmp/ first. "
-                "(b) file_base64 + filename — the file's bytes base64-encoded plus its name; use this "
-                "when running remotely (ChatGPT) where there is no shared filesystem. "
-                "Returns success=true and the task url on success."
-            ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "class_id": {"type": "string", "description": "Class ID from get_classes"},
-                    "task_id": {"type": "string", "description": "Task ID from get_tasks"},
-                    "file_path": {
-                        "type": "string",
-                        "description": "Absolute local path to the file (local clients). Save to /tmp/ first.",
-                    },
-                    "file_base64": {
-                        "type": "string",
-                        "description": "The file's raw bytes, base64-encoded (remote clients). Requires filename.",
-                    },
-                    "filename": {
-                        "type": "string",
-                        "description": "File name to upload as (e.g. 'essay.pdf'). Required with file_base64.",
-                    },
-                    "dry_run": {
-                        "type": "boolean",
-                        "description": "true = preview only, do not submit (default). false = actually upload.",
-                        "default": True,
-                    },
-                },
-                "required": ["class_id", "task_id"],
-            },
-        ),
-        types.Tool(
             name="get_file_content",
             description=(
                 "Reads an attachment (PDF, Word .docx, text, or image) using the student's "
@@ -424,16 +382,6 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             result = await _batch(fetch_journal, cid)
         else:
             result = await fetch_journal(cid)
-
-    elif name == "submit_task_file":
-        result = await submit_task_file(
-            arguments["class_id"],
-            arguments["task_id"],
-            file_path=arguments.get("file_path"),
-            file_base64=arguments.get("file_base64"),
-            filename=arguments.get("filename"),
-            dry_run=arguments.get("dry_run", True),
-        )
 
     elif name == "get_file_content":
         f = await fetch_file_readable(arguments["url"])
