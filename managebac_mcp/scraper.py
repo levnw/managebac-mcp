@@ -503,6 +503,83 @@ async def fetch_tasks(class_id: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Upcoming / overdue (consolidated deadlines across ALL classes)
+# ---------------------------------------------------------------------------
+
+_UPCOMING_STATUSES = [
+    "Not Assessed Yet", "Not Submitted", "Submitted",
+    "Pending", "Complete", "Incomplete", "Overdue",
+]
+
+
+def parse_upcoming(html: str) -> list[dict]:
+    """
+    Parse /student/tasks_and_deadlines — the consolidated list of every task
+    across all classes, grouped by day. This is the authoritative source for
+    'what is due today / this week', far more reliable than per-class crawling.
+    """
+    soup = BeautifulSoup(html, "lxml")
+    container = soup.find("div", class_="js-tasks")
+    items: list[dict] = []
+    if not container:
+        return items
+
+    current_day = ""
+    for el in container.children:
+        if getattr(el, "name", None) is None:
+            continue
+        if el.name == "p" and el.get("role") == "heading":
+            current_day = el.get_text(" ", strip=True)   # e.g. "Today - Tuesday, Jun 2"
+        elif el.name == "section":
+            for tile in el.find_all("div", class_="f-task-tile"):
+                link = tile.find("a", class_="f-tile__title-link") or \
+                       tile.find("a", href=re.compile(r"/core_tasks/\d+"))
+                href = link.get("href", "") if link else ""
+                m = re.search(r"/classes/(\d+)/core_tasks/(\d+)", href)
+                if not m:
+                    continue
+                cid, tid = m.group(1), m.group(2)
+                title = link.get_text(" ", strip=True)
+
+                class_a = tile.find("a", href=re.compile(r"/student/classes/\d+$"))
+                class_name = class_a.get_text(" ", strip=True) if class_a else ""
+
+                tile_text = tile.get_text(" ", strip=True)
+                due_m = re.search(r"[A-Z][a-z]{2}\s+\d{1,2},\s*\d{1,2}:\d{2}\s*[AP]M", tile_text)
+                due = due_m.group(0) if due_m else ""
+
+                task_type = ("Summative" if "Summative" in tile_text
+                             else "Formative" if "Formative" in tile_text else "")
+                status = next((s for s in _UPCOMING_STATUSES if s in tile_text), "")
+                needs_submission = "Submit Coursework" in tile_text
+
+                items.append({
+                    "title": title,
+                    "url": f"{_base()}/student/classes/{cid}/core_tasks/{tid}",
+                    "class_name": class_name,
+                    "class_id": cid,
+                    "due": due,
+                    "due_group": current_day,
+                    "type": task_type,
+                    "status": status,
+                    "needs_submission": needs_submission,
+                })
+    return items
+
+
+async def fetch_upcoming(view: str = "upcoming") -> dict:
+    view = view if view in ("upcoming", "overdue", "past") else "upcoming"
+    cache_key = f"get_upcoming:{view}"
+    items = cache.get(cache_key)
+    if items is None:
+        async with await get_client() as client:
+            r = await authed_get(client, f"/student/tasks_and_deadlines?view={view}")
+        items = parse_upcoming(r.text)
+        cache.set(cache_key, items, "get_tasks")   # reuse the 10-min tasks TTL
+    return {"current": _now_info(), "view": view, "tasks": items}
+
+
+# ---------------------------------------------------------------------------
 # Task detail
 # ---------------------------------------------------------------------------
 

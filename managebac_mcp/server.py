@@ -16,6 +16,7 @@ from .scraper import (
     fetch_journal,
     fetch_units,
     fetch_file_bytes,
+    fetch_upcoming,
     submit_task_file,
     find_task,
 )
@@ -68,6 +69,33 @@ async def list_tools() -> list[types.Tool]:
                 "class_id, teacher, room, and task_count (pending tasks for that class)."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
+        ),
+        types.Tool(
+            name="get_upcoming",
+            description=(
+                "THE authoritative list of upcoming (or overdue) tasks across ALL classes at once, "
+                "grouped by day — use this for any 'what's due today / this week / what do I still "
+                "have to submit' question instead of crawling get_tasks per class. "
+                "Returns {current, view, tasks}. 'current' is the live date/time. Each task has: "
+                "title, url, class_name, class_id, due (e.g. 'Jun 2, 2:40 PM'), due_group "
+                "(e.g. 'Today - Tuesday, Jun 2'), type, status, and needs_submission. "
+                "CRITICAL: needs_submission=true means the student has NOT submitted it yet and there "
+                "is a Submit Coursework box — treat those as still-to-do. A task only counts as done "
+                "if its status is Submitted/Complete and needs_submission is false. Never tell the "
+                "student they're free unless you've checked needs_submission here. "
+                "view defaults to 'upcoming'; pass 'overdue' for past-due unfinished work."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "view": {
+                        "type": "string",
+                        "enum": ["upcoming", "overdue", "past"],
+                        "description": "Which list to return (default 'upcoming')",
+                    }
+                },
+                "required": [],
+            },
         ),
         types.Tool(
             name="get_tasks",
@@ -305,6 +333,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
     elif name == "get_timetable":
         result = await fetch_timetable()
+
+    elif name == "get_upcoming":
+        result = await fetch_upcoming(arguments.get("view", "upcoming"))
 
     elif name == "get_tasks":
         cid = arguments["class_id"]
