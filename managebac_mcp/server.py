@@ -17,6 +17,7 @@ from .scraper import (
     fetch_units,
     fetch_file_readable,
     fetch_upcoming,
+    fetch_grades,
     tag_search,
     find_task,
 )
@@ -268,6 +269,28 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="get_grades",
+            description=(
+                "Consolidated grades across ALL classes (or one). Use for 'how am I doing', "
+                "'what are my grades', 'my grades in Biology'. "
+                "Returns {scope, classes}; each class has a 'criteria' summary (per criterion: "
+                "latest score, best, average, out_of, count) and 'graded_tasks' (each with title, "
+                "url, type, date, grades, teacher_comment). "
+                "Note: scores are MYP criterion levels (e.g. 7 out of 8), not percentages. "
+                "Pass class_id to scope to one class; omit it for everything."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "class_id": {
+                        "type": "string",
+                        "description": "Optional — one class. Omit for all classes.",
+                    }
+                },
+                "required": [],
+            },
+        ),
+        types.Tool(
             name="tag_search",
             description=(
                 "Find tasks by tag or type across ALL classes at once, or within one class. "
@@ -391,6 +414,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             return [types.TextContent(type="text", text=f["text"])]
         else:
             result = {"error": f["error"]}
+
+    elif name == "get_grades":
+        result = await fetch_grades(arguments.get("class_id", ""))
 
     elif name == "tag_search":
         result = await tag_search(arguments["tag"], arguments.get("class_id", ""))

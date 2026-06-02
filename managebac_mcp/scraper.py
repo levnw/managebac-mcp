@@ -624,6 +624,70 @@ async def tag_search(tag: str = "", class_id: str = "") -> dict:
     }
 
 
+async def fetch_grades(class_id: str = "") -> dict:
+    """
+    Consolidated grades across all classes (or one). Built from the per-task
+    criterion scores already scraped by get_tasks, so it's fast.
+    For each class: a per-criterion summary (latest, best, average, out_of) plus
+    the list of graded tasks with their scores and teacher comments.
+    """
+    import asyncio as _asyncio
+    classes = await fetch_classes()
+    name_by_id = {c["id"]: c["name"] for c in classes}
+    ids = [class_id] if class_id else [c["id"] for c in classes]
+
+    task_lists = await _asyncio.gather(
+        *[fetch_tasks(cid) for cid in ids], return_exceptions=True
+    )
+
+    out_classes = []
+    for cid, tasks in zip(ids, task_lists):
+        if isinstance(tasks, Exception):
+            continue
+        graded = [t for t in tasks if t.get("grades")]   # tasks are newest-first
+        if not graded:
+            continue
+
+        crit: dict[str, dict] = {}
+        for t in graded:
+            for k, v in t["grades"].items():
+                score = v.get("score")
+                if score is None:
+                    continue
+                entry = crit.setdefault(k, {"scores": [], "out_of": v.get("max")})
+                entry["scores"].append(score)
+                if v.get("max"):
+                    entry["out_of"] = v["max"]
+
+        criteria = {}
+        for k in sorted(crit):
+            s = crit[k]["scores"]
+            criteria[k] = {
+                "latest": s[0] if s else None,        # newest graded task first
+                "best": max(s) if s else None,
+                "average": round(sum(s) / len(s), 1) if s else None,
+                "out_of": crit[k]["out_of"],
+                "count": len(s),
+            }
+
+        out_classes.append({
+            "class_name": name_by_id.get(cid, ""),
+            "class_id": cid,
+            "criteria": criteria,
+            "graded_tasks": [
+                {"title": t.get("title", ""), "url": t.get("url", ""),
+                 "type": t.get("type", ""), "date": t.get("date", ""),
+                 "grades": t["grades"], "teacher_comment": t.get("teacher_comment", "")}
+                for t in graded
+            ],
+        })
+
+    return {
+        "scope": name_by_id.get(class_id, class_id) if class_id else "all classes",
+        "classes": out_classes,
+    }
+
+
 async def prewarm(user) -> None:
     """
     Warm a freshly-enrolled user's cache in the background so their first
