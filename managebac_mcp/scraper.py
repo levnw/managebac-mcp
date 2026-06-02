@@ -579,6 +579,51 @@ async def fetch_upcoming(view: str = "upcoming") -> dict:
     return {"current": _now_info(), "view": view, "tasks": items}
 
 
+async def tag_search(tag: str = "", class_id: str = "") -> dict:
+    """
+    Find tasks matching a tag/type across all classes (or one class).
+    Matches `tag` (case-insensitive) against each task's type (Summative/
+    Formative) and its tags (Criterion A, Homework, Test, ...). Reuses the
+    cached per-class task lists, so it's fast.
+    """
+    import asyncio as _asyncio
+    classes = await fetch_classes()
+    name_by_id = {c["id"]: c["name"] for c in classes}
+    ids = [class_id] if class_id else [c["id"] for c in classes]
+
+    task_lists = await _asyncio.gather(
+        *[fetch_tasks(cid) for cid in ids], return_exceptions=True
+    )
+
+    tagl = tag.lower().strip()
+    matches: list[dict] = []
+    for cid, tasks in zip(ids, task_lists):
+        if isinstance(tasks, Exception):
+            continue
+        for t in tasks:
+            haystack = [t.get("type", "")] + list(t.get("tags", []))
+            if not tagl or any(tagl in h.lower() for h in haystack):
+                matches.append({
+                    "title": t.get("title", ""),
+                    "url": t.get("url", ""),
+                    "class_name": name_by_id.get(cid, ""),
+                    "class_id": cid,
+                    "type": t.get("type", ""),
+                    "tags": t.get("tags", []),
+                    "status": t.get("status", ""),
+                    "date": t.get("date", ""),
+                    "due_day_time": t.get("due_day_time", ""),
+                    "grades": t.get("grades", {}),
+                })
+
+    return {
+        "query": tag,
+        "scope": name_by_id.get(class_id, class_id) if class_id else "all classes",
+        "count": len(matches),
+        "tasks": matches,
+    }
+
+
 async def prewarm(user) -> None:
     """
     Warm a freshly-enrolled user's cache in the background so their first

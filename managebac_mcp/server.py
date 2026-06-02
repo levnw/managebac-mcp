@@ -17,6 +17,7 @@ from .scraper import (
     fetch_units,
     fetch_file_bytes,
     fetch_upcoming,
+    tag_search,
     submit_task_file,
     find_task,
 )
@@ -307,6 +308,32 @@ async def list_tools() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="tag_search",
+            description=(
+                "Find tasks by tag or type across ALL classes at once, or within one class. "
+                "Use for requests like 'show me all summative tasks', 'all Criterion A tasks', "
+                "'all homework in Biology'. The 'tag' matches a task's type (Summative/Formative) "
+                "or any of its tags (e.g. 'Criterion A', 'Homework', 'Test', 'Classwork'). "
+                "Omit class_id to search every class; pass a class_id to scope to one. "
+                "Returns {query, scope, count, tasks} where each task has title, url, class_name, "
+                "type, tags, status, date, due_day_time, grades."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tag": {
+                        "type": "string",
+                        "description": "Tag or type to match, e.g. 'Summative', 'Criterion A', 'Homework'",
+                    },
+                    "class_id": {
+                        "type": "string",
+                        "description": "Optional — limit to one class. Omit to search all classes.",
+                    },
+                },
+                "required": ["tag"],
+            },
+        ),
+        types.Tool(
             name="find_task",
             description=(
                 "Finds a task by URL or by fuzzy title search across all classes. "
@@ -425,6 +452,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                         blob=b64,
                     ),
                 )]
+
+    elif name == "tag_search":
+        result = await tag_search(arguments["tag"], arguments.get("class_id", ""))
 
     elif name == "find_task":
         result = await find_task(arguments["query"])
