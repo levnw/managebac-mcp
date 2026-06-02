@@ -359,17 +359,30 @@ def parse_timetable(html: str) -> list[dict]:
     return slots
 
 
-async def fetch_timetable() -> list[dict]:
-    cached = cache.get("get_timetable")
-    if cached is not None:
-        return cached
+def _now_info() -> dict:
+    """Current date/time in the server's (school's) local timezone."""
+    import datetime
+    now = datetime.datetime.now().astimezone()
+    return {
+        "weekday": now.strftime("%A"),
+        "date": now.strftime("%B ") + str(now.day) + now.strftime(", %Y"),
+        "time": now.strftime("%I:%M %p").lstrip("0"),
+        "iso": now.isoformat(timespec="minutes"),
+        "timezone": now.strftime("%Z") or str(now.utcoffset()),
+    }
 
-    async with await get_client() as client:
-        r = await authed_get(client, "/student/timetables")
 
-    result = parse_timetable(r.text)
-    cache.set("get_timetable", result, "get_timetable")
-    return result
+async def fetch_timetable() -> dict:
+    # Timetable slots are cached (they change rarely); the "current" time is
+    # always computed fresh so the AI knows what day/time it actually is.
+    slots = cache.get("get_timetable")
+    if slots is None:
+        async with await get_client() as client:
+            r = await authed_get(client, "/student/timetables")
+        slots = parse_timetable(r.text)
+        cache.set("get_timetable", slots, "get_timetable")
+
+    return {"current": _now_info(), "timetable": slots}
 
 
 # ---------------------------------------------------------------------------

@@ -61,9 +61,11 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_timetable",
             description=(
-                "Returns the student's full weekly timetable. "
-                "Each slot has: period, day, time_start, time_end, class_name, class_id, teacher, room, "
-                "and task_count (pending tasks for that class)."
+                "Returns the student's full weekly timetable plus the current date/time. "
+                "The result has two keys: 'current' (the live weekday, date, time, and timezone — "
+                "use this to know what day 'today'/'tomorrow' is, never assume) and 'timetable' "
+                "(the weekly slots). Each slot has: period, day, time_start, time_end, class_name, "
+                "class_id, teacher, room, and task_count (pending tasks for that class)."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
         ),
