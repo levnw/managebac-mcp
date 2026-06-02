@@ -40,7 +40,10 @@ SERVER_INSTRUCTIONS = (
     "- get_task_detail and get_files expose a file `url`; if the student wants to read "
     "an attachment, pass that url to get_file_content.\n"
     "- submit_task_file uploads work to a task. Never submit without showing a dry-run "
-    "preview first and getting the student's explicit confirmation."
+    "preview first and getting the student's explicit confirmation.\n"
+    "- Data is cached for speed (tasks ~10 min, classes/units longer). If the student asks "
+    "to 'update', 'refresh', 'check again', or is waiting on a new grade/task, call refresh "
+    "first and then re-fetch — that pulls live data from ManageBac."
 )
 
 server = Server("managebac", instructions=SERVER_INSTRUCTIONS)
@@ -67,6 +70,18 @@ async def list_tools() -> list[types.Tool]:
                 "use this to know what day 'today'/'tomorrow' is, never assume) and 'timetable' "
                 "(the weekly slots). Each slot has: period, day, time_start, time_end, class_name, "
                 "class_id, teacher, room, and task_count (pending tasks for that class)."
+            ),
+            inputSchema={"type": "object", "properties": {}, "required": []},
+        ),
+        types.Tool(
+            name="refresh",
+            description=(
+                "Force-refresh the student's data. Clears their cached ManageBac data so the very "
+                "next tool call fetches LIVE from ManageBac instead of the cache. "
+                "Call this whenever the student asks to 'update', 'refresh', 'check again', 'is it "
+                "updated', or otherwise implies the cached data might be stale (e.g. waiting on a "
+                "grade or a just-posted task). After calling refresh, call the relevant data tool "
+                "again (e.g. get_upcoming) to get the fresh result."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
         ),
@@ -333,6 +348,11 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
     elif name == "get_timetable":
         result = await fetch_timetable()
+
+    elif name == "refresh":
+        cache.clear_user()
+        result = {"status": "refreshed",
+                  "message": "Cleared cached data. Re-call the data tool now to get live results from ManageBac."}
 
     elif name == "get_upcoming":
         result = await fetch_upcoming(arguments.get("view", "upcoming"))
