@@ -13,6 +13,10 @@ async def login(client: httpx.AsyncClient) -> None:
     """Log the CURRENT user into ManageBac and persist their cookies."""
     user = require_user()
 
+    # Start from a clean cookie jar — stale or duplicate _managebac_session
+    # cookies are exactly what cause the "too many redirects" login loop.
+    client.cookies.clear()
+
     # Get CSRF token
     r = await client.get(f"{user.mb_url}/login")
     soup = BeautifulSoup(r.text, "lxml")
@@ -51,11 +55,23 @@ async def get_client() -> httpx.AsyncClient:
 
 
 async def authed_get(client: httpx.AsyncClient, path: str) -> httpx.Response:
-    """GET a path, transparently re-logging in the current user on session expiry."""
+    """
+    GET a path, transparently re-logging in the current user when the session
+    is missing, expired, or stale.
+
+    Stale cookies can make ManageBac bounce between pages until httpx raises
+    TooManyRedirects — so we treat that, a redirect to /login, and a 401 all as
+    "session is bad": clear it, log in fresh, and retry once.
+    """
     user = require_user()
-    r = await client.get(path)
-    if "/login" in str(r.url) or r.status_code == 401:
-        await login(client)
-        users.save_cookies(user.id, dict(client.cookies))
+    try:
         r = await client.get(path)
-    return r
+        if "/login" not in str(r.url) and r.status_code != 401:
+            return r
+    except httpx.TooManyRedirects:
+        pass
+
+    # Session is bad — drop the stored cookies, log in fresh, retry once.
+    users.save_cookies(user.id, {})
+    await login(client)
+    return await client.get(path)
