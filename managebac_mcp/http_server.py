@@ -148,6 +148,12 @@ async def _handle_enroll_post(request):
             users.delete_user(user.id)
             return HTMLResponse(_enroll_form("That invite code was just used. Ask for a new one."), status_code=403)
 
+    # Warm their cache in the background so the first question is instant.
+    # Fire-and-forget — the response below returns immediately.
+    import asyncio as _asyncio
+    from . import scraper
+    _asyncio.create_task(scraper.prewarm(user))
+
     base = str(request.base_url).rstrip("/")
     connector_url = f"{base}/mcp?key={user.token}"
     return HTMLResponse(_SUCCESS_PAGE.format(label=_html.escape(user.label), connector_url=connector_url))

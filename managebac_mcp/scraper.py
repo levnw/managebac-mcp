@@ -579,6 +579,31 @@ async def fetch_upcoming(view: str = "upcoming") -> dict:
     return {"current": _now_info(), "view": view, "tasks": items}
 
 
+async def prewarm(user) -> None:
+    """
+    Warm a freshly-enrolled user's cache in the background so their first
+    question is instant. Fetches the things people ask for first — classes,
+    timetable, the consolidated upcoming list, and every class's task list —
+    concurrently. Best-effort: any failure is swallowed (the data just loads
+    lazily on first use instead).
+    """
+    import asyncio as _asyncio
+    from .context import set_current_user
+    set_current_user(user)   # this task gets its own isolated context
+    try:
+        classes = await fetch_classes()
+        class_ids = [c["id"] for c in classes]
+        await _asyncio.gather(
+            fetch_timetable(),
+            fetch_upcoming("upcoming"),
+            *[fetch_tasks(cid) for cid in class_ids],
+            return_exceptions=True,
+        )
+        print(f"[prewarm] cached {len(class_ids)} classes for {user.label}", flush=True)
+    except Exception as e:
+        print(f"[prewarm] failed for {user.label}: {e}", flush=True)
+
+
 # ---------------------------------------------------------------------------
 # Task detail
 # ---------------------------------------------------------------------------
