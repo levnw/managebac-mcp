@@ -121,6 +121,39 @@ def log_request(tool: str, args: dict, response: Any, source: str = "mcp", durat
         conn.execute("DELETE FROM request_log WHERE id NOT IN (SELECT id FROM request_log ORDER BY id DESC LIMIT 500)")
 
 
+def admin_activity(user_id: str | None = None, limit: int = 50) -> list[dict]:
+    """Recent tool calls (admin view). Optionally filtered to one user.
+    Does NOT include full responses — just what was called, when, how long."""
+    with _connect() as conn:
+        if user_id:
+            rows = conn.execute(
+                "SELECT ts, user_id, tool, args, duration_ms FROM request_log "
+                "WHERE user_id = ? ORDER BY id DESC LIMIT ?", (user_id, limit)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT ts, user_id, tool, args, duration_ms FROM request_log "
+                "ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+    out = []
+    for r in rows:
+        try:
+            args = json.loads(r[3])
+        except Exception:
+            args = {}
+        out.append({"ts": r[0], "user_id": r[1], "tool": r[2], "args": args, "duration_ms": r[4]})
+    return out
+
+
+def admin_user_stats(user_id: str) -> dict:
+    """Request count + last-active timestamp for one user."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*), MAX(ts) FROM request_log WHERE user_id = ?", (user_id,)
+        ).fetchone()
+    return {"request_count": row[0] or 0, "last_active": row[1]}
+
+
 def get_cache_entries() -> list[dict]:
     """All cache rows for the current user (for CLI inspection)."""
     uid = require_user().id

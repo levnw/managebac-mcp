@@ -300,6 +300,18 @@ def submit(
         raise typer.Exit(1)
 
 
+@app.command(name="set-admin")
+def set_admin_cmd(
+    username: str = typer.Option(..., "--username", "-u", help="Admin username"),
+):
+    """Set (or reset) the admin login used by the admin app."""
+    from . import admin as _admin
+    password = typer.prompt("Admin password", hide_input=True, confirmation_prompt=True)
+    _admin.set_admin(username, password)
+    rprint(f"[green]✓[/green] Admin credentials set for [bold]{username}[/bold].")
+    rprint("[dim]Use these in the admin app to log in.[/dim]")
+
+
 @app.command(hidden=True)
 def mcp_stdio():
     """Run the stdio MCP server (called automatically by Claude Desktop)."""

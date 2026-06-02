@@ -14,13 +14,13 @@ from contextlib import asynccontextmanager
 
 from starlette.applications import Starlette
 from starlette.routing import Mount, Route
-from starlette.responses import HTMLResponse, PlainTextResponse
+from starlette.responses import HTMLResponse, PlainTextResponse, JSONResponse
 from starlette.types import Scope, Receive, Send
 
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
-from . import users, config
-from .context import set_current_user, reset_user
+from . import users, config, admin, cache
+from .context import set_current_user, reset_user, User
 from .server import server
 
 
@@ -66,7 +66,8 @@ _ENROLL_FORM = """<!doctype html>
  <input name="email" type="email" required autocomplete="off">
  <label>Password</label>
  <input name="password" type="password" required autocomplete="off">
- {invite_field}
+ <label>Invite code</label>
+ <input name="invite" placeholder="Ask the admin for a code" autocomplete="off">
  <button type="submit">Connect</button>
 </form>
 <div class="note">Your login is used only to read your own ManageBac data and is
@@ -91,12 +92,8 @@ ManageBac account. If it leaks, re-enroll to get a new one.</div>
 
 
 def _enroll_form(error: str = "") -> str:
-    invite_field = ""
-    if config.SIGNUP_CODE:
-        invite_field = ('<label>Invite code</label>'
-                        '<input name="invite" required autocomplete="off">')
     err_html = f'<div class="err">{_html.escape(error)}</div>' if error else ""
-    return _ENROLL_FORM.format(error=err_html, invite_field=invite_field)
+    return _ENROLL_FORM.format(error=err_html)
 
 
 async def _handle_enroll_get(request):
@@ -110,13 +107,19 @@ async def _handle_enroll_post(request):
     password = (form.get("password") or "").strip()
     invite = (form.get("invite") or "").strip()
 
-    if config.SIGNUP_CODE and invite != config.SIGNUP_CODE:
-        return HTMLResponse(_enroll_form("Invalid invite code."), status_code=403)
     if not (mb_url and email and password):
         return HTMLResponse(_enroll_form("All fields are required."), status_code=400)
 
-    # Reuse an existing record for this URL+email, else create a fresh one.
     existing = users.get_user_by_email(mb_url, email)
+
+    # New users must present a valid, unused one-time invite code. Returning
+    # users (already enrolled) can re-enroll to update their password without one.
+    if not existing:
+        if not invite:
+            return HTMLResponse(_enroll_form("An invite code is required to sign up."), status_code=403)
+        if not admin.code_unused(invite):
+            return HTMLResponse(_enroll_form("That invite code is invalid or already used."), status_code=403)
+
     if existing:
         users.update_password(existing.id, password)
         user = users.get_user_by_token(existing.token)  # reload with new password
@@ -139,9 +142,103 @@ async def _handle_enroll_post(request):
     finally:
         reset_user(ctx)
 
+    # Login succeeded — now consume the one-time code (atomic; guards races).
+    if not existing:
+        if not admin.redeem_code(invite, user.id, email):
+            users.delete_user(user.id)
+            return HTMLResponse(_enroll_form("That invite code was just used. Ask for a new one."), status_code=403)
+
     base = str(request.base_url).rstrip("/")
     connector_url = f"{base}/mcp?key={user.token}"
     return HTMLResponse(_SUCCESS_PAGE.format(label=_html.escape(user.label), connector_url=connector_url))
+
+
+# ---------------------------------------------------------------------------
+# Admin API (used by the admin app)
+# ---------------------------------------------------------------------------
+
+def _bearer(request) -> str:
+    auth = request.headers.get("authorization", "")
+    return auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+
+
+def _require_admin(request) -> str | None:
+    return admin.validate_session(_bearer(request))
+
+
+async def _admin_login(request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    username = (body.get("username") or "").strip()
+    password = body.get("password") or ""
+    if not admin.verify_admin(username, password):
+        return JSONResponse({"error": "Invalid username or password"}, status_code=401)
+    return JSONResponse(admin.create_session(username))
+
+
+async def _admin_codes_get(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse({"codes": admin.list_codes()})
+
+
+async def _admin_codes_post(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    note = (body.get("note") or "").strip()
+    return JSONResponse(admin.create_code(note))
+
+
+async def _admin_code_delete(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    admin.delete_code(request.path_params["code"])
+    return JSONResponse({"ok": True})
+
+
+async def _admin_users_get(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    out = []
+    for u in users.list_users():
+        if u["id"] == "local":
+            continue
+        stats = cache.admin_user_stats(u["id"])
+        out.append({**u, **stats})
+    return JSONResponse({"users": out})
+
+
+async def _admin_user_delete(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    user_id = request.path_params["user_id"]
+    # Clear their cached data, then remove the account.
+    ctx = set_current_user(User(id=user_id, token="", label="", mb_url="", email="", password=""))
+    try:
+        cache.clear_user()
+    finally:
+        reset_user(ctx)
+    users.delete_user(user_id)
+    return JSONResponse({"ok": True})
+
+
+async def _admin_user_activity(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    user_id = request.path_params["user_id"]
+    return JSONResponse({"activity": cache.admin_activity(user_id=user_id, limit=100)})
+
+
+async def _admin_activity(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse({"activity": cache.admin_activity(limit=100)})
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +295,15 @@ def build_app(*, stateless: bool = True):
             Route("/", health, methods=["GET"]),
             Route("/enroll", _handle_enroll_get, methods=["GET"]),
             Route("/enroll", _handle_enroll_post, methods=["POST"]),
+            # Admin API (consumed by the admin app)
+            Route("/admin/login", _admin_login, methods=["POST"]),
+            Route("/admin/codes", _admin_codes_get, methods=["GET"]),
+            Route("/admin/codes", _admin_codes_post, methods=["POST"]),
+            Route("/admin/codes/{code}", _admin_code_delete, methods=["DELETE"]),
+            Route("/admin/users", _admin_users_get, methods=["GET"]),
+            Route("/admin/users/{user_id}", _admin_user_delete, methods=["DELETE"]),
+            Route("/admin/users/{user_id}/activity", _admin_user_activity, methods=["GET"]),
+            Route("/admin/activity", _admin_activity, methods=["GET"]),
         ],
         lifespan=lifespan,
     )
