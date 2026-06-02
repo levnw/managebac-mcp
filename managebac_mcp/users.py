@@ -60,10 +60,15 @@ def _connect() -> sqlite3.Connection:
             created_at      INTEGER NOT NULL
         )
     """)
-    # Migration: add the 'enabled' column to older databases.
+    # Migrations: add newer columns to older databases. Defaults keep already-
+    # enrolled users working (enabled=1, approved=1).
     cols = [c[1] for c in conn.execute("PRAGMA table_info(users)").fetchall()]
     if "enabled" not in cols:
         conn.execute("ALTER TABLE users ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+    if "approved" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN approved INTEGER NOT NULL DEFAULT 1")
+    if "note" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN note TEXT NOT NULL DEFAULT ''")
     conn.commit()
     return conn
 
@@ -80,13 +85,14 @@ def _row_to_user(row) -> User:
 
 
 def create_user(label: str, mb_url: str, email: str, password: str) -> User:
-    """Create a new user with a fresh random id + token. Returns the User."""
+    """Create a new user with a fresh id + token. New users start PENDING
+    (approved=0) — the admin must approve them before their token works."""
     user_id = secrets.token_hex(8)
     token = secrets.token_urlsafe(32)
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO users (id, token, label, mb_url, mb_email, mb_password_enc, session_cookies, created_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO users (id, token, label, mb_url, mb_email, mb_password_enc, session_cookies, created_at, approved) "
+            "VALUES (?,?,?,?,?,?,?,?,0)",
             (user_id, token, label, mb_url.rstrip("/"), email, _encrypt(password), None, int(time.time())),
         )
     return User(id=user_id, token=token, label=label, mb_url=mb_url.rstrip("/"), email=email, password=password)
@@ -100,8 +106,8 @@ def ensure_local_user(mb_url: str, email: str, password: str) -> User:
     """
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO users (id, token, label, mb_url, mb_email, mb_password_enc, session_cookies, created_at) "
-            "VALUES ('local','local','local',?,?,?,NULL,?) "
+            "INSERT INTO users (id, token, label, mb_url, mb_email, mb_password_enc, session_cookies, created_at, approved) "
+            "VALUES ('local','local','local',?,?,?,NULL,?,1) "
             "ON CONFLICT(id) DO UPDATE SET mb_url=excluded.mb_url, mb_email=excluded.mb_email, "
             "mb_password_enc=excluded.mb_password_enc",
             (mb_url.rstrip("/"), email, _encrypt(password), int(time.time())),
@@ -117,7 +123,7 @@ def get_user_by_token(token: str) -> User | None:
     with _connect() as conn:
         row = conn.execute(
             "SELECT id, token, label, mb_url, mb_email, mb_password_enc FROM users "
-            "WHERE token = ? AND enabled = 1",
+            "WHERE token = ? AND enabled = 1 AND approved = 1",
             (token,),
         ).fetchone()
     return _row_to_user(row) if row else None
@@ -136,6 +142,16 @@ def get_user_by_id(user_id: str) -> User | None:
 def set_enabled(user_id: str, enabled: bool) -> None:
     with _connect() as conn:
         conn.execute("UPDATE users SET enabled = ? WHERE id = ?", (1 if enabled else 0, user_id))
+
+
+def set_approved(user_id: str, approved: bool) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE users SET approved = ? WHERE id = ?", (1 if approved else 0, user_id))
+
+
+def set_note(user_id: str, note: str) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE users SET note = ? WHERE id = ?", (note, user_id))
 
 
 def regenerate_token(user_id: str) -> str | None:
@@ -163,11 +179,13 @@ def update_password(user_id: str, password: str) -> None:
 def list_users() -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT id, label, mb_url, mb_email, created_at, token, enabled FROM users ORDER BY created_at"
+            "SELECT id, label, mb_url, mb_email, created_at, token, enabled, approved, note "
+            "FROM users ORDER BY created_at"
         ).fetchall()
     return [
         {"id": r[0], "label": r[1], "mb_url": r[2], "email": r[3],
-         "created_at": r[4], "token": r[5], "enabled": bool(r[6])}
+         "created_at": r[4], "token": r[5], "enabled": bool(r[6]),
+         "approved": bool(r[7]), "note": r[8] or ""}
         for r in rows
     ]
 

@@ -31,11 +31,17 @@ struct UsersView: View {
         HStack {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
-                    Text(u.email).font(.rowTitle).foregroundStyle(u.enabled ? Theme.text : Theme.faint)
-                    if !u.enabled { StatusTag(text: "Paused") }
+                    Text(u.email).font(.rowTitle).foregroundStyle(u.approved && u.enabled ? Theme.text : Theme.faint)
+                    if !u.approved { StatusTag(text: "Pending") }
+                    else if !u.enabled { StatusTag(text: "Paused") }
                 }
-                Text("\(u.mb_url.replacingOccurrences(of: "https://", with: ""))  ·  \(u.request_count) calls  ·  active \(timeAgo(u.last_active))")
+                let metaParts = [u.mb_url.replacingOccurrences(of: "https://", with: ""),
+                                 "\(u.request_count) calls", "active \(timeAgo(u.last_active))"]
+                Text(metaParts.joined(separator: "  ·  "))
                     .font(.rowMeta).foregroundStyle(Theme.secondary)
+                if !u.note.isEmpty {
+                    Text(u.note).font(.rowMeta).foregroundStyle(Theme.faint).italic()
+                }
             }
             Spacer()
             Text("View").font(.rowMeta).foregroundStyle(Theme.faint)
@@ -70,7 +76,10 @@ struct UserDetailView: View {
     var refresh: () -> Void
 
     @State private var enabled: Bool
+    @State private var approved: Bool
     @State private var token: String
+    @State private var note: String
+    @State private var noteSaved = false
     @State private var activity: [ActivityItem] = []
     @State private var confirm = false
     @State private var error = ""
@@ -82,7 +91,9 @@ struct UserDetailView: View {
         self.user = user
         self.refresh = refresh
         _enabled = State(initialValue: user.enabled)
+        _approved = State(initialValue: user.approved)
         _token = State(initialValue: user.token)
+        _note = State(initialValue: user.note)
     }
 
     private var connector: String { connectorURL(base: session.baseURL, token: token) }
@@ -94,10 +105,31 @@ struct UserDetailView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(user.email).font(.pageTitle).foregroundStyle(Theme.text)
-                        if !enabled { StatusTag(text: "Paused") }
+                        if !approved { StatusTag(text: "Pending") }
+                        else if !enabled { StatusTag(text: "Paused") }
                     }
                     Text("\(user.request_count) calls  ·  joined \(timeAgo(user.created_at))  ·  active \(timeAgo(user.last_active))")
                         .font(.rowMeta).foregroundStyle(Theme.secondary)
+                }
+
+                // Approval — pending users can't use their link until approved.
+                if !approved {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("This person is waiting for approval. Their link won't work until you approve.")
+                            .font(.rowMeta).foregroundStyle(Theme.secondary)
+                        Button("Approve") { Task { await approve() } }
+                            .buttonStyle(FlatButton(prominent: true)).disabled(busy)
+                    }
+                }
+
+                // Note
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Note").font(.section).foregroundStyle(Theme.secondary)
+                    TextField("Add a private note about this person…", text: $note, axis: .vertical)
+                        .textFieldStyle(.plain).lineLimit(2...5)
+                        .padding(10).background(Card { Color.clear })
+                    Button(noteSaved ? "Saved" : "Save note") { Task { await saveNote() } }
+                        .buttonStyle(FlatButton()).disabled(busy)
                 }
 
                 // Connector link
@@ -153,6 +185,20 @@ struct UserDetailView: View {
             Button("Remove", role: .destructive) { Task { await remove() } }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    private func approve() async {
+        busy = true; error = ""
+        do { try await API(session).approveUser(user.id, approved: true); approved = true; refresh() }
+        catch let err { error = err.localizedDescription }
+        busy = false
+    }
+
+    private func saveNote() async {
+        busy = true; error = ""
+        do { try await API(session).setNote(user.id, note: note); noteSaved = true; refresh() }
+        catch let err { error = err.localizedDescription }
+        busy = false
     }
 
     private func togglePause() async {

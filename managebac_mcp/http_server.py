@@ -136,6 +136,31 @@ _SUCCESS_PAGE = """<!doctype html>
 </div>
 </body></html>"""
 
+_PENDING_PAGE = """<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Request received</title>
+<style>""" + _STYLE + """</style></head><body>
+<div class="card">
+ <div class="brand">MANAGEBAC ASSISTANT</div>
+ <h1>Request received, {label}</h1>
+ <p class="sub">Your account is connected and waiting for the admin to approve you.
+ As soon as they do, the link below will start working in ChatGPT.</p>
+
+ <div class="steps">
+  <p>What happens next</p>
+  <ol>
+   <li>The admin approves your request.</li>
+   <li>Add the link below to ChatGPT (Settings → Connectors → Add custom connector, "No authentication").</li>
+   <li>Ask ChatGPT about your classes, tasks and deadlines.</li>
+  </ol>
+ </div>
+
+ <code>{connector_url}</code>
+ <div class="warn"><b>Keep this link private.</b> It won't work until you're approved.
+ Anyone who has it can read your ManageBac account.</div>
+</div>
+</body></html>"""
+
 
 def _enroll_form(error: str = "", code: str = "") -> str:
     err_html = f'<div class="err">{_html.escape(error)}</div>' if error else ""
@@ -204,7 +229,10 @@ async def _handle_enroll_post(request):
 
     base = str(request.base_url).rstrip("/")
     connector_url = f"{base}/mcp?key={user.token}"
-    return HTMLResponse(_SUCCESS_PAGE.format(label=_html.escape(user.label), connector_url=connector_url))
+    # New sign-ups are pending until the admin approves them; returning users
+    # (already in the system) get their link straight away.
+    page = _SUCCESS_PAGE if existing else _PENDING_PAGE
+    return HTMLResponse(page.format(label=_html.escape(user.label), connector_url=connector_url))
 
 
 # ---------------------------------------------------------------------------
@@ -303,6 +331,29 @@ async def _admin_user_regenerate(request):
     return JSONResponse({"ok": True, "token": new_token})
 
 
+async def _admin_user_approve(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    approved = bool(body.get("approved", True))
+    users.set_approved(request.path_params["user_id"], approved)
+    return JSONResponse({"ok": True, "approved": approved})
+
+
+async def _admin_user_note(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    users.set_note(request.path_params["user_id"], (body.get("note") or ""))
+    return JSONResponse({"ok": True})
+
+
 async def _admin_user_activity(request):
     if not _require_admin(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
@@ -379,6 +430,8 @@ def build_app(*, stateless: bool = True):
             Route("/admin/users/{user_id}", _admin_user_delete, methods=["DELETE"]),
             Route("/admin/users/{user_id}/pause", _admin_user_pause, methods=["POST"]),
             Route("/admin/users/{user_id}/regenerate", _admin_user_regenerate, methods=["POST"]),
+            Route("/admin/users/{user_id}/approve", _admin_user_approve, methods=["POST"]),
+            Route("/admin/users/{user_id}/note", _admin_user_note, methods=["POST"]),
             Route("/admin/users/{user_id}/activity", _admin_user_activity, methods=["GET"]),
             Route("/admin/activity", _admin_activity, methods=["GET"]),
         ],

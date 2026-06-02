@@ -15,6 +15,8 @@ struct AdminUser: Codable, Identifiable, Hashable {
     let last_active: Int?
     let token: String
     let enabled: Bool
+    let approved: Bool
+    let note: String
 }
 
 struct InviteCode: Codable, Identifiable, Hashable {

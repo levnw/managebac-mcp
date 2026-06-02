@@ -12,6 +12,7 @@ struct OverviewView: View {
         return users.filter { ($0.last_active ?? 0) >= dayAgo }.count
     }
     private var totalCalls: Int { users.reduce(0) { $0 + $1.request_count } }
+    private var pendingCount: Int { users.filter { !$0.approved }.count }
     private var pausedCount: Int { users.filter { !$0.enabled }.count }
     private var unusedCodes: Int { codes.filter { !$0.used }.count }
 
@@ -21,6 +22,7 @@ struct OverviewView: View {
                 if !error.isEmpty { EmptyHint(text: error) }
 
                 stat("People connected", "\(users.count)")
+                stat("Awaiting approval", "\(pendingCount)")
                 stat("Active in last 24h", "\(activeToday)")
                 stat("Paused", "\(pausedCount)")
                 stat("Total tool calls", "\(totalCalls)")

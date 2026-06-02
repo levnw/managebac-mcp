@@ -88,6 +88,12 @@ final class API {
         let data = try await request("/admin/users/\(id)/regenerate", method: "POST")
         return try JSONDecoder().decode(R.self, from: data).token
     }
+    func approveUser(_ id: String, approved: Bool) async throws {
+        _ = try await request("/admin/users/\(id)/approve", method: "POST", body: ["approved": approved])
+    }
+    func setNote(_ id: String, note: String) async throws {
+        _ = try await request("/admin/users/\(id)/note", method: "POST", body: ["note": note])
+    }
     func activity() async throws -> [ActivityItem] {
         try JSONDecoder().decode(ActivityResponse.self, from: await request("/admin/activity")).activity
     }
