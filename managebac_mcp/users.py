@@ -85,14 +85,16 @@ def _row_to_user(row) -> User:
 
 
 def create_user(label: str, mb_url: str, email: str, password: str) -> User:
-    """Create a new user with a fresh id + token. New users start PENDING
-    (approved=0) — the admin must approve them before their token works."""
+    """Create a new user with a fresh id + token. New users are auto-approved
+    and their connector link works immediately — no admin approval needed (a
+    valid one-time invite code is still required to sign up). The admin can
+    still pause a user afterward via enabled=0."""
     user_id = secrets.token_hex(8)
     token = secrets.token_urlsafe(32)
     with _connect() as conn:
         conn.execute(
             "INSERT INTO users (id, token, label, mb_url, mb_email, mb_password_enc, session_cookies, created_at, approved) "
-            "VALUES (?,?,?,?,?,?,?,?,0)",
+            "VALUES (?,?,?,?,?,?,?,?,1)",
             (user_id, token, label, mb_url.rstrip("/"), email, _encrypt(password), None, int(time.time())),
         )
     return User(id=user_id, token=token, label=label, mb_url=mb_url.rstrip("/"), email=email, password=password)
@@ -117,13 +119,15 @@ def ensure_local_user(mb_url: str, email: str, password: str) -> User:
 
 
 def get_user_by_token(token: str) -> User | None:
-    """Access-path lookup. Returns None for unknown OR disabled (paused) users."""
+    """Access-path lookup. Returns None for unknown OR disabled (paused) users.
+    Approval is NOT required — enrolling (with a valid invite code) is enough;
+    only an explicit pause (enabled=0) blocks access."""
     if not token:
         return None
     with _connect() as conn:
         row = conn.execute(
             "SELECT id, token, label, mb_url, mb_email, mb_password_enc FROM users "
-            "WHERE token = ? AND enabled = 1 AND approved = 1",
+            "WHERE token = ? AND enabled = 1",
             (token,),
         ).fetchone()
     return _row_to_user(row) if row else None

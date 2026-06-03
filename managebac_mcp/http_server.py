@@ -229,10 +229,9 @@ async def _handle_enroll_post(request):
 
     base = str(request.base_url).rstrip("/")
     connector_url = f"{base}/mcp?key={user.token}"
-    # New sign-ups are pending until the admin approves them; returning users
-    # (already in the system) get their link straight away.
-    page = _SUCCESS_PAGE if existing else _PENDING_PAGE
-    return HTMLResponse(page.format(label=_html.escape(user.label), connector_url=connector_url))
+    # No approval gate — the link works immediately for everyone (new and
+    # returning). A valid invite code was already required above to sign up.
+    return HTMLResponse(_SUCCESS_PAGE.format(label=_html.escape(user.label), connector_url=connector_url))
 
 
 # ---------------------------------------------------------------------------
