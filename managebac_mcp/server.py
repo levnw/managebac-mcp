@@ -355,19 +355,45 @@ async def _batch(fn, ids: list[str]) -> dict:
     return dict(zip(ids, results))
 
 
+_TASKS_PER_CLASS_CAP = 20
+
+
 def _slim_tasks(result):
-    """Drop the heavy `teacher_comment` essay from get_tasks output. The task
-    LIST is an index — full teacher comments belong in get_task_detail. Batched
-    across ~18 classes, these comments made get_tasks the biggest context hog
-    (up to ~58K tokens in one call). The comment stays in the cache, so
-    get_grades (single class) and get_task_detail still serve it on demand.
+    """Shrink get_tasks output so it can't blow up the context window.
+
+    get_tasks was the biggest consumer (~58K tokens in one batched call). Three
+    things bloat it: the full teacher_comment essays, empty/default fields
+    repeated on every task, and the entire YEAR of tasks per class (×18 classes).
+    So we (1) drop teacher_comment, (2) omit empty fields, (3) keep only the
+    most-recent N tasks per class (they're newest-first) with a note when older
+    ones are hidden.
+
+    This only trims the get_tasks TOOL output — the full, uncapped task lists
+    stay in the cache, so find_task, tag_search and get_grades still see
+    everything. For a hidden/older task, use those or get_task_detail.
     Handles both a single list and a batch dict {class_id: [tasks]}."""
     def strip(t: dict) -> dict:
-        return {k: v for k, v in t.items() if k != "teacher_comment"}
+        out = {}
+        for k, v in t.items():
+            if k == "teacher_comment":
+                continue
+            if v is None or v is False or v == "" or v == [] or v == {}:
+                continue
+            out[k] = v
+        return out
+
+    def cap(tasks: list) -> list:
+        slim = [strip(t) for t in tasks[:_TASKS_PER_CLASS_CAP]]
+        hidden = len(tasks) - _TASKS_PER_CLASS_CAP
+        if hidden > 0:
+            slim.append({"_note": f"{hidden} older task(s) hidden to save space — "
+                                  f"use tag_search, find_task or get_grades to reach them."})
+        return slim
+
     if isinstance(result, dict):
-        return {cid: [strip(t) for t in tasks] for cid, tasks in result.items()}
+        return {cid: cap(tasks) for cid, tasks in result.items()}
     if isinstance(result, list):
-        return [strip(t) for t in result]
+        return cap(result)
     return result
 
 
