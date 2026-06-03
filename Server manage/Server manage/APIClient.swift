@@ -94,6 +94,17 @@ final class API {
     func setNote(_ id: String, note: String) async throws {
         _ = try await request("/admin/users/\(id)/note", method: "POST", body: ["note": note])
     }
+    struct CredentialResult: Decodable { let ok: Bool; let login_ok: Bool?; let login_error: String? }
+    /// Update a user's ManageBac email and/or password. The server clears the
+    /// old session and test-logs-in with the new credentials, reporting back
+    /// whether the login succeeded.
+    func updateCredentials(_ id: String, email: String?, password: String?) async throws -> CredentialResult {
+        var body: [String: Any] = ["verify": true]
+        if let email, !email.isEmpty { body["email"] = email }
+        if let password, !password.isEmpty { body["password"] = password }
+        let data = try await request("/admin/users/\(id)/credentials", method: "POST", body: body)
+        return try JSONDecoder().decode(CredentialResult.self, from: data)
+    }
     func activity() async throws -> [ActivityItem] {
         try JSONDecoder().decode(ActivityResponse.self, from: await request("/admin/activity")).activity
     }

@@ -86,6 +86,10 @@ struct UserDetailView: View {
     @State private var busy = false
     @State private var copied = false
     @State private var regenerated = false
+    @State private var email: String
+    @State private var password: String = ""
+    @State private var credMsg = ""
+    @State private var credOK = false
 
     init(user: AdminUser, refresh: @escaping () -> Void) {
         self.user = user
@@ -94,6 +98,7 @@ struct UserDetailView: View {
         _approved = State(initialValue: user.approved)
         _token = State(initialValue: user.token)
         _note = State(initialValue: user.note)
+        _email = State(initialValue: user.email)
     }
 
     private var connector: String { connectorURL(base: session.baseURL, token: token) }
@@ -130,6 +135,28 @@ struct UserDetailView: View {
                         .padding(10).background(Card { Color.clear })
                     Button(noteSaved ? "Saved" : "Save note") { Task { await saveNote() } }
                         .buttonStyle(FlatButton()).disabled(busy)
+                }
+
+                // ManageBac login — fix a wrong or changed email/password here.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ManageBac login").font(.section).foregroundStyle(Theme.secondary)
+                    Text("Update if their password changed or sign-in is failing. Saving tests the login right away.")
+                        .font(.rowMeta).foregroundStyle(Theme.faint)
+                    TextField("Email", text: $email)
+                        .textFieldStyle(.plain).autocorrectionDisabled(true)
+                        .padding(10).background(Card { Color.clear })
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.emailAddress)
+                        #endif
+                    SecureField("New password (leave blank to keep current)", text: $password)
+                        .textFieldStyle(.plain)
+                        .padding(10).background(Card { Color.clear })
+                    Button(busy ? "Saving…" : "Save & test login") { Task { await saveCredentials() } }
+                        .buttonStyle(FlatButton(prominent: true)).disabled(busy)
+                    if !credMsg.isEmpty {
+                        Text(credMsg).font(.rowMeta).foregroundStyle(credOK ? Theme.secondary : Theme.danger)
+                    }
                 }
 
                 // Connector link
@@ -198,6 +225,31 @@ struct UserDetailView: View {
         busy = true; error = ""
         do { try await API(session).setNote(user.id, note: note); noteSaved = true; refresh() }
         catch let err { error = err.localizedDescription }
+        busy = false
+    }
+
+    private func saveCredentials() async {
+        let emailChanged = email != user.email && !email.isEmpty
+        if !emailChanged && password.isEmpty {
+            credOK = false; credMsg = "Nothing to change — enter a new email or password."
+            return
+        }
+        busy = true; credMsg = ""; credOK = false
+        do {
+            let r = try await API(session).updateCredentials(
+                user.id,
+                email: emailChanged ? email : nil,
+                password: password.isEmpty ? nil : password)
+            password = ""
+            if let lok = r.login_ok {
+                credOK = lok
+                credMsg = lok ? "Saved — ManageBac login works ✓"
+                              : "Saved, but login still failed: \(r.login_error ?? "unknown")"
+            } else {
+                credOK = true; credMsg = "Saved."
+            }
+            refresh()
+        } catch let err { credOK = false; credMsg = err.localizedDescription }
         busy = false
     }
 

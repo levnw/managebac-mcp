@@ -353,6 +353,51 @@ async def _admin_user_note(request):
     return JSONResponse({"ok": True})
 
 
+async def _admin_user_credentials(request):
+    """Admin: change a user's ManageBac email and/or password. Clears their
+    stale session, then (unless verify=false) tries a real login with the new
+    credentials and reports whether it worked — so the admin gets immediate
+    feedback instead of finding out via a failed tool call later."""
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    user_id = request.path_params["user_id"]
+    email = (body.get("email") or "").strip()
+    password = body.get("password") or ""
+    verify = body.get("verify", True)
+
+    if not users.get_user_by_id(user_id):
+        return JSONResponse({"error": "user not found"}, status_code=404)
+    if not email and not password:
+        return JSONResponse({"error": "Provide a new email and/or password."}, status_code=400)
+
+    if email:
+        users.update_email(user_id, email)
+    if password:
+        users.update_password(user_id, password)
+    # Old cookies are tied to the old login — clear so the next fetch re-logs-in.
+    users.save_cookies(user_id, {})
+
+    result = {"ok": True}
+    if verify:
+        user = users.get_user_by_id(user_id)   # reload with the new credentials
+        from .auth import get_client, login
+        ctx = set_current_user(user)
+        try:
+            async with await get_client() as client:
+                await login(client)
+            result["login_ok"] = True
+        except Exception as e:
+            result["login_ok"] = False
+            result["login_error"] = str(e)
+        finally:
+            reset_user(ctx)
+    return JSONResponse(result)
+
+
 async def _admin_user_activity(request):
     if not _require_admin(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
@@ -431,6 +476,7 @@ def build_app(*, stateless: bool = True):
             Route("/admin/users/{user_id}/regenerate", _admin_user_regenerate, methods=["POST"]),
             Route("/admin/users/{user_id}/approve", _admin_user_approve, methods=["POST"]),
             Route("/admin/users/{user_id}/note", _admin_user_note, methods=["POST"]),
+            Route("/admin/users/{user_id}/credentials", _admin_user_credentials, methods=["POST"]),
             Route("/admin/users/{user_id}/activity", _admin_user_activity, methods=["GET"]),
             Route("/admin/activity", _admin_activity, methods=["GET"]),
         ],

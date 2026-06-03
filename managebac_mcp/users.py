@@ -180,6 +180,17 @@ def update_password(user_id: str, password: str) -> None:
         conn.execute("UPDATE users SET mb_password_enc = ? WHERE id = ?", (_encrypt(password), user_id))
 
 
+def update_email(user_id: str, email: str) -> None:
+    """Change the ManageBac login email. Also updates the label if it was the
+    old email (the default), so the admin list stays readable."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE users SET mb_email = ?, label = CASE WHEN label = mb_email THEN ? ELSE label END "
+            "WHERE id = ?",
+            (email, email, user_id),
+        )
+
+
 def list_users() -> list[dict]:
     with _connect() as conn:
         rows = conn.execute(
