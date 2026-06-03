@@ -120,8 +120,9 @@ async def list_tools() -> list[types.Tool]:
                 "Batch result is a dict keyed by class_id. "
                 "Each task has: id, title, url, date, due_day_time, type (Summative/Formative), "
                 "tags, status (Pending/Submitted/Complete/Incomplete/N/A), has_submission_box, "
-                "grades (e.g. {A: {score: 7, max: 8}}), teacher_comment. "
-                "Call get_task_detail for the full description, links, and attached files."
+                "grades (e.g. {A: {score: 7, max: 8}}). "
+                "This is a lightweight index — for the teacher's written comment/feedback, the "
+                "full description, links, and attached files, call get_task_detail on a specific task."
             ),
             inputSchema={
                 "type": "object",
@@ -354,6 +355,22 @@ async def _batch(fn, ids: list[str]) -> dict:
     return dict(zip(ids, results))
 
 
+def _slim_tasks(result):
+    """Drop the heavy `teacher_comment` essay from get_tasks output. The task
+    LIST is an index — full teacher comments belong in get_task_detail. Batched
+    across ~18 classes, these comments made get_tasks the biggest context hog
+    (up to ~58K tokens in one call). The comment stays in the cache, so
+    get_grades (single class) and get_task_detail still serve it on demand.
+    Handles both a single list and a batch dict {class_id: [tasks]}."""
+    def strip(t: dict) -> dict:
+        return {k: v for k, v in t.items() if k != "teacher_comment"}
+    if isinstance(result, dict):
+        return {cid: [strip(t) for t in tasks] for cid, tasks in result.items()}
+    if isinstance(result, list):
+        return [strip(t) for t in result]
+    return result
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     t0 = time.monotonic()
@@ -383,6 +400,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 result = await _batch(fetch_tasks, cid)
             else:
                 result = await fetch_tasks(cid)
+            result = _slim_tasks(result)   # drop teacher_comment to protect context
 
         elif name == "get_task_detail":
             tasks_arg = arguments.get("tasks")
