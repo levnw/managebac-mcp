@@ -43,7 +43,12 @@ SERVER_INSTRUCTIONS = (
     "an attachment, pass that url to get_file_content.\n"
     "- Data is cached for speed (tasks ~10 min, classes/units longer). If the student asks "
     "to 'update', 'refresh', 'check again', or is waiting on a new grade/task, call refresh "
-    "first and then re-fetch — that pulls live data from ManageBac."
+    "first and then re-fetch — that pulls live data from ManageBac.\n"
+    "- Be economical with tool calls to keep the conversation fast: for cross-class questions "
+    "use the consolidated tools (get_upcoming, get_grades, tag_search) instead of calling "
+    "get_tasks for every class. Reuse what you already fetched in this conversation rather than "
+    "re-calling the same tool. Only fetch a class's full task list when the student is focused "
+    "on that one class."
 )
 
 server = Server("managebac", instructions=SERVER_INSTRUCTIONS)
@@ -115,9 +120,13 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_tasks",
             description=(
-                "Returns all tasks for one or more classes. "
-                "BATCH SUPPORTED: class_id can be a single ID or a list — all fetched concurrently. "
-                "Batch result is a dict keyed by class_id. "
+                "Returns the recent tasks for a class (≈12 newest; older ones are summarized "
+                "with a note — reach them via tag_search/find_task/get_grades). "
+                "Use this to drill into ONE class. For cross-class questions do NOT batch every "
+                "class here — that floods the context. Instead use: get_upcoming (what's due / to "
+                "submit), get_grades (grades across classes), tag_search (find tasks by type/tag). "
+                "BATCH SUPPORTED but use sparingly: class_id can be a single ID or a small list — "
+                "all fetched concurrently. Batch result is a dict keyed by class_id. "
                 "Each task has: id, title, url, date, due_day_time, type (Summative/Formative), "
                 "tags, status (Pending/Submitted/Complete/Incomplete/N/A), has_submission_box, "
                 "grades (e.g. {A: {score: 7, max: 8}}). "
@@ -355,7 +364,7 @@ async def _batch(fn, ids: list[str]) -> dict:
     return dict(zip(ids, results))
 
 
-_TASKS_PER_CLASS_CAP = 20
+_TASKS_PER_CLASS_CAP = 12
 
 
 def _slim_tasks(result):

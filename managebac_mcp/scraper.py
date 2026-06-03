@@ -632,12 +632,20 @@ async def tag_search(tag: str = "", class_id: str = "") -> dict:
                     "grades": t.get("grades", {}),
                 })
 
-    return {
+    # Cap the number of returned tasks so a broad tag (e.g. "Formative" across
+    # all classes) can't flood the context. `count` still reports the true total.
+    _TAG_SEARCH_CAP = 40
+    total = len(matches)
+    out = {
         "query": tag,
         "scope": name_by_id.get(class_id, class_id) if class_id else "all classes",
-        "count": len(matches),
-        "tasks": matches,
+        "count": total,
+        "tasks": matches[:_TAG_SEARCH_CAP],
     }
+    if total > _TAG_SEARCH_CAP:
+        out["note"] = (f"Showing the first {_TAG_SEARCH_CAP} of {total} matches. "
+                       f"Narrow the search with a class_id or a more specific tag.")
+    return out
 
 
 async def fetch_grades(class_id: str = "") -> dict:
