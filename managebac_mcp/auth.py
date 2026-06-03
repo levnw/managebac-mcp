@@ -25,6 +25,18 @@ def _login_lock(user_id: str) -> asyncio.Lock:
     return lock
 
 
+# Cap how many requests hit ManageBac at once. Tools like get_grades / prewarm /
+# tag_search fan out to ~17 classes; firing all of them simultaneously makes
+# ManageBac reject/redirect most of the burst (those pages then parse to empty
+# and get cached). A small limit keeps every request succeeding.
+_REQUEST_SEM = asyncio.Semaphore(4)
+
+
+async def _throttled_get(client: httpx.AsyncClient, path: str) -> httpx.Response:
+    async with _REQUEST_SEM:
+        return await client.get(path)
+
+
 async def login(client: httpx.AsyncClient) -> None:
     """Log the CURRENT user into ManageBac and persist their cookies."""
     user = require_user()
@@ -81,7 +93,7 @@ async def authed_get(client: httpx.AsyncClient, path: str) -> httpx.Response:
     """
     user = require_user()
     try:
-        r = await client.get(path)
+        r = await _throttled_get(client, path)
         if "/login" not in str(r.url) and r.status_code != 401:
             return r
     except httpx.TooManyRedirects:
@@ -94,11 +106,11 @@ async def authed_get(client: httpx.AsyncClient, path: str) -> httpx.Response:
         # try their fresh cookies before logging in again.
         client.cookies = httpx.Cookies(users.load_cookies(user.id))
         try:
-            r = await client.get(path)
+            r = await _throttled_get(client, path)
             if "/login" not in str(r.url) and r.status_code != 401:
                 return r
         except httpx.TooManyRedirects:
             pass
         # Still bad — do a real login (clears cookies, signs in, saves).
         await login(client)
-    return await client.get(path)
+    return await _throttled_get(client, path)
