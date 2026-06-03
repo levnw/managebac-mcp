@@ -22,6 +22,7 @@ from .scraper import (
     find_task,
 )
 from . import cache
+from .context import ManageBacError
 
 SERVER_INSTRUCTIONS = (
     "You are connected to the student's own ManageBac account (their school's "
@@ -272,12 +273,17 @@ async def list_tools() -> list[types.Tool]:
             name="get_grades",
             description=(
                 "Consolidated grades across ALL classes (or one). Use for 'how am I doing', "
-                "'what are my grades', 'my grades in Biology'. "
+                "'what are my grades', 'my grades in Biology', and for predicting grades. "
                 "Returns {scope, classes}; each class has a 'criteria' summary (per criterion: "
-                "latest score, best, average, out_of, count) and 'graded_tasks' (each with title, "
-                "url, type, date, grades, teacher_comment). "
-                "Note: scores are MYP criterion levels (e.g. 7 out of 8), not percentages. "
-                "Pass class_id to scope to one class; omit it for everything."
+                "latest score, best, average, out_of, count) — this is everything you need to "
+                "assess or predict a grade. "
+                "Omit class_id for ALL classes: returns the compact criteria summary per class "
+                "(no per-task detail, to keep the response small and reliable). "
+                "Pass a class_id to scope to ONE class: that also includes 'graded_tasks' (each "
+                "with title, url, type, date, grades, teacher_comment). "
+                "If any class failed to load, the result has a 'fetch_errors' list — those classes "
+                "are missing, not ungraded; retry or call refresh. "
+                "Note: scores are MYP criterion levels (e.g. 7 out of 8), not percentages."
             ),
             inputSchema={
                 "type": "object",
@@ -353,86 +359,108 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
     t0 = time.monotonic()
     result: object
 
-    if name == "get_classes":
-        result = await fetch_classes()
+    # Error buffer: any failure inside the dispatch is turned into a structured
+    # {"error": ...} the AI can read aloud to the student, AND logged with its
+    # reason so the admin can see WHY a call failed instead of a silent empty.
+    try:
+        if name == "get_classes":
+            result = await fetch_classes()
 
-    elif name == "get_timetable":
-        result = await fetch_timetable()
+        elif name == "get_timetable":
+            result = await fetch_timetable()
 
-    elif name == "refresh":
-        cache.clear_user()
-        result = {"status": "refreshed",
-                  "message": "Cleared cached data. Re-call the data tool now to get live results from ManageBac."}
+        elif name == "refresh":
+            cache.clear_user()
+            result = {"status": "refreshed",
+                      "message": "Cleared cached data. Re-call the data tool now to get live results from ManageBac."}
 
-    elif name == "get_upcoming":
-        result = await fetch_upcoming(arguments.get("view", "upcoming"))
+        elif name == "get_upcoming":
+            result = await fetch_upcoming(arguments.get("view", "upcoming"))
 
-    elif name == "get_tasks":
-        cid = arguments["class_id"]
-        if _is_batch(cid):
-            result = await _batch(fetch_tasks, cid)
+        elif name == "get_tasks":
+            cid = arguments["class_id"]
+            if _is_batch(cid):
+                result = await _batch(fetch_tasks, cid)
+            else:
+                result = await fetch_tasks(cid)
+
+        elif name == "get_task_detail":
+            tasks_arg = arguments.get("tasks")
+            if tasks_arg:
+                # Batch: [{class_id, task_id}, ...]
+                results = await asyncio.gather(*[
+                    fetch_task_detail(t["class_id"], t["task_id"]) for t in tasks_arg
+                ])
+                result = list(results)
+            else:
+                result = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
+
+        elif name == "get_units":
+            cid = arguments["class_id"]
+            if _is_batch(cid):
+                result = await _batch(fetch_units, cid)
+            else:
+                result = await fetch_units(cid)
+
+        elif name == "get_files":
+            cid = arguments["class_id"]
+            if _is_batch(cid):
+                result = await _batch(fetch_files, cid)
+            else:
+                result = await fetch_files(cid)
+
+        elif name == "get_journal":
+            cid = arguments["class_id"]
+            if _is_batch(cid):
+                result = await _batch(fetch_journal, cid)
+            else:
+                result = await fetch_journal(cid)
+
+        elif name == "get_file_content":
+            f = await fetch_file_readable(arguments["url"])
+            duration_ms = int((time.monotonic() - t0) * 1000)
+            if f["kind"] == "image":
+                cache.log_request(name, arguments, {"kind": "image", "content_type": f.get("content_type")},
+                                  source="mcp", duration_ms=duration_ms)
+                return [types.ImageContent(type="image", data=f["data_b64"], mimeType=f["content_type"])]
+            elif f["kind"] == "text":
+                cache.log_request(name, arguments, {"kind": "text", "truncated": f.get("truncated")},
+                                  source="mcp", duration_ms=duration_ms)
+                return [types.TextContent(type="text", text=f["text"])]
+            else:
+                result = {"error": f["error"], "tool": name}
+
+        elif name == "get_grades":
+            result = await fetch_grades(arguments.get("class_id", ""))
+
+        elif name == "tag_search":
+            result = await tag_search(arguments["tag"], arguments.get("class_id", ""))
+
+        elif name == "find_task":
+            result = await find_task(arguments["query"])
+            if result is None:
+                result = {"error": "Task not found", "tool": name}
+
         else:
-            result = await fetch_tasks(cid)
+            result = {"error": f"Unknown tool: {name}", "tool": name}
 
-    elif name == "get_task_detail":
-        tasks_arg = arguments.get("tasks")
-        if tasks_arg:
-            # Batch: [{class_id, task_id}, ...]
-            results = await asyncio.gather(*[
-                fetch_task_detail(t["class_id"], t["task_id"]) for t in tasks_arg
-            ])
-            result = list(results)
-        else:
-            result = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
-
-    elif name == "get_units":
-        cid = arguments["class_id"]
-        if _is_batch(cid):
-            result = await _batch(fetch_units, cid)
-        else:
-            result = await fetch_units(cid)
-
-    elif name == "get_files":
-        cid = arguments["class_id"]
-        if _is_batch(cid):
-            result = await _batch(fetch_files, cid)
-        else:
-            result = await fetch_files(cid)
-
-    elif name == "get_journal":
-        cid = arguments["class_id"]
-        if _is_batch(cid):
-            result = await _batch(fetch_journal, cid)
-        else:
-            result = await fetch_journal(cid)
-
-    elif name == "get_file_content":
-        f = await fetch_file_readable(arguments["url"])
-        if f["kind"] == "image":
-            return [types.ImageContent(type="image", data=f["data_b64"], mimeType=f["content_type"])]
-        elif f["kind"] == "text":
-            return [types.TextContent(type="text", text=f["text"])]
-        else:
-            result = {"error": f["error"]}
-
-    elif name == "get_grades":
-        result = await fetch_grades(arguments.get("class_id", ""))
-
-    elif name == "tag_search":
-        result = await tag_search(arguments["tag"], arguments.get("class_id", ""))
-
-    elif name == "find_task":
-        result = await find_task(arguments["query"])
-        if result is None:
-            result = {"error": "Task not found"}
-
-    else:
-        result = {"error": f"Unknown tool: {name}"}
+    except ManageBacError as e:
+        # Expected, explainable failures (login/session/redirect) — surface the reason.
+        result = {"error": e.reason, "tool": name}
+        print(f"[tool error] {name} {arguments}: {e.reason}", flush=True)
+    except Exception as e:
+        # Anything unexpected (parse crash, network, etc.) — surface type + message.
+        result = {"error": f"{type(e).__name__}: {e}", "tool": name}
+        import traceback
+        print(f"[tool error] {name} {arguments}: {type(e).__name__}: {e}", flush=True)
+        traceback.print_exc()
 
     duration_ms = int((time.monotonic() - t0) * 1000)
     cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
 
-    return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+    # Compact separators (no indent / no spaces) — pretty-printing wasted ~35%
+    # of the payload, and oversized payloads get truncated by the connector.
+    return [types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))]
 
 
 async def main():

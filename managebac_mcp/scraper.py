@@ -216,23 +216,36 @@ def parse_classes(html: str) -> list[dict]:
 
 
 async def fetch_classes() -> list[dict]:
+    # `if cached:` (not `is not None`) deliberately treats a cached EMPTY list as
+    # a miss. A student always has classes, so an empty result only ever means a
+    # transient failure (login page, ManageBac hiccup). Caching that empty list
+    # for 24h is what poisoned get_classes — and every tool that depends on it
+    # (get_grades, tag_search, get_upcoming) — for a whole day.
     cached = cache.get("get_classes")
-    if cached is not None:
+    if cached:
         return cached
 
+    import asyncio as _asyncio
+
     async with await get_client() as client:
+        # authed_get already re-logs-in transparently on a /login redirect.
         r = await authed_get(client, "/student/classes/my")
-        if "/login" in str(r.url):
-            await login(client)
-            r = await authed_get(client, "/student/classes/my")
+        result = parse_classes(r.text)
 
-    result = parse_classes(r.text)
+        # Never cache an empty parse — return it so the NEXT call retries fresh
+        # instead of serving stale-empty until the TTL expires.
+        if not result:
+            return []
 
-    # For each class, check if it has a journal tab
-    async with await get_client() as client:
-        for cls in result:
-            r2 = await authed_get(client, f"/student/classes/{cls['id']}")
-            cls["has_journal"] = "learner_portfolio" in r2.text
+        # Check each class's journal tab concurrently (the request semaphore in
+        # auth.py caps real parallelism). Sequentially this was ~18 round-trips,
+        # slow enough to hit the connector's timeout.
+        pages = await _asyncio.gather(
+            *[authed_get(client, f"/student/classes/{c['id']}") for c in result]
+        )
+
+    for cls, r2 in zip(result, pages):
+        cls["has_journal"] = "learner_portfolio" in r2.text
 
     cache.set("get_classes", result, "get_classes")
     return result
@@ -375,12 +388,15 @@ def _now_info() -> dict:
 async def fetch_timetable() -> dict:
     # Timetable slots are cached (they change rarely); the "current" time is
     # always computed fresh so the AI knows what day/time it actually is.
+    # `if slots:` treats a cached EMPTY timetable as a miss — a student always
+    # has a timetable, so empty means a transient fetch failure, not real data.
     slots = cache.get("get_timetable")
-    if slots is None:
+    if not slots:
         async with await get_client() as client:
             r = await authed_get(client, "/student/timetables")
         slots = parse_timetable(r.text)
-        cache.set("get_timetable", slots, "get_timetable")
+        if slots:                       # never cache an empty parse
+            cache.set("get_timetable", slots, "get_timetable")
 
     return {"current": _now_info(), "timetable": slots}
 
@@ -641,8 +657,13 @@ async def fetch_grades(class_id: str = "") -> dict:
     )
 
     out_classes = []
+    fetch_errors = []
     for cid, tasks in zip(ids, task_lists):
         if isinstance(tasks, Exception):
+            # Surface the failure instead of silently dropping the class — a
+            # missing class here is otherwise indistinguishable from "no grades".
+            fetch_errors.append({"class_id": cid, "class_name": name_by_id.get(cid, ""),
+                                 "error": str(tasks)})
             continue
         graded = [t for t in tasks if t.get("grades")]   # tasks are newest-first
         if not graded:
@@ -670,22 +691,32 @@ async def fetch_grades(class_id: str = "") -> dict:
                 "count": len(s),
             }
 
-        out_classes.append({
+        entry = {
             "class_name": name_by_id.get(cid, ""),
             "class_id": cid,
             "criteria": criteria,
-            "graded_tasks": [
+        }
+        # The per-criterion summary above is all the all-classes view needs (and
+        # all predicted-grades needs). Only attach the full graded-task list —
+        # with teacher comments — when scoped to ONE class. Shipping every task
+        # for all ~13 graded classes is what made the payload so large it got
+        # truncated by the connector and came back looking empty.
+        if class_id:
+            entry["graded_tasks"] = [
                 {"title": t.get("title", ""), "url": t.get("url", ""),
                  "type": t.get("type", ""), "date": t.get("date", ""),
                  "grades": t["grades"], "teacher_comment": t.get("teacher_comment", "")}
                 for t in graded
-            ],
-        })
+            ]
+        out_classes.append(entry)
 
-    return {
+    result = {
         "scope": name_by_id.get(class_id, class_id) if class_id else "all classes",
         "classes": out_classes,
     }
+    if fetch_errors:
+        result["fetch_errors"] = fetch_errors
+    return result
 
 
 async def prewarm(user) -> None:

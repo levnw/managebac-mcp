@@ -7,7 +7,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from . import users
-from .context import require_user
+from .context import require_user, ManageBacError
 
 # One login at a time per user. Without this, a burst of concurrent fetches
 # (prewarm, get_grades, tag_search → 17 classes at once) all try to log in
@@ -64,7 +64,10 @@ async def login(client: httpx.AsyncClient) -> None:
     )
 
     if "/login" in str(r.url):
-        raise RuntimeError(f"ManageBac login failed for {user.label} — check their credentials")
+        raise ManageBacError(
+            f"ManageBac login failed for {user.label}. The email or password is "
+            f"likely wrong (or was changed on ManageBac). Re-enroll to update it."
+        )
 
     users.save_cookies(user.id, dict(client.cookies))
 
@@ -113,4 +116,14 @@ async def authed_get(client: httpx.AsyncClient, path: str) -> httpx.Response:
             pass
         # Still bad — do a real login (clears cookies, signs in, saves).
         await login(client)
-    return await _throttled_get(client, path)
+    r = await _throttled_get(client, path)
+    # If we STILL land on the login page after a fresh login, the session can't
+    # be authenticated. Raise with a reason instead of returning the login HTML,
+    # which would otherwise parse to an empty result and get cached as "no data".
+    if "/login" in str(r.url) or r.status_code == 401:
+        raise ManageBacError(
+            f"ManageBac kept redirecting {path} to the login page even after a "
+            f"fresh sign-in for {user.label} — the session could not be "
+            f"authenticated (wrong credentials, or ManageBac is blocking the login)."
+        )
+    return r

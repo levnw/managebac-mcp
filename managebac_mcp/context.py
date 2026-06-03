@@ -16,6 +16,20 @@ from dataclasses import dataclass
 _current_user: contextvars.ContextVar = contextvars.ContextVar("current_user", default=None)
 
 
+class ManageBacError(Exception):
+    """
+    A fetch/parse failure carrying a human-readable reason.
+
+    Raised instead of letting a tool return a silently-empty result, so the AI
+    (and the student) get told WHY something failed — bad login, ManageBac
+    redirect loop, unexpected page — rather than a confusing empty answer. The
+    reason is also written to the request log for the admin to see.
+    """
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
+
+
 @dataclass
 class User:
     id: str            # stable random id, used to namespace cache + sessions
