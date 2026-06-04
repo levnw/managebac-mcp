@@ -460,14 +460,16 @@ def parse_tasks(html: str, class_id: str = "") -> list[dict]:
         task_type = "Summative" if "Summative" in row_text else "Formative" if "Formative" in row_text else ""
         criterion_tags = list(dict.fromkeys(tags))  # deduplicate, preserve order
 
-        # Status
-        status = "Pending"
-        for s in ("Submitted", "Complete", "Not Submitted", "Not Assessed Yet", "Incomplete", "Pending"):
-            if s in row_text:
-                status = s
-                break
-        if "N/A" in row_text and not any(x in row_text for x in ("Submitted", "Pending", "Incomplete")):
-            status = "N/A"
+        # Status — read it from the dedicated status badge (span.badge-label),
+        # NOT a substring scan of the whole row. Titles, tags and teacher
+        # comments routinely contain words like "submitted" or "complete", and
+        # the old scan matched those by accident — e.g. a "Not Submitted" task
+        # matched "Submitted", and nothing ever came back "Not Submitted". The
+        # badge carries ManageBac's own status text verbatim, with no collisions.
+        status = ""
+        status_badge = row.find("span", class_="badge-label")
+        if status_badge:
+            status = status_badge.get_text(" ", strip=True)
 
         has_submission_box = bool(row.find(string=re.compile(r'Submit Coursework', re.I)))
 
