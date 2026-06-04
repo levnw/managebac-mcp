@@ -844,6 +844,17 @@ def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
         if not fname:
             continue
 
+        # The real, downloadable file URL — a signed CDN link in the filename
+        # anchor's href. THIS is what get_file_content needs. (The old code kept
+        # only the preview-modal token below, which is an HTML popup, not a file,
+        # so reading a submitted file 404'd.)
+        download_url = ""
+        if file_link and file_link.name == "a":
+            download_url = file_link.get("href", "")
+        if not download_url:
+            asset = tr.find("a", href=re.compile(r"/uploads/asset/|cdn\.[^/]*managebac", re.I))
+            download_url = asset.get("href", "") if asset else ""
+
         # Upload timestamp — in a <label> inside the row
         uploaded_at = ""
         label = tr.find("label")
@@ -853,12 +864,13 @@ def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
             if up_match:
                 uploaded_at = up_match.group(1)
 
-        # Teacher feedback token
+        # Teacher feedback token (the preview-modal popup — not a file download)
         feedback_btn = tr.find("a", attrs={"data-pdf-preview-url-value": True})
         feedback_token = feedback_btn["data-pdf-preview-url-value"] if feedback_btn else None
 
         submitted_files.append({
             "name": fname,
+            "url": download_url,          # pass this to get_file_content to read it
             "uploaded_at": uploaded_at,
             "teacher_feedback_token": feedback_token,
         })

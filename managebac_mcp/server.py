@@ -158,7 +158,8 @@ async def list_tools() -> list[types.Tool]:
                 "description.links (external URLs embedded by the teacher), "
                 "description.embedded_files (attached files, each with name, size, url), "
                 "resources (teacher-posted files), "
-                "submitted_files (student uploads, with teacher_feedback_token if annotated), "
+                "submitted_files (the student's own uploads — each has a `url` you can pass to "
+                "get_file_content to read the PDF/doc they turned in; plus teacher_feedback_token if annotated), "
                 "task_history, discussions (posts with author, timestamp, text, links, replies)."
             ),
             inputSchema={
