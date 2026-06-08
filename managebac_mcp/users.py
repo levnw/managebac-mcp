@@ -15,6 +15,7 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet
 
+from . import config
 from .config import DATA_DIR
 from .context import User
 
@@ -47,7 +48,7 @@ def _decrypt(token: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(USERS_DB)
+    conn = config.connect(USERS_DB)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id              TEXT PRIMARY KEY,

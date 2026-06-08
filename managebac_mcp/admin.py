@@ -9,6 +9,7 @@ import secrets
 import sqlite3
 import time
 
+from . import config
 from .config import DATA_DIR
 
 ADMIN_DB = DATA_DIR / "admin.db"
@@ -18,7 +19,7 @@ _PBKDF2_ROUNDS = 200_000
 
 
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(ADMIN_DB)
+    conn = config.connect(ADMIN_DB)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS admins (
             username TEXT PRIMARY KEY,

@@ -11,6 +11,7 @@ import sqlite3
 import time
 from typing import Any
 
+from . import config
 from .config import CACHE_DB
 from .context import require_user
 
@@ -27,7 +28,7 @@ TTL = {
 
 
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(CACHE_DB)
+    conn = config.connect(CACHE_DB)
     # Migration: a pre-multi-user cache table has no user_id column. The cache
     # is disposable, so just drop and recreate it with the namespaced schema.
     existing = conn.execute(
