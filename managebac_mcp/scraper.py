@@ -761,6 +761,17 @@ async def prewarm(user) -> None:
 def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
     soup = BeautifulSoup(html, "lxml")
 
+    # Task title — typically in h2.page-title or the first prominent heading
+    title = ""
+    for sel in ["h2.page-title", "h1.page-title", ".page-title", "h1", "h2"]:
+        el = soup.select_one(sel)
+        if el:
+            t = el.get_text(strip=True)
+            # Skip generic headings like "Description", "Resources"
+            if t and t.lower() not in ("description", "resources", "discussions", "task history"):
+                title = t
+                break
+
     # Description block — find <h4>Description</h4> then get next sibling div.show-more
     # Inside that: div.fix-body-margins (the actual content)
     desc_heading = soup.find(["h4", "h3", "h2"], string=re.compile(r'^Description$', re.I))
@@ -895,6 +906,7 @@ def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
         "class_id": class_id,
         "task_id": task_id,
         "url": f"{_base()}/student/classes/{class_id}/core_tasks/{task_id}",
+        **({"title": title} if title else {}),
         "description": {
             "text": desc_text,
             "links": desc_links,

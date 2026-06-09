@@ -106,7 +106,7 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_TASK_DETAIL_URI = "ui://widget/task-detail-v5.html"
+_TASK_DETAIL_URI = "ui://widget/task-detail-v6.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -244,19 +244,36 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
       (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     applyTheme(initTheme);
 
-    // Try to render immediately from toolOutput
     let rendered = false;
     function tryRender(data) {
-      if (rendered) return;
+      if (rendered || !data) return;
       rendered = true;
       render(data);
     }
 
-    if (window.openai?.toolOutput) {
-      tryRender(window.openai.toolOutput);
+    // Try immediately (works when toolOutput is set synchronously)
+    tryRender(window.openai?.toolOutput);
+
+    // Poll every 100ms for up to 4s — ChatGPT sets toolOutput asynchronously
+    // after the widget iframe loads; polling is the only reliable way to catch it.
+    if (!rendered) {
+      let polls = 0;
+      const timer = setInterval(() => {
+        polls++;
+        if (window.openai?.toolOutput) {
+          clearInterval(timer);
+          tryRender(window.openai.toolOutput);
+        } else if (polls >= 40) {
+          clearInterval(timer);
+          if (!rendered) {
+            document.getElementById('root').innerHTML =
+              '<p style="color:var(--fg2);font-size:0.82rem;margin-bottom:4px;">No data (toolOutput null after 4s)</p>';
+          }
+        }
+      }, 100);
     }
 
-    // Fallback: postMessage delivery
+    // Also listen for postMessage delivery
     window.addEventListener('message', ev => {
       const m = ev.data;
       if (!m) return;
@@ -265,7 +282,6 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
       }
     });
 
-    // Fallback: openai:tool-result custom event
     window.addEventListener('openai:tool-result', ev => {
       tryRender(ev.detail?.structuredContent || ev.detail);
     });
@@ -273,20 +289,6 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
     window.addEventListener('openai:set_globals', ev => {
       applyTheme(ev.detail?.globals?.theme);
     });
-
-    // Last resort: if still loading after 3s, show debug panel
-    setTimeout(() => {
-      if (!rendered) {
-        const dbg = {
-          toolOutput: window.openai?.toolOutput,
-          globals: window.openai?.globals,
-          openaiExists: typeof window.openai !== 'undefined',
-        };
-        document.getElementById('root').innerHTML =
-          '<p style="color:var(--fg2);font-size:0.82rem;margin-bottom:6px;">No data received after 3s. Debug:</p>' +
-          '<div class="debug">' + esc(JSON.stringify(dbg, null, 2)) + '</div>';
-      }
-    }, 3000);
   </script>
 </body>
 </html>"""
