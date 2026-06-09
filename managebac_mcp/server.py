@@ -624,10 +624,10 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 task = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)
-                return [types.CallToolResult(
+                return types.CallToolResult(
                     content=[types.TextContent(type="text", text=json.dumps(task, ensure_ascii=False, separators=(",", ":")))],
                     structuredContent=task,
-                )]
+                )
 
         elif name == "get_units":
             cid = arguments["class_id"]
@@ -679,10 +679,10 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             sc = {"message": "UI infrastructure test", "status": "ok", "timestamp": time.time()}
             duration_ms = int((time.monotonic() - t0) * 1000)
             cache.log_request(name, arguments, sc, source="mcp", duration_ms=duration_ms)
-            return [types.CallToolResult(
+            return types.CallToolResult(
                 content=[types.TextContent(type="text", text="Test widget rendered.")],
                 structuredContent=sc,
-            )]
+            )
 
         else:
             result = {"error": f"Unknown tool: {name}", "tool": name}
