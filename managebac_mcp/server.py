@@ -438,27 +438,30 @@ async def list_tools() -> list[types.Tool]:
             name="get_task_detail",
             description=(
                 "Returns the full detail for one or more tasks. "
-                "BATCH SUPPORTED: pass a 'tasks' list of {class_id, task_id} pairs — all fetched concurrently, result is a list. "
-                "Single task: pass class_id and task_id directly. "
-                "Returns per task: url, "
-                "description.text (full instructions as Markdown — bold/italic/lists preserved), "
+                "Single task: pass class_id + task_id, OR pass the task url (class_id and task_id will be extracted automatically). "
+                "BATCH SUPPORTED: pass a 'tasks' list of {class_id, task_id} pairs — all fetched concurrently. "
+                "Returns per task: title, url, "
+                "description.text (full instructions as Markdown), "
                 "description.links (external URLs embedded by the teacher), "
-                "description.embedded_files (attached files, each with name, size, url), "
                 "resources (teacher-posted files), "
                 "submitted_files (the student's own uploads — each has a `url` you can pass to "
-                "get_file_content to read the PDF/doc they turned in; plus teacher_feedback_token if annotated), "
-                "task_history, discussions (posts with author, timestamp, text, links, replies)."
+                "get_file_content to read the PDF/doc they turned in), "
+                "task_history, discussions."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "class_id": {
                         "type": "string",
-                        "description": "Class ID — single task mode only",
+                        "description": "Class ID — from get_upcoming, get_tasks, etc.",
                     },
                     "task_id": {
                         "type": "string",
-                        "description": "Task ID — single task mode only",
+                        "description": "Task ID — from get_upcoming, get_tasks, etc.",
+                    },
+                    "url": {
+                        "type": "string",
+                        "description": "Full ManageBac task URL — class_id and task_id are extracted automatically. Use this if you have the URL but not the IDs.",
                     },
                     "tasks": {
                         "type": "array",
@@ -781,6 +784,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             result = _slim_tasks(result)   # drop teacher_comment to protect context
 
         elif name == "get_task_detail":
+            import re as _re
             tasks_arg = arguments.get("tasks")
             if tasks_arg:
                 fetched = await asyncio.gather(*[
@@ -788,7 +792,18 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 ])
                 task = list(fetched)[0] if len(fetched) == 1 else list(fetched)
             else:
-                task = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
+                cid = arguments.get("class_id")
+                tid = arguments.get("task_id")
+                # Fallback: extract IDs from a task URL if class_id/task_id not provided directly
+                if not cid or not tid:
+                    url_arg = arguments.get("url", "")
+                    m = _re.search(r"/classes/(\d+)/core_tasks/(\d+)", url_arg)
+                    if m:
+                        cid, tid = m.group(1), m.group(2)
+                if not cid or not tid:
+                    result = {"error": "class_id and task_id are required (or pass url)", "tool": name}
+                    raise KeyError("class_id and task_id missing — provide them or pass url")
+                task = await fetch_task_detail(cid, tid)
             full = task if isinstance(task, dict) else {"tasks": task}
             # slim structuredContent so ChatGPT populates window.openai.toolOutput
             sc = _widget_sc(task) if isinstance(task, dict) else _widget_sc((task or [{}])[0])
