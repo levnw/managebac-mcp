@@ -101,88 +101,127 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Task Detail</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { --bg: #ffffff; --bg2: #f8fafc; --fg: #0f172a; --fg2: #475569; --border: #e2e8f0; --accent: #3b82f6; }
+    .dark { --bg: #212121; --bg2: #2f2f2f; --fg: #ececec; --fg2: #a0a0a0; --border: #3f3f3f; --accent: #60a5fa; }
+    body { background: var(--bg); color: var(--fg); margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    #root { padding: 20px; max-width: 720px; margin: 0 auto; overflow: auto; }
+    h1 { font-size: 1.4rem; font-weight: 700; margin: 0 0 10px; }
+    h2 { font-size: 1rem; font-weight: 600; margin: 20px 0 8px; color: var(--fg2); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 600; margin-bottom: 12px; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-orange { background: #ffedd5; color: #9a3412; }
+    .dark .badge-green { background: #14532d; color: #86efac; }
+    .dark .badge-orange { background: #431407; color: #fdba74; }
+    .due-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; color: var(--fg2); margin-bottom: 16px; }
+    .due-box strong { color: var(--fg); }
+    .description { font-size: 0.9rem; line-height: 1.65; color: var(--fg); }
+    .description a { color: var(--accent); text-decoration: none; }
+    .description a:hover { text-decoration: underline; }
+    .link-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; color: var(--accent); text-decoration: none; margin: 4px 4px 0 0; word-break: break-all; }
+    .file-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; }
+    .file-row.submitted { border-color: #86efac44; background: #dcfce710; }
+    .dark .file-row.submitted { border-color: #16653344; background: #14532d22; }
+    .file-name { font-size: 0.875rem; font-weight: 500; }
+    .file-size { font-size: 0.75rem; color: var(--fg2); }
+    .view-btn { font-size: 0.8rem; color: var(--accent); background: none; border: none; cursor: pointer; padding: 0; }
+    .open-btn { display: inline-block; margin-top: 20px; padding: 8px 16px; background: var(--accent); color: #fff; border-radius: 8px; font-size: 0.875rem; font-weight: 600; text-decoration: none; }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0 0; }
+    .loading { color: var(--fg2); font-size: 0.9rem; padding: 40px 0; text-align: center; }
+  </style>
 </head>
-<body class="m-0 p-0 bg-white text-slate-900">
-  <div id="root" class="p-6 max-w-3xl mx-auto overflow-auto h-full">
-    <p class="text-slate-400">Loading...</p>
-  </div>
+<body>
+  <div id="root"><p class="loading">Loading task...</p></div>
   <script>
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    function applyTheme(theme) {
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+    }
+
     function render(task) {
-      if (!task) return;
-      const e = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if (!task || typeof task !== 'object') return;
       let h = '';
 
-      // Header
-      h += '<h1 class="text-2xl font-bold mb-2">' + e(task.title) + '</h1>';
+      h += '<h1>' + esc(task.title || 'Task') + '</h1>';
+
       if (task.status) {
-        const ok = task.status.toLowerCase().includes('submitted');
-        h += '<span class="inline-block px-3 py-1 rounded-full text-sm font-medium mb-4 ' +
-          (ok ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800') + '">' + e(task.status) + '</span>';
+        const s = task.status.toLowerCase();
+        const cls = s.includes('not submitted') ? 'badge-orange' : s.includes('submitted') || s.includes('complete') ? 'badge-green' : 'badge-orange';
+        h += '<span class="badge ' + cls + '">' + esc(task.status) + '</span>';
       }
 
-      // Due date
       if (task.due_date) {
-        h += '<div class="mb-4 p-3 bg-slate-50 rounded-lg text-sm text-slate-600">Due: <strong>' + e(task.due_date) + '</strong></div>';
+        h += '<div class="due-box">Due <strong>' + esc(task.due_date) + '</strong></div>';
       }
 
-      // Description
       if (task.description) {
-        h += '<h2 class="text-lg font-semibold mt-5 mb-2">Description</h2>';
-        const txt = typeof task.description === 'string' ? task.description : task.description.text || '';
-        h += '<div class="prose text-sm leading-relaxed">' + txt + '</div>';
-        const links = task.description?.links || [];
+        const txt = typeof task.description === 'string' ? task.description : (task.description.text || '');
+        const links = Array.isArray(task.description?.links) ? task.description.links : [];
+        if (txt) {
+          h += '<h2>Instructions</h2><div class="description">' + txt + '</div>';
+        }
         if (links.length) {
-          h += '<ul class="mt-3 space-y-1">' + links.map(l =>
-            '<li><a href="' + e(l) + '" target="_blank" class="text-blue-600 hover:underline text-sm break-all">' + e(l) + '</a></li>'
-          ).join('') + '</ul>';
+          h += '<div style="margin-top:10px">' + links.map(l =>
+            '<a class="link-pill" href="' + esc(l) + '" target="_blank" rel="noopener">&#128279; ' + esc(l) + '</a>'
+          ).join('') + '</div>';
         }
       }
 
-      // Submitted files
-      if (task.submitted_files?.length) {
-        h += '<h2 class="text-lg font-semibold mt-5 mb-2">Your Submissions</h2>';
-        h += task.submitted_files.map(f =>
-          '<div class="flex justify-between items-center p-3 mb-2 bg-green-50 border border-green-200 rounded-lg">' +
-          '<div><p class="font-medium text-sm">' + e(f.name) + '</p>' +
-          (f.size ? '<p class="text-xs text-slate-500">' + e(f.size) + '</p>' : '') + '</div>' +
-          (f.url ? '<button class="text-blue-600 text-sm hover:underline view-file" data-url="' + e(f.url) + '">View</button>' : '') +
+      const resources = task.resources || task.attachments || task.description?.embedded_files || [];
+      if (resources.length) {
+        h += '<h2>Attachments</h2>';
+        h += resources.map(f =>
+          '<div class="file-row"><div><div class="file-name">' + esc(f.name) + '</div>' +
+          (f.size ? '<div class="file-size">' + esc(f.size) + '</div>' : '') + '</div>' +
+          (f.url ? '<a class="view-btn" href="' + esc(f.url) + '" target="_blank">Download</a>' : '') +
           '</div>'
         ).join('');
       }
 
-      // Open link
+      if (task.submitted_files?.length) {
+        h += '<h2>Your Submissions</h2>';
+        h += task.submitted_files.map(f =>
+          '<div class="file-row submitted"><div><div class="file-name">' + esc(f.name) + '</div>' +
+          (f.size ? '<div class="file-size">' + esc(f.size) + '</div>' : '') + '</div>' +
+          (f.url ? '<button class="view-btn view-file" data-url="' + esc(f.url) + '">View &#8594;</button>' : '') +
+          '</div>'
+        ).join('');
+      }
+
       if (task.url) {
-        h += '<div class="mt-8 pt-5 border-t border-slate-200">' +
-          '<a href="' + e(task.url) + '" target="_blank" class="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Open in ManageBac &#8599;</a>' +
-          '</div>';
+        h += '<hr class="divider"><a class="open-btn" href="' + esc(task.url) + '" target="_blank" rel="noopener">Open in ManageBac &#8599;</a>';
       }
 
       document.getElementById('root').innerHTML = h;
 
       document.querySelectorAll('.view-file').forEach(btn => {
         btn.addEventListener('click', () => {
-          window.parent.postMessage({
-            jsonrpc: '2.0', id: Math.random(),
-            method: 'tools/call',
-            params: { name: 'get_file_content', arguments: { url: btn.dataset.url } }
+          window.parent.postMessage({ jsonrpc:'2.0', id: Math.random(),
+            method:'tools/call', params:{ name:'get_file_content', arguments:{ url: btn.dataset.url } }
           }, '*');
         });
       });
     }
 
-    render(window.openai?.toolOutput);
+    // Apply theme immediately — check globals before set_globals fires
+    const initTheme = window.openai?.globals?.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    applyTheme(initTheme);
 
-    window.addEventListener('message', e => {
-      if (e.source !== window.parent) return;
-      if (e.data?.method === 'ui/notifications/tool-result') render(e.data.params?.structuredContent);
+    // Render immediately if data is already available
+    if (window.openai?.toolOutput) {
+      render(window.openai.toolOutput);
+    }
+
+    // Also listen for postMessage delivery (timing varies)
+    window.addEventListener('message', ev => {
+      if (ev.source !== window.parent) return;
+      const m = ev.data;
+      if (m?.method === 'ui/notifications/tool-result') render(m.params?.structuredContent);
     }, { passive: true });
 
-    window.addEventListener('openai:set_globals', e => {
-      if (e.detail?.globals?.theme === 'dark') {
-        document.body.classList.add('dark');
-        document.body.style.background = '#0f172a';
-        document.body.style.color = '#f1f5f9';
-      }
+    window.addEventListener('openai:set_globals', ev => {
+      applyTheme(ev.detail?.globals?.theme);
     }, { passive: true });
   </script>
 </body>
