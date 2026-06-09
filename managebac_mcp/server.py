@@ -106,7 +106,7 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_TASK_DETAIL_URI = "ui://widget/task-detail.html"
+_TASK_DETAIL_URI = "ui://widget/task-detail-v3.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -747,9 +747,17 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             result = await tag_search(arguments["tag"], arguments.get("class_id", ""))
 
         elif name == "find_task":
-            result = await find_task(arguments["query"])
-            if result is None:
+            task = await find_task(arguments["query"])
+            if task is None:
                 result = {"error": "Task not found", "tool": name}
+            else:
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)
+                return types.CallToolResult(
+                    content=[types.TextContent(type="text", text=json.dumps(task, ensure_ascii=False, separators=(",", ":")))],
+                    structuredContent=task,
+                    _meta=_TASK_META,
+                )
 
         elif name == "test_ui":
             sc = {"message": "UI infrastructure test", "status": "ok", "timestamp": time.time()}
