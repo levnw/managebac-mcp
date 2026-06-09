@@ -69,16 +69,16 @@ server = Server("managebac", instructions=SERVER_INSTRUCTIONS)
 # UI Helpers
 # ---------------------------------------------------------------------------
 
-def _add_ui_metadata(task_detail: dict) -> dict:
-    """Add ChatGPT UI metadata to task detail response."""
-    task_detail = task_detail.copy()  # Don't mutate the cached result
-    if "_meta" not in task_detail:
-        task_detail["_meta"] = {}
+def _add_ui_metadata(data: dict, resource_name: str = "task-detail") -> dict:
+    """Add ChatGPT UI metadata to response."""
+    data = data.copy()  # Don't mutate the original
+    if "_meta" not in data:
+        data["_meta"] = {}
     public_url = _get_public_url()
-    task_detail["_meta"]["ui"] = {
-        "resourceUri": f"{public_url}/ui/task-detail"
+    data["_meta"]["ui"] = {
+        "resourceUri": f"{public_url}/ui/{resource_name}"
     }
-    return task_detail
+    return data
 
 
 @server.list_tools()
@@ -379,6 +379,19 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["query"],
             },
         ),
+        types.Tool(
+            name="test_ui",
+            description=(
+                "TEST TOOL: Simple UI test to verify the iframe infrastructure is working. "
+                "Call this to see if ChatGPT can render embedded UI components. "
+                "Should display a green success message with tool input/output."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
     ]
 
 
@@ -521,6 +534,15 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             result = await find_task(arguments["query"])
             if result is None:
                 result = {"error": "Task not found", "tool": name}
+
+        elif name == "test_ui":
+            # Test tool to verify UI infrastructure works
+            result = {
+                "message": "This is a test UI component",
+                "timestamp": time.time(),
+                "status": "ok"
+            }
+            result = _add_ui_metadata(result, resource_name="test")
 
         else:
             result = {"error": f"Unknown tool: {name}", "tool": name}

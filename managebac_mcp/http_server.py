@@ -417,6 +417,63 @@ async def _admin_activity(request):
 # UI Components (served to ChatGPT iframes)
 # ---------------------------------------------------------------------------
 
+async def _ui_test(request):
+    """Serve a simple test UI to verify the infrastructure works."""
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Test UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="m-0 p-0 bg-white dark:bg-slate-950">
+    <div class="p-8 max-w-2xl mx-auto">
+        <div class="bg-green-50 dark:bg-green-900/20 border-2 border-green-500 rounded-lg p-6 text-center">
+            <h1 class="text-4xl font-bold text-green-700 dark:text-green-400 mb-4">✅ UI IS WORKING!</h1>
+            <p class="text-xl text-slate-700 dark:text-slate-300 mb-6">The iframe loaded successfully and is receiving data.</p>
+
+            <div class="bg-slate-100 dark:bg-slate-800 rounded p-4 mb-6 text-left">
+                <p class="text-sm font-mono text-slate-600 dark:text-slate-400 mb-2"><strong>Tool Input:</strong></p>
+                <pre id="input" class="text-xs overflow-auto">Loading...</pre>
+                <p class="text-sm font-mono text-slate-600 dark:text-slate-400 mt-4 mb-2"><strong>Tool Output:</strong></p>
+                <pre id="output" class="text-xs overflow-auto">Loading...</pre>
+            </div>
+
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                If you see this, the UI infrastructure is working correctly.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Display tool input and output
+        document.getElementById('input').textContent = JSON.stringify(window.openai?.toolInput || {}, null, 2);
+        document.getElementById('output').textContent = JSON.stringify(window.openai?.toolOutput || {}, null, 2);
+
+        // Listen for updates
+        window.addEventListener('message', (event) => {
+            if (event.source !== window.parent) return;
+            const msg = event.data;
+            if (msg.method === 'ui/notifications/tool-result') {
+                document.getElementById('output').textContent = JSON.stringify(msg.params?.structuredContent || {}, null, 2);
+            }
+        }, { passive: true });
+
+        // Listen for theme changes
+        window.addEventListener('openai:set_globals', (event) => {
+            if (event.detail?.globals?.theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }, { passive: true });
+    </script>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
 async def _ui_task_detail(request):
     """Serve the task-detail UI component page."""
     html = """<!DOCTYPE html>
@@ -672,6 +729,7 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
             Route("/admin/users/{user_id}/activity", _admin_user_activity, methods=["GET"]),
             Route("/admin/activity", _admin_activity, methods=["GET"]),
             # UI components (served to ChatGPT iframes)
+            Route("/ui/test", _ui_test, methods=["GET"]),
             Route("/ui/task-detail", _ui_task_detail, methods=["GET"]),
         ],
         lifespan=lifespan,
