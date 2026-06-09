@@ -222,15 +222,20 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
     applyTheme(initTheme);
 
     // Render immediately if data is already available
-    if (window.openai?.toolOutput) {
-      render(window.openai.toolOutput);
+    // toolOutput may be a single task or {tasks: [...]} for batch
+    const initial = window.openai?.toolOutput;
+    if (initial) {
+      render(initial.tasks ? initial.tasks[0] : initial);
     }
 
     // Also listen for postMessage delivery (timing varies)
     window.addEventListener('message', ev => {
       if (ev.source !== window.parent) return;
       const m = ev.data;
-      if (m?.method === 'ui/notifications/tool-result') render(m.params?.structuredContent);
+      if (m?.method === 'ui/notifications/tool-result') {
+        const sc = m.params?.structuredContent;
+        render(sc?.tasks ? sc.tasks[0] : sc);
+      }
     }, { passive: true });
 
     window.addEventListener('openai:set_globals', ev => {
@@ -685,19 +690,20 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
         elif name == "get_task_detail":
             tasks_arg = arguments.get("tasks")
             if tasks_arg:
-                results = await asyncio.gather(*[
+                fetched = await asyncio.gather(*[
                     fetch_task_detail(t["class_id"], t["task_id"]) for t in tasks_arg
                 ])
-                result = list(results)
+                task = list(fetched)[0] if len(fetched) == 1 else list(fetched)
             else:
                 task = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
-                duration_ms = int((time.monotonic() - t0) * 1000)
-                cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)
-                return types.CallToolResult(
-                    content=[types.TextContent(type="text", text=json.dumps(task, ensure_ascii=False, separators=(",", ":")))],
-                    structuredContent=task,
-                    _meta=_TASK_META,
-                )
+            sc = task if isinstance(task, dict) else {"tasks": task}
+            duration_ms = int((time.monotonic() - t0) * 1000)
+            cache.log_request(name, arguments, sc, source="mcp", duration_ms=duration_ms)
+            return types.CallToolResult(
+                content=[types.TextContent(type="text", text=json.dumps(sc, ensure_ascii=False, separators=(",", ":")))],
+                structuredContent=sc,
+                _meta=_TASK_META,
+            )
 
         elif name == "get_units":
             cid = arguments["class_id"]
