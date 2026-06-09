@@ -391,6 +391,14 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {},
                 "required": [],
             },
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string"},
+                    "status": {"type": "string"},
+                    "timestamp": {"type": "number"},
+                },
+            },
         ),
     ]
 
