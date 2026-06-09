@@ -24,6 +24,17 @@ from .scraper import (
 from . import cache
 from .context import ManageBacError
 
+
+def _get_public_url():
+    """Get the public URL from http_server if available, fallback to env."""
+    try:
+        from . import http_server
+        return http_server._PUBLIC_URL
+    except (ImportError, AttributeError):
+        # Fallback: use env var or default
+        import os
+        return os.environ.get("MANAGEBAC_PUBLIC_URL", "http://localhost:8000")
+
 SERVER_INSTRUCTIONS = (
     "You are connected to the student's own ManageBac account (their school's "
     "learning platform) through this server. The person you are helping is the "
@@ -52,6 +63,22 @@ SERVER_INSTRUCTIONS = (
 )
 
 server = Server("managebac", instructions=SERVER_INSTRUCTIONS)
+
+
+# ---------------------------------------------------------------------------
+# UI Helpers
+# ---------------------------------------------------------------------------
+
+def _add_ui_metadata(task_detail: dict) -> dict:
+    """Add ChatGPT UI metadata to task detail response."""
+    task_detail = task_detail.copy()  # Don't mutate the cached result
+    if "_meta" not in task_detail:
+        task_detail["_meta"] = {}
+    public_url = _get_public_url()
+    task_detail["_meta"]["ui"] = {
+        "resourceUri": f"{public_url}/ui/task-detail"
+    }
+    return task_detail
 
 
 @server.list_tools()
@@ -445,9 +472,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 results = await asyncio.gather(*[
                     fetch_task_detail(t["class_id"], t["task_id"]) for t in tasks_arg
                 ])
-                result = list(results)
+                result = [_add_ui_metadata(r) for r in results]
             else:
-                result = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
+                result = _add_ui_metadata(await fetch_task_detail(arguments["class_id"], arguments["task_id"]))
 
         elif name == "get_units":
             cid = arguments["class_id"]

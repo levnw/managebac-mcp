@@ -357,7 +357,7 @@ def serve(
         border_style="blue",
     ))
 
-    http_server.run(host=host, port=port)
+    http_server.run(host=host, port=port, public_url=public_url)
 
 
 # ---------------------------------------------------------------------------
