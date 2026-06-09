@@ -106,41 +106,41 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_TASK_DETAIL_URI = "ui://widget/task-detail-v3.html"
+_TASK_DETAIL_URI = "ui://widget/task-detail-v4.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Task Detail</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root { --bg2: #f1f5f9; --fg: #0f172a; --fg2: #475569; --border: #e2e8f0; --accent: #3b82f6; }
-    .dark { --bg2: #2f2f2f; --fg: #ececec; --fg2: #a0a0a0; --border: #3f3f3f; --accent: #60a5fa; }
-    body { background: transparent; color: var(--fg); margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-    #root { padding: 20px; max-width: 720px; margin: 0 auto; overflow: auto; }
-    h1 { font-size: 1.4rem; font-weight: 700; margin: 0 0 10px; }
-    h2 { font-size: 1rem; font-weight: 600; margin: 20px 0 8px; color: var(--fg2); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; }
-    .badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 0.75rem; font-weight: 600; margin-bottom: 12px; }
+    :root { --bg: transparent; --bg2: #f1f5f9; --fg: #0f172a; --fg2: #475569; --border: #e2e8f0; --accent: #3b82f6; }
+    html.dark { --bg2: #2a2a2a; --fg: #ececec; --fg2: #9a9a9a; --border: #3a3a3a; --accent: #60a5fa; }
+    * { box-sizing: border-box; }
+    body { background: var(--bg); color: var(--fg); margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+    #root { padding: 16px 20px 24px; max-width: 700px; }
+    .loading { color: var(--fg2); padding: 32px 0; text-align: center; }
+    .debug { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-family: monospace; font-size: 11px; color: var(--fg2); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow: auto; }
+    h1 { font-size: 1.25rem; font-weight: 700; margin: 0 0 8px; line-height: 1.3; }
+    h2 { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--fg2); margin: 18px 0 6px; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.72rem; font-weight: 600; margin-bottom: 10px; }
     .badge-green { background: #dcfce7; color: #166534; }
     .badge-orange { background: #ffedd5; color: #9a3412; }
-    .dark .badge-green { background: #14532d; color: #86efac; }
-    .dark .badge-orange { background: #431407; color: #fdba74; }
-    .due-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 0.85rem; color: var(--fg2); margin-bottom: 16px; }
+    html.dark .badge-green { background: #14532d; color: #86efac; }
+    html.dark .badge-orange { background: #431407; color: #fdba74; }
+    .due-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 0.82rem; color: var(--fg2); margin-bottom: 14px; }
     .due-box strong { color: var(--fg); }
-    .description { font-size: 0.9rem; line-height: 1.65; color: var(--fg); }
+    .description { font-size: 0.88rem; line-height: 1.65; }
     .description a { color: var(--accent); text-decoration: none; }
-    .description a:hover { text-decoration: underline; }
-    .link-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; color: var(--accent); text-decoration: none; margin: 4px 4px 0 0; word-break: break-all; }
-    .file-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; }
-    .file-row.submitted { border-color: #86efac44; background: #dcfce710; }
-    .dark .file-row.submitted { border-color: #16653344; background: #14532d22; }
-    .file-name { font-size: 0.875rem; font-weight: 500; }
-    .file-size { font-size: 0.75rem; color: var(--fg2); }
-    .view-btn { font-size: 0.8rem; color: var(--accent); background: none; border: none; cursor: pointer; padding: 0; }
-    .open-btn { display: inline-block; margin-top: 20px; padding: 8px 16px; background: var(--accent); color: #fff; border-radius: 8px; font-size: 0.875rem; font-weight: 600; text-decoration: none; }
-    .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0 0; }
-    .loading { color: var(--fg2); font-size: 0.9rem; padding: 40px 0; text-align: center; }
+    .link-pill { display: inline-flex; align-items: center; gap: 5px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; font-size: 0.78rem; color: var(--accent); text-decoration: none; margin: 3px 3px 0 0; word-break: break-all; }
+    .file-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin-bottom: 5px; gap: 8px; }
+    .file-row.submitted { border-color: #86efac55; background: #dcfce714; }
+    html.dark .file-row.submitted { border-color: #16653366; background: #14532d22; }
+    .file-name { font-size: 0.83rem; font-weight: 500; }
+    .file-size { font-size: 0.72rem; color: var(--fg2); margin-top: 1px; }
+    .view-btn { font-size: 0.78rem; color: var(--accent); background: none; border: none; cursor: pointer; padding: 0; flex-shrink: 0; }
+    .open-btn { display: inline-block; margin-top: 18px; padding: 7px 14px; background: var(--accent); color: #fff; border-radius: 8px; font-size: 0.83rem; font-weight: 600; text-decoration: none; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 18px 0 0; }
   </style>
 </head>
 <body>
@@ -152,36 +152,59 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
       document.documentElement.classList.toggle('dark', theme === 'dark');
     }
 
-    function render(task) {
-      if (!task || typeof task !== 'object') return;
-      let h = '';
+    function extractTask(data) {
+      if (!data || typeof data !== 'object') return null;
+      // batch: {tasks: [...]}
+      if (Array.isArray(data.tasks) && data.tasks.length) return data.tasks[0];
+      // single task direct
+      if (data.url || data.description || data.title) return data;
+      // array at root
+      if (Array.isArray(data) && data.length) return data[0];
+      return null;
+    }
 
-      h += '<h1>' + esc(task.title || 'Task') + '</h1>';
-
-      if (task.status) {
-        const s = task.status.toLowerCase();
-        const cls = s.includes('not submitted') ? 'badge-orange' : s.includes('submitted') || s.includes('complete') ? 'badge-green' : 'badge-orange';
-        h += '<span class="badge ' + cls + '">' + esc(task.status) + '</span>';
+    function render(data) {
+      const task = extractTask(data);
+      if (!task) {
+        // show raw debug so we can see what arrived
+        document.getElementById('root').innerHTML =
+          '<p style="color:var(--fg2);margin-bottom:8px;font-size:0.82rem;">Received data (unexpected shape):</p>' +
+          '<div class="debug">' + esc(JSON.stringify(data, null, 2)) + '</div>';
+        return;
       }
 
-      if (task.due_date) {
-        h += '<div class="due-box">Due <strong>' + esc(task.due_date) + '</strong></div>';
+      let h = '';
+      h += '<h1>' + esc(task.title || task.name || 'Task') + '</h1>';
+
+      const status = task.status || task.task_status;
+      if (status) {
+        const s = status.toLowerCase();
+        const cls = s.includes('not sub') ? 'badge-orange'
+          : (s.includes('submit') || s.includes('complet')) ? 'badge-green' : 'badge-orange';
+        h += '<span class="badge ' + cls + '">' + esc(status) + '</span>';
+      }
+
+      const due = task.due_date || task.due || task.due_day_time;
+      if (due) {
+        h += '<div class="due-box">Due <strong>' + esc(due) + '</strong></div>';
       }
 
       if (task.description) {
         const txt = typeof task.description === 'string' ? task.description : (task.description.text || '');
         const links = Array.isArray(task.description?.links) ? task.description.links : [];
-        if (txt) {
-          h += '<h2>Instructions</h2><div class="description">' + txt + '</div>';
-        }
+        if (txt) h += '<h2>Instructions</h2><div class="description">' + txt + '</div>';
         if (links.length) {
-          h += '<div style="margin-top:10px">' + links.map(l =>
+          h += '<div style="margin-top:8px">' + links.map(l =>
             '<a class="link-pill" href="' + esc(l) + '" target="_blank" rel="noopener">&#128279; ' + esc(l) + '</a>'
           ).join('') + '</div>';
         }
       }
 
-      const resources = task.resources || task.attachments || task.description?.embedded_files || [];
+      const resources = [
+        ...(task.resources || []).flatMap(r => r.files || [r]),
+        ...(task.description?.embedded_files || []),
+        ...(task.attachments || []),
+      ].filter(f => f && f.name);
       if (resources.length) {
         h += '<h2>Attachments</h2>';
         h += resources.map(f =>
@@ -203,44 +226,69 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
       }
 
       if (task.url) {
-        h += '<hr class="divider"><a class="open-btn" href="' + esc(task.url) + '" target="_blank" rel="noopener">Open in ManageBac &#8599;</a>';
+        h += '<hr><a class="open-btn" href="' + esc(task.url) + '" target="_blank" rel="noopener">Open in ManageBac &#8599;</a>';
       }
 
       document.getElementById('root').innerHTML = h;
-
       document.querySelectorAll('.view-file').forEach(btn => {
         btn.addEventListener('click', () => {
-          window.parent.postMessage({ jsonrpc:'2.0', id: Math.random(),
-            method:'tools/call', params:{ name:'get_file_content', arguments:{ url: btn.dataset.url } }
+          window.parent.postMessage({
+            jsonrpc: '2.0', id: Math.random(),
+            method: 'tools/call',
+            params: { name: 'get_file_content', arguments: { url: btn.dataset.url } }
           }, '*');
         });
       });
     }
 
-    // Apply theme immediately — check globals before set_globals fires
-    const initTheme = window.openai?.globals?.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    // Theme
+    const initTheme = window.openai?.globals?.theme ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     applyTheme(initTheme);
 
-    // Render immediately if data is already available
-    // toolOutput may be a single task or {tasks: [...]} for batch
-    const initial = window.openai?.toolOutput;
-    if (initial) {
-      render(initial.tasks ? initial.tasks[0] : initial);
+    // Try to render immediately from toolOutput
+    let rendered = false;
+    function tryRender(data) {
+      if (rendered) return;
+      rendered = true;
+      render(data);
     }
 
-    // Also listen for postMessage delivery (timing varies)
+    if (window.openai?.toolOutput) {
+      tryRender(window.openai.toolOutput);
+    }
+
+    // Fallback: postMessage delivery
     window.addEventListener('message', ev => {
-      if (ev.source !== window.parent) return;
       const m = ev.data;
-      if (m?.method === 'ui/notifications/tool-result') {
-        const sc = m.params?.structuredContent;
-        render(sc?.tasks ? sc.tasks[0] : sc);
+      if (!m) return;
+      if (m.method === 'ui/notifications/tool-result') {
+        tryRender(m.params?.structuredContent);
       }
-    }, { passive: true });
+    });
+
+    // Fallback: openai:tool-result custom event
+    window.addEventListener('openai:tool-result', ev => {
+      tryRender(ev.detail?.structuredContent || ev.detail);
+    });
 
     window.addEventListener('openai:set_globals', ev => {
       applyTheme(ev.detail?.globals?.theme);
-    }, { passive: true });
+    });
+
+    // Last resort: if still loading after 3s, show debug panel
+    setTimeout(() => {
+      if (!rendered) {
+        const dbg = {
+          toolOutput: window.openai?.toolOutput,
+          globals: window.openai?.globals,
+          openaiExists: typeof window.openai !== 'undefined',
+        };
+        document.getElementById('root').innerHTML =
+          '<p style="color:var(--fg2);font-size:0.82rem;margin-bottom:6px;">No data received after 3s. Debug:</p>' +
+          '<div class="debug">' + esc(JSON.stringify(dbg, null, 2)) + '</div>';
+      }
+    }, 3000);
   </script>
 </body>
 </html>"""
