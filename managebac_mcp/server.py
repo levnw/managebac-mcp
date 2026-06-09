@@ -1,6 +1,8 @@
 import asyncio
+import hashlib
 import json
 import sys
+from collections import OrderedDict
 from pathlib import Path
 import time
 from mcp.server import Server
@@ -388,78 +390,93 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
       });
     }
 
-    // ── Data loading ───────────────────────────────────────────────────────────
-    // ChatGPT sets window.openai.toolOutput asynchronously after the iframe
-    // loads. Poll until it appears rather than checking once at load time.
+    // ── Data loading ────────────────────────────────────────────────────────────
+    // _D is embedded by the server at widget-creation time — no toolOutput needed.
+    // Fallbacks catch the page-refresh case and any postMessage delivery.
+    const _D = /*D*/null;
 
-    let rendered = false;
     function tryRender(data) {
-      if (rendered || !data) return;
+      if (!data) return;
       const task = extractTask(data);
-      if (!task) return; // not our data shape, keep polling
-      rendered = true;
-      render(data);
+      if (task) render(data);
     }
 
-    // Immediate check (catches synchronous set on page refresh / history load)
-    tryRender(window.openai?.toolOutput);
+    // Embedded data — always available, renders immediately
+    tryRender(_D);
 
-    // Poll every 80ms for up to 5s
-    if (!rendered) {
-      let n = 0;
-      const t = setInterval(() => {
-        n++;
-        if (window.openai?.toolOutput) { clearInterval(t); tryRender(window.openai.toolOutput); }
-        else if (n >= 63) { clearInterval(t); } // ~5s
-      }, 80);
-    }
-
-    // postMessage delivery (backup channel)
+    // Fallbacks for page-refresh / postMessage delivery
+    if (window.openai?.toolOutput) tryRender(window.openai.toolOutput);
     window.addEventListener('message', ev => {
       const m = ev.data;
-      if (m?.method === 'ui/notifications/tool-result') tryRender(m.params?.structuredContent);
+      if (!m || typeof m !== 'object') return;
+      const candidates = [m, m.params, m.result, m.params?.structuredContent, m.result?.structuredContent];
+      for (const c of candidates) { if (c && extractTask(c)) { tryRender(c); break; } }
     });
-    window.addEventListener('openai:tool-result', ev => {
-      tryRender(ev.detail?.structuredContent ?? ev.detail);
-    });
-    window.addEventListener('openai:set_globals', ev => {
-      applyTheme(ev.detail?.globals?.theme);
-    });
+    window.addEventListener('openai:set_globals', ev => applyTheme(ev.detail?.globals?.theme));
   </script>
 </body>
 </html>"""
 
-_WIDGETS = {
+# Static widgets (test widget + task template stub registered so ChatGPT
+# sees a widget for get_task_detail in list_resources).
+_STATIC_WIDGETS = {
     _TEST_WIDGET_URI: {"html": _TEST_WIDGET_HTML, "title": "Test Widget"},
-    _TASK_DETAIL_URI: {"html": _TASK_DETAIL_HTML, "title": "Task Detail"},
+    _TASK_DETAIL_URI: {"html": _TASK_DETAIL_HTML.replace("const _D = /*D*/null;", "const _D = null;"), "title": "Task Detail"},
 }
+
+# Per-task dynamic widgets: URI → {html, title}  (LRU capped at 60)
+_TASK_WIDGETS: OrderedDict = OrderedDict()
+
+def _make_task_widget(sc: dict) -> str:
+    """Bake task data directly into widget HTML; return unique URI.
+
+    Because toolOutput is only set on page-refresh (not live calls), the
+    only reliable delivery channel is the widget HTML itself.
+    """
+    data_json = json.dumps(sc, ensure_ascii=False, separators=(",", ":"))
+    # Escape '</' to prevent breaking the <script> block
+    data_safe = data_json.replace("</", r"<\/")
+    uri_hash = hashlib.sha1(data_json.encode()).hexdigest()[:14]
+    uri = f"ui://widget/task/{uri_hash}.html"
+    if uri not in _TASK_WIDGETS:
+        html = _TASK_DETAIL_HTML.replace("const _D = /*D*/null;", f"const _D = {data_safe};")
+        title = sc.get("title") or "Task"
+        _TASK_WIDGETS[uri] = {"html": html, "title": title}
+        if len(_TASK_WIDGETS) > 60:
+            _TASK_WIDGETS.popitem(last=False)
+    return uri
+
 
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
     return {
         "openai/outputTemplate": uri,
-        "ui": {"resourceUri": uri},  # alternate key some clients check
+        "ui": {"resourceUri": uri},
         "openai/toolInvocation/invoking": invoking,
         "openai/toolInvocation/invoked": invoked,
         "openai/widgetAccessible": True,
     }
 
-_TEST_META  = _widget_meta(_TEST_WIDGET_URI,  "Loading test widget...", "Test widget loaded")
-_TASK_META  = _widget_meta(_TASK_DETAIL_URI,  "Loading task...",        "Task loaded")
+_TEST_META = _widget_meta(_TEST_WIDGET_URI, "Loading test widget...", "Test widget loaded")
+# Static task meta used only in the tool *definition* so ChatGPT knows the tool has a widget.
+# Actual CallToolResult uses a per-task URI from _make_task_widget().
+_TASK_META_STATIC = _widget_meta(_TASK_DETAIL_URI, "Loading task...", "Task loaded")
 
 
 @server.list_resources()
 async def list_resources() -> list[types.Resource]:
+    all_widgets = {**_STATIC_WIDGETS, **_TASK_WIDGETS}
     return [
         types.Resource(uri=uri, name=info["title"], title=info["title"], mimeType=WIDGET_MIME)
-        for uri, info in _WIDGETS.items()
+        for uri, info in all_widgets.items()
     ]
 
 
 @server.list_resource_templates()
 async def list_resource_templates() -> list[types.ResourceTemplate]:
+    all_widgets = {**_STATIC_WIDGETS, **_TASK_WIDGETS}
     return [
         types.ResourceTemplate(uri_template=uri, name=info["title"], title=info["title"], mimeType=WIDGET_MIME)
-        for uri, info in _WIDGETS.items()
+        for uri, info in all_widgets.items()
     ]
 
 
@@ -467,10 +484,9 @@ async def list_resource_templates() -> list[types.ResourceTemplate]:
 async def read_resource(uri) -> list:
     from mcp.server.lowlevel.helper_types import ReadResourceContents
     uri_str = str(uri)
-    info = _WIDGETS.get(uri_str)
+    info = _STATIC_WIDGETS.get(uri_str) or _TASK_WIDGETS.get(uri_str)
     if info is None:
         raise ValueError(f"Unknown resource: {uri_str}")
-    # Return both mimetypes as separate content items so client finds whichever it expects
     return [
         ReadResourceContents(content=info["html"], mime_type=WIDGET_MIME),
         ReadResourceContents(content=info["html"], mime_type=WIDGET_MIME_ALT),
@@ -613,7 +629,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                 },
             },
-            _meta=_TASK_META,
+            _meta=_TASK_META_STATIC,
         ),
         types.Tool(
             name="get_files",
@@ -941,14 +957,15 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     raise KeyError("class_id and task_id missing — provide them or pass url")
                 task = await fetch_task_detail(cid, tid)
             full = task if isinstance(task, dict) else {"tasks": task}
-            # slim structuredContent so ChatGPT populates window.openai.toolOutput
             sc = _widget_sc(task) if isinstance(task, dict) else _widget_sc((task or [{}])[0])
+            widget_uri = _make_task_widget(sc)
+            task_meta = _widget_meta(widget_uri, "Loading task...", "Task loaded")
             duration_ms = int((time.monotonic() - t0) * 1000)
             cache.log_request(name, arguments, full, source="mcp", duration_ms=duration_ms)
             return types.CallToolResult(
                 content=[types.TextContent(type="text", text=json.dumps(full, ensure_ascii=False, separators=(",", ":")))],
                 structuredContent=sc,
-                _meta=_TASK_META,
+                _meta=task_meta,
             )
 
         elif name == "get_units":
@@ -998,12 +1015,14 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 result = {"error": "Task not found", "tool": name}
             else:
                 sc = _widget_sc(task)
+                widget_uri = _make_task_widget(sc)
+                task_meta = _widget_meta(widget_uri, "Loading task...", "Task loaded")
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
                     content=[types.TextContent(type="text", text=json.dumps(task, ensure_ascii=False, separators=(",", ":")))],
                     structuredContent=sc,
-                    _meta=_TASK_META,
+                    _meta=task_meta,
                 )
 
         elif name == "test_ui":
