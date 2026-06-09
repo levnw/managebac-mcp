@@ -106,132 +106,281 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_TASK_DETAIL_URI = "ui://widget/task-detail-v6.html"
+_TASK_DETAIL_URI = "ui://widget/task-detail-v7.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Task Detail</title>
+  <title>Task</title>
   <style>
-    :root { --bg: transparent; --bg2: #f1f5f9; --fg: #0f172a; --fg2: #475569; --border: #e2e8f0; --accent: #3b82f6; }
-    html.dark { --bg2: #2a2a2a; --fg: #ececec; --fg2: #9a9a9a; --border: #3a3a3a; --accent: #60a5fa; }
-    * { box-sizing: border-box; }
-    body { background: var(--bg); color: var(--fg); margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
-    #root { padding: 16px 20px 24px; max-width: 700px; }
-    .loading { color: var(--fg2); padding: 32px 0; text-align: center; }
-    .debug { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-family: monospace; font-size: 11px; color: var(--fg2); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow: auto; }
-    h1 { font-size: 1.25rem; font-weight: 700; margin: 0 0 8px; line-height: 1.3; }
-    h2 { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--fg2); margin: 18px 0 6px; }
-    .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 0.72rem; font-weight: 600; margin-bottom: 10px; }
-    .badge-green { background: #dcfce7; color: #166534; }
-    .badge-orange { background: #ffedd5; color: #9a3412; }
-    html.dark .badge-green { background: #14532d; color: #86efac; }
-    html.dark .badge-orange { background: #431407; color: #fdba74; }
-    .due-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 0.82rem; color: var(--fg2); margin-bottom: 14px; }
-    .due-box strong { color: var(--fg); }
-    .description { font-size: 0.88rem; line-height: 1.65; }
-    .description a { color: var(--accent); text-decoration: none; }
-    .link-pill { display: inline-flex; align-items: center; gap: 5px; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; font-size: 0.78rem; color: var(--accent); text-decoration: none; margin: 3px 3px 0 0; word-break: break-all; }
-    .file-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin-bottom: 5px; gap: 8px; }
-    .file-row.submitted { border-color: #86efac55; background: #dcfce714; }
-    html.dark .file-row.submitted { border-color: #16653366; background: #14532d22; }
-    .file-name { font-size: 0.83rem; font-weight: 500; }
-    .file-size { font-size: 0.72rem; color: var(--fg2); margin-top: 1px; }
-    .view-btn { font-size: 0.78rem; color: var(--accent); background: none; border: none; cursor: pointer; padding: 0; flex-shrink: 0; }
-    .open-btn { display: inline-block; margin-top: 18px; padding: 7px 14px; background: var(--accent); color: #fff; border-radius: 8px; font-size: 0.83rem; font-weight: 600; text-decoration: none; }
-    hr { border: none; border-top: 1px solid var(--border); margin: 18px 0 0; }
+    /* Dark by default — matches ChatGPT's dark theme.
+       Apply class="light" on <html> if light mode is detected. */
+    :root {
+      --surface: #2f2f2f;
+      --surface2: #3a3a3a;
+      --fg: #ececec;
+      --fg2: #8e8ea0;
+      --border: #454545;
+      --accent: #10a37f;
+      --accent-dim: rgba(16,163,127,.15);
+      --red-dim: rgba(239,68,68,.15);
+      --red: #f87171;
+      --green: #34d399;
+      --green-dim: rgba(52,211,153,.15);
+    }
+    html.light {
+      --surface: #f7f7f8;
+      --surface2: #efefef;
+      --fg: #111827;
+      --fg2: #6b7280;
+      --border: #e5e7eb;
+      --accent: #059669;
+      --accent-dim: rgba(5,150,105,.1);
+      --red-dim: rgba(239,68,68,.1);
+      --red: #dc2626;
+      --green: #059669;
+      --green-dim: rgba(5,150,105,.1);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: transparent;
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    #root { padding: 16px 18px 20px; }
+
+    /* Title */
+    .title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      line-height: 1.35;
+      margin-bottom: 10px;
+      color: var(--fg);
+    }
+
+    /* Status badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .badge-pending  { background: var(--red-dim);   color: var(--red);   }
+    .badge-done     { background: var(--green-dim);  color: var(--green); }
+
+    /* Due date */
+    .due {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--fg2);
+      margin-bottom: 14px;
+    }
+    .due strong { color: var(--fg); }
+
+    /* Section label */
+    .section-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--fg2);
+      margin: 16px 0 6px;
+    }
+
+    /* Instructions */
+    .instructions {
+      font-size: 0.875rem;
+      line-height: 1.65;
+      color: var(--fg);
+      white-space: pre-wrap;
+    }
+
+    /* Links */
+    .link-list { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; }
+    .link-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--accent);
+      font-size: 0.82rem;
+      overflow: hidden;
+    }
+    .link-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* File rows */
+    .file-list { display: flex; flex-direction: column; gap: 5px; }
+    .file-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .file-row.submitted {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .file-info { min-width: 0; }
+    .file-name { font-size: 0.83rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-size { font-size: 0.71rem; color: var(--fg2); margin-top: 1px; }
+    .file-action {
+      flex-shrink: 0;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--accent);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: none;
+    }
+
+    /* Open button */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0 14px; }
+    .open-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .open-btn:hover { opacity: .88; }
+
+    .loading { color: var(--fg2); padding: 28px 0; text-align: center; font-size: 0.88rem; }
   </style>
 </head>
 <body>
-  <div id="root"><p class="loading">Loading task...</p></div>
+  <div id="root"><p class="loading">Loading task…</p></div>
   <script>
     const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+    // Theme: dark by default, only switch to light when explicitly detected
     function applyTheme(theme) {
-      document.documentElement.classList.toggle('dark', theme === 'dark');
+      if (theme === 'light') document.documentElement.classList.add('light');
+      else document.documentElement.classList.remove('light');
     }
+    (function initTheme() {
+      const t = window.openai?.globals?.theme;
+      if (t) { applyTheme(t); return; }
+      if (window.matchMedia('(prefers-color-scheme: light)').matches) applyTheme('light');
+      // else stay dark (default)
+    })();
 
     function extractTask(data) {
       if (!data || typeof data !== 'object') return null;
-      if (Array.isArray(data)) return data.length ? data[0] : null;
-      if (Array.isArray(data.tasks) && data.tasks.length) return data.tasks[0];
-      // slim widget payload: has url or description
-      if (data.url || data.description || data.title || data.submitted_files) return data;
+      if (Array.isArray(data)) return data[0] || null;
+      if (Array.isArray(data.tasks)) return data.tasks[0] || null;
+      if (data.url || data.description || data.title || data.submitted_files || data.resources) return data;
       return null;
     }
 
     function render(data) {
       const task = extractTask(data);
-      if (!task) {
-        // show raw debug so we can see what arrived
-        document.getElementById('root').innerHTML =
-          '<p style="color:var(--fg2);margin-bottom:8px;font-size:0.82rem;">Received data (unexpected shape):</p>' +
-          '<div class="debug">' + esc(JSON.stringify(data, null, 2)) + '</div>';
-        return;
-      }
+      if (!task) return; // keep "Loading…" — data shape unknown, might retry
 
       let h = '';
-      h += '<h1>' + esc(task.title || task.name || 'Task') + '</h1>';
 
+      // Title
+      const title = task.title || task.name;
+      if (title) h += '<div class="title">' + esc(title) + '</div>';
+
+      // Status badge
       const status = task.status || task.task_status;
       if (status) {
         const s = status.toLowerCase();
-        const cls = s.includes('not sub') ? 'badge-orange'
-          : (s.includes('submit') || s.includes('complet')) ? 'badge-green' : 'badge-orange';
-        h += '<span class="badge ' + cls + '">' + esc(status) + '</span>';
+        const done = s.includes('submit') || s.includes('complet');
+        h += '<span class="badge ' + (done ? 'badge-done' : 'badge-pending') + '">' +
+          (done ? '✓' : '○') + ' ' + esc(status) + '</span>';
       }
 
+      // Due date
       const due = task.due_date || task.due || task.due_day_time;
-      if (due) {
-        h += '<div class="due-box">Due <strong>' + esc(due) + '</strong></div>';
-      }
+      if (due) h += '<div class="due">📅 Due <strong>' + esc(due) + '</strong></div>';
 
-      if (task.description) {
-        const txt = typeof task.description === 'string' ? task.description : (task.description.text || '');
-        const links = Array.isArray(task.description?.links) ? task.description.links : [];
-        if (txt) h += '<h2>Instructions</h2><div class="description">' + txt + '</div>';
+      // Instructions
+      const desc = task.description;
+      if (desc) {
+        const txt = typeof desc === 'string' ? desc : (desc.text || '');
+        const links = Array.isArray(desc.links) ? desc.links : [];
+        if (txt) {
+          h += '<div class="section-label">Instructions</div>';
+          h += '<div class="instructions">' + esc(txt) + '</div>';
+        }
         if (links.length) {
-          h += '<div style="margin-top:8px">' + links.map(l =>
-            '<a class="link-pill" href="' + esc(l) + '" target="_blank" rel="noopener">&#128279; ' + esc(l) + '</a>'
-          ).join('') + '</div>';
+          h += '<div class="section-label">Links</div><div class="link-list">';
+          h += links.map(l => {
+            const url = typeof l === 'string' ? l : (l.url || '');
+            const label = (typeof l === 'object' && l.text) ? l.text : url;
+            return '<a class="link-item" href="' + esc(url) + '" target="_blank" rel="noopener">' +
+              '🔗 <span>' + esc(label) + '</span></a>';
+          }).join('');
+          h += '</div>';
         }
       }
 
+      // Attachments / resources
       const resources = [
-        ...(task.resources || []).flatMap(r => r.files || [r]),
+        ...(task.resources || []).flatMap(r => Array.isArray(r.files) ? r.files : (r.name ? [r] : [])),
         ...(task.description?.embedded_files || []),
-        ...(task.attachments || []),
       ].filter(f => f && f.name);
       if (resources.length) {
-        h += '<h2>Attachments</h2>';
+        h += '<div class="section-label">Attachments</div><div class="file-list">';
         h += resources.map(f =>
-          '<div class="file-row"><div><div class="file-name">' + esc(f.name) + '</div>' +
+          '<div class="file-row"><div class="file-info"><div class="file-name">' + esc(f.name) + '</div>' +
           (f.size ? '<div class="file-size">' + esc(f.size) + '</div>' : '') + '</div>' +
-          (f.url ? '<a class="view-btn" href="' + esc(f.url) + '" target="_blank">Download</a>' : '') +
+          (f.url ? '<a class="file-action" href="' + esc(f.url) + '" target="_blank">Download</a>' : '') +
           '</div>'
         ).join('');
+        h += '</div>';
       }
 
-      if (task.submitted_files?.length) {
-        h += '<h2>Your Submissions</h2>';
-        h += task.submitted_files.map(f =>
-          '<div class="file-row submitted"><div><div class="file-name">' + esc(f.name) + '</div>' +
+      // Submitted files
+      const submitted = task.submitted_files || [];
+      if (submitted.length) {
+        h += '<div class="section-label">Your Submissions</div><div class="file-list">';
+        h += submitted.map(f =>
+          '<div class="file-row submitted"><div class="file-info"><div class="file-name">' + esc(f.name) + '</div>' +
           (f.size ? '<div class="file-size">' + esc(f.size) + '</div>' : '') + '</div>' +
-          (f.url ? '<button class="view-btn view-file" data-url="' + esc(f.url) + '">View &#8594;</button>' : '') +
+          (f.url ? '<button class="file-action view-file" data-url="' + esc(f.url) + '">View →</button>' : '') +
           '</div>'
         ).join('');
+        h += '</div>';
       }
 
+      // Open button
       if (task.url) {
-        h += '<hr><a class="open-btn" href="' + esc(task.url) + '" target="_blank" rel="noopener">Open in ManageBac &#8599;</a>';
+        h += '<div class="divider"></div>';
+        h += '<a class="open-btn" href="' + esc(task.url) + '" target="_blank" rel="noopener">Open in ManageBac ↗</a>';
       }
 
       document.getElementById('root').innerHTML = h;
+
       document.querySelectorAll('.view-file').forEach(btn => {
         btn.addEventListener('click', () => {
           window.parent.postMessage({
-            jsonrpc: '2.0', id: Math.random(),
+            jsonrpc: '2.0', id: Date.now(),
             method: 'tools/call',
             params: { name: 'get_file_content', arguments: { url: btn.dataset.url } }
           }, '*');
@@ -239,53 +388,40 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
       });
     }
 
-    // Theme
-    const initTheme = window.openai?.globals?.theme ||
-      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    applyTheme(initTheme);
+    // ── Data loading ───────────────────────────────────────────────────────────
+    // ChatGPT sets window.openai.toolOutput asynchronously after the iframe
+    // loads. Poll until it appears rather than checking once at load time.
 
     let rendered = false;
     function tryRender(data) {
       if (rendered || !data) return;
+      const task = extractTask(data);
+      if (!task) return; // not our data shape, keep polling
       rendered = true;
       render(data);
     }
 
-    // Try immediately (works when toolOutput is set synchronously)
+    // Immediate check (catches synchronous set on page refresh / history load)
     tryRender(window.openai?.toolOutput);
 
-    // Poll every 100ms for up to 4s — ChatGPT sets toolOutput asynchronously
-    // after the widget iframe loads; polling is the only reliable way to catch it.
+    // Poll every 80ms for up to 5s
     if (!rendered) {
-      let polls = 0;
-      const timer = setInterval(() => {
-        polls++;
-        if (window.openai?.toolOutput) {
-          clearInterval(timer);
-          tryRender(window.openai.toolOutput);
-        } else if (polls >= 40) {
-          clearInterval(timer);
-          if (!rendered) {
-            document.getElementById('root').innerHTML =
-              '<p style="color:var(--fg2);font-size:0.82rem;margin-bottom:4px;">No data (toolOutput null after 4s)</p>';
-          }
-        }
-      }, 100);
+      let n = 0;
+      const t = setInterval(() => {
+        n++;
+        if (window.openai?.toolOutput) { clearInterval(t); tryRender(window.openai.toolOutput); }
+        else if (n >= 63) { clearInterval(t); } // ~5s
+      }, 80);
     }
 
-    // Also listen for postMessage delivery
+    // postMessage delivery (backup channel)
     window.addEventListener('message', ev => {
       const m = ev.data;
-      if (!m) return;
-      if (m.method === 'ui/notifications/tool-result') {
-        tryRender(m.params?.structuredContent);
-      }
+      if (m?.method === 'ui/notifications/tool-result') tryRender(m.params?.structuredContent);
     });
-
     window.addEventListener('openai:tool-result', ev => {
-      tryRender(ev.detail?.structuredContent || ev.detail);
+      tryRender(ev.detail?.structuredContent ?? ev.detail);
     });
-
     window.addEventListener('openai:set_globals', ev => {
       applyTheme(ev.detail?.globals?.theme);
     });
