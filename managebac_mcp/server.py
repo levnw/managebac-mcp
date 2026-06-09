@@ -106,7 +106,7 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_TASK_DETAIL_URI = "ui://widget/task-detail-v4.html"
+_TASK_DETAIL_URI = "ui://widget/task-detail-v5.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -154,12 +154,10 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
 
     function extractTask(data) {
       if (!data || typeof data !== 'object') return null;
-      // batch: {tasks: [...]}
+      if (Array.isArray(data)) return data.length ? data[0] : null;
       if (Array.isArray(data.tasks) && data.tasks.length) return data.tasks[0];
-      // single task direct
-      if (data.url || data.description || data.title) return data;
-      // array at root
-      if (Array.isArray(data) && data.length) return data[0];
+      // slim widget payload: has url or description
+      if (data.url || data.description || data.title || data.submitted_files) return data;
       return null;
     }
 
@@ -652,6 +650,51 @@ async def list_tools() -> list[types.Tool]:
     ]
 
 
+def _widget_sc(task: dict) -> dict:
+    """Build a small structuredContent dict for the task-detail widget.
+
+    ChatGPT silently drops toolOutput when structuredContent is too large —
+    keep this under ~1 KB so the iframe always receives data.
+    Full task JSON is still in TextContent for ChatGPT's own reasoning.
+    """
+    desc = task.get("description") or {}
+    if isinstance(desc, str):
+        desc = {"text": desc, "links": []}
+
+    def slim(f):
+        return {k: f[k] for k in ("name", "size", "url") if f.get(k)}
+
+    resources = []
+    for r in (task.get("resources") or []):
+        if not isinstance(r, dict):
+            continue
+        for f in (r.get("files") or []):
+            resources.append(slim(f))
+    for f in (desc.get("embedded_files") or []):
+        resources.append(slim(f))
+
+    submitted = [slim(f) for f in (task.get("submitted_files") or []) if isinstance(f, dict)]
+
+    sc: dict = {}
+    if task.get("url"):
+        sc["url"] = task["url"]
+    if task.get("title"):
+        sc["title"] = task["title"]
+    if task.get("status"):
+        sc["status"] = task["status"]
+    if task.get("due_date") or task.get("due") or task.get("due_day_time"):
+        sc["due_date"] = task.get("due_date") or task.get("due") or task.get("due_day_time")
+    desc_text = (desc.get("text") or "")[:800]
+    desc_links = (desc.get("links") or [])[:6]
+    if desc_text or desc_links:
+        sc["description"] = {"text": desc_text, "links": desc_links}
+    if resources:
+        sc["resources"] = resources[:8]
+    if submitted:
+        sc["submitted_files"] = submitted[:8]
+    return sc
+
+
 def _is_batch(val) -> bool:
     return isinstance(val, list)
 
@@ -744,11 +787,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 task = list(fetched)[0] if len(fetched) == 1 else list(fetched)
             else:
                 task = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
-            sc = task if isinstance(task, dict) else {"tasks": task}
+            full = task if isinstance(task, dict) else {"tasks": task}
+            # slim structuredContent so ChatGPT populates window.openai.toolOutput
+            sc = _widget_sc(task) if isinstance(task, dict) else _widget_sc((task or [{}])[0])
             duration_ms = int((time.monotonic() - t0) * 1000)
-            cache.log_request(name, arguments, sc, source="mcp", duration_ms=duration_ms)
+            cache.log_request(name, arguments, full, source="mcp", duration_ms=duration_ms)
             return types.CallToolResult(
-                content=[types.TextContent(type="text", text=json.dumps(sc, ensure_ascii=False, separators=(",", ":")))],
+                content=[types.TextContent(type="text", text=json.dumps(full, ensure_ascii=False, separators=(",", ":")))],
                 structuredContent=sc,
                 _meta=_TASK_META,
             )
@@ -799,11 +844,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             if task is None:
                 result = {"error": "Task not found", "tool": name}
             else:
+                sc = _widget_sc(task)
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
                     content=[types.TextContent(type="text", text=json.dumps(task, ensure_ascii=False, separators=(",", ":")))],
-                    structuredContent=task,
+                    structuredContent=sc,
                     _meta=_TASK_META,
                 )
 
