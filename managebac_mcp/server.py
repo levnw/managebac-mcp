@@ -70,25 +70,38 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>UI Test</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>UI Debug</title>
+  <style>
+    body { background: transparent; color: #0f172a; font-family: monospace; font-size: 12px; margin: 0; padding: 12px; }
+    .row { margin-bottom: 8px; }
+    .label { font-weight: bold; color: #64748b; }
+    pre { background: #f1f5f9; padding: 8px; border-radius: 6px; white-space: pre-wrap; word-break: break-all; margin: 4px 0 0; }
+    .msg { background: #e0f2fe; border-left: 3px solid #0284c7; padding: 6px 8px; margin: 4px 0; border-radius: 0 6px 6px 0; }
+  </style>
 </head>
-<body class="m-0 p-6 bg-white font-sans">
-  <div class="max-w-md mx-auto bg-green-50 border-2 border-green-500 rounded-xl p-8 text-center">
-    <div class="text-5xl mb-4">&#9989;</div>
-    <h1 class="text-2xl font-bold text-green-700 mb-2">UI is working!</h1>
-    <p class="text-slate-600 mb-6">The ChatGPT iframe loaded and received tool data.</p>
-    <div class="bg-white rounded-lg border border-slate-200 p-4 text-left">
-      <p class="text-xs font-semibold text-slate-500 mb-1">toolOutput:</p>
-      <pre id="out" class="text-xs text-slate-800 whitespace-pre-wrap">loading...</pre>
-    </div>
-  </div>
+<body>
+  <div class="row"><span class="label">window.openai exists:</span> <span id="exists">?</span></div>
+  <div class="row"><span class="label">toolOutput:</span><pre id="output">checking...</pre></div>
+  <div class="row"><span class="label">toolInput:</span><pre id="input">checking...</pre></div>
+  <div class="row"><span class="label">globals:</span><pre id="globals">checking...</pre></div>
+  <div class="row"><span class="label">postMessages received:</span></div>
+  <div id="msgs"></div>
   <script>
-    const out = window.openai?.toolOutput;
-    document.getElementById('out').textContent = JSON.stringify(out, null, 2);
-    window.addEventListener('openai:set_globals', e => {
-      if (e.detail?.globals?.theme === 'dark') document.body.style.background = '#0f172a';
-    }, { passive: true });
+    document.getElementById('exists').textContent = (typeof window.openai !== 'undefined') ? 'YES' : 'NO';
+    document.getElementById('output').textContent = JSON.stringify(window.openai?.toolOutput, null, 2);
+    document.getElementById('input').textContent = JSON.stringify(window.openai?.toolInput, null, 2);
+    document.getElementById('globals').textContent = JSON.stringify(window.openai?.globals, null, 2);
+
+    window.addEventListener('message', ev => {
+      const d = document.createElement('div');
+      d.className = 'msg';
+      d.textContent = JSON.stringify(ev.data);
+      document.getElementById('msgs').appendChild(d);
+    });
+
+    window.addEventListener('openai:set_globals', ev => {
+      document.getElementById('globals').textContent = JSON.stringify(ev.detail?.globals, null, 2);
+    });
   </script>
 </body>
 </html>"""
@@ -102,9 +115,9 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
   <title>Task Detail</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    :root { --bg: #ffffff; --bg2: #f8fafc; --fg: #0f172a; --fg2: #475569; --border: #e2e8f0; --accent: #3b82f6; }
-    .dark { --bg: #212121; --bg2: #2f2f2f; --fg: #ececec; --fg2: #a0a0a0; --border: #3f3f3f; --accent: #60a5fa; }
-    body { background: var(--bg); color: var(--fg); margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    :root { --bg2: #f1f5f9; --fg: #0f172a; --fg2: #475569; --border: #e2e8f0; --accent: #3b82f6; }
+    .dark { --bg2: #2f2f2f; --fg: #ececec; --fg2: #a0a0a0; --border: #3f3f3f; --accent: #60a5fa; }
+    body { background: transparent; color: var(--fg); margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
     #root { padding: 20px; max-width: 720px; margin: 0 auto; overflow: auto; }
     h1 { font-size: 1.4rem; font-weight: 700; margin: 0 0 10px; }
     h2 { font-size: 1rem; font-weight: 600; margin: 20px 0 8px; color: var(--fg2); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; }
