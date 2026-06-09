@@ -561,17 +561,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
     duration_ms = int((time.monotonic() - t0) * 1000)
     cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
 
-    # Extract _meta before JSON serialization (it goes in TextContent._meta, not in JSON)
-    meta = None
-    if isinstance(result, dict) and "_meta" in result:
-        meta = result.pop("_meta")
-
     # Compact separators (no indent / no spaces) — pretty-printing wasted ~35%
     # of the payload, and oversized payloads get truncated by the connector.
+    # Keep _meta in the JSON (ChatGPT reads it from the response body, not TextContent._meta)
     return [types.TextContent(
         type="text",
-        text=json.dumps(result, ensure_ascii=False, separators=(",", ":")),
-        _meta=meta
+        text=json.dumps(result, ensure_ascii=False, separators=(",", ":"))
     )]
 
 
