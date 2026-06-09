@@ -188,16 +188,35 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
 </html>"""
 
 _WIDGETS = {
-    _TEST_WIDGET_URI: _TEST_WIDGET_HTML,
-    _TASK_DETAIL_URI: _TASK_DETAIL_HTML,
+    _TEST_WIDGET_URI: {"html": _TEST_WIDGET_HTML, "title": "Test Widget"},
+    _TASK_DETAIL_URI: {"html": _TASK_DETAIL_HTML, "title": "Task Detail"},
 }
+
+def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
+    return {
+        "openai/outputTemplate": uri,
+        "openai/toolInvocation/invoking": invoking,
+        "openai/toolInvocation/invoked": invoked,
+        "openai/widgetAccessible": True,
+    }
+
+_TEST_META  = _widget_meta(_TEST_WIDGET_URI,  "Loading test widget...", "Test widget loaded")
+_TASK_META  = _widget_meta(_TASK_DETAIL_URI,  "Loading task...",        "Task loaded")
 
 
 @server.list_resources()
 async def list_resources() -> list[types.Resource]:
     return [
-        types.Resource(uri=uri, name=uri, mimeType=WIDGET_MIME)
-        for uri in _WIDGETS
+        types.Resource(uri=uri, name=info["title"], title=info["title"], mimeType=WIDGET_MIME)
+        for uri, info in _WIDGETS.items()
+    ]
+
+
+@server.list_resource_templates()
+async def list_resource_templates() -> list[types.ResourceTemplate]:
+    return [
+        types.ResourceTemplate(uri_template=uri, name=info["title"], title=info["title"], mimeType=WIDGET_MIME)
+        for uri, info in _WIDGETS.items()
     ]
 
 
@@ -205,10 +224,10 @@ async def list_resources() -> list[types.Resource]:
 async def read_resource(uri) -> list:
     from mcp.server.lowlevel.helper_types import ReadResourceContents
     uri_str = str(uri)
-    html = _WIDGETS.get(uri_str)
-    if html is None:
+    info = _WIDGETS.get(uri_str)
+    if info is None:
         raise ValueError(f"Unknown resource: {uri_str}")
-    return [ReadResourceContents(content=html, mime_type=WIDGET_MIME)]
+    return [ReadResourceContents(content=info["html"], mime_type=WIDGET_MIME)]
 
 
 @server.list_tools()
@@ -344,11 +363,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                 },
             },
-            _meta={
-                "openai/outputTemplate": _TASK_DETAIL_URI,
-                "openai/toolInvocation/invoking": "Loading task...",
-                "openai/toolInvocation/invoked": "Task loaded",
-            },
+            _meta=_TASK_META,
         ),
         types.Tool(
             name="get_files",
@@ -521,11 +536,7 @@ async def list_tools() -> list[types.Tool]:
                 "Call this to see if ChatGPT can render embedded UI components."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
-            _meta={
-                "openai/outputTemplate": _TEST_WIDGET_URI,
-                "openai/toolInvocation/invoking": "Loading test widget...",
-                "openai/toolInvocation/invoked": "Test widget loaded",
-            },
+            _meta=_TEST_META,
         ),
     ]
 
@@ -627,6 +638,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 return types.CallToolResult(
                     content=[types.TextContent(type="text", text=json.dumps(task, ensure_ascii=False, separators=(",", ":")))],
                     structuredContent=task,
+                    _meta=_TASK_META,
                 )
 
         elif name == "get_units":
@@ -682,6 +694,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             return types.CallToolResult(
                 content=[types.TextContent(type="text", text="Test widget rendered.")],
                 structuredContent=sc,
+                _meta=_TEST_META,
             )
 
         else:
