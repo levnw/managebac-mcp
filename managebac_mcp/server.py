@@ -25,16 +25,6 @@ from . import cache
 from .context import ManageBacError
 
 
-def _get_public_url():
-    """Get the public URL from http_server if available, fallback to env."""
-    try:
-        from . import http_server
-        return http_server._PUBLIC_URL
-    except (ImportError, AttributeError):
-        # Fallback: use env var or default
-        import os
-        return os.environ.get("MANAGEBAC_PUBLIC_URL", "http://localhost:8000")
-
 SERVER_INSTRUCTIONS = (
     "You are connected to the student's own ManageBac account (their school's "
     "learning platform) through this server. The person you are helping is the "
@@ -66,19 +56,159 @@ server = Server("managebac", instructions=SERVER_INSTRUCTIONS)
 
 
 # ---------------------------------------------------------------------------
-# UI Helpers
+# Widget registry
 # ---------------------------------------------------------------------------
+# Maps widget name -> (uri, html_content)
+# mimetype must be text/html+skybridge for ChatGPT to render the iframe
 
-def _add_ui_metadata(data: dict, resource_name: str = "task-detail") -> dict:
-    """Add ChatGPT UI metadata to response."""
-    data = data.copy()  # Don't mutate the original
-    if "_meta" not in data:
-        data["_meta"] = {}
-    public_url = _get_public_url()
-    data["_meta"]["ui"] = {
-        "resourceUri": f"{public_url}/ui/{resource_name}"
+WIDGET_MIME = "text/html+skybridge"
+
+_TEST_WIDGET_URI = "ui://widget/test.html"
+_TEST_WIDGET_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>UI Test</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="m-0 p-6 bg-white font-sans">
+  <div class="max-w-md mx-auto bg-green-50 border-2 border-green-500 rounded-xl p-8 text-center">
+    <div class="text-5xl mb-4">&#9989;</div>
+    <h1 class="text-2xl font-bold text-green-700 mb-2">UI is working!</h1>
+    <p class="text-slate-600 mb-6">The ChatGPT iframe loaded and received tool data.</p>
+    <div class="bg-white rounded-lg border border-slate-200 p-4 text-left">
+      <p class="text-xs font-semibold text-slate-500 mb-1">toolOutput:</p>
+      <pre id="out" class="text-xs text-slate-800 whitespace-pre-wrap">loading...</pre>
+    </div>
+  </div>
+  <script>
+    const out = window.openai?.toolOutput;
+    document.getElementById('out').textContent = JSON.stringify(out, null, 2);
+    window.addEventListener('openai:set_globals', e => {
+      if (e.detail?.globals?.theme === 'dark') document.body.style.background = '#0f172a';
+    }, { passive: true });
+  </script>
+</body>
+</html>"""
+
+_TASK_DETAIL_URI = "ui://widget/task-detail.html"
+_TASK_DETAIL_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Task Detail</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="m-0 p-0 bg-white text-slate-900">
+  <div id="root" class="p-6 max-w-3xl mx-auto overflow-auto h-full">
+    <p class="text-slate-400">Loading...</p>
+  </div>
+  <script>
+    function render(task) {
+      if (!task) return;
+      const e = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      let h = '';
+
+      // Header
+      h += '<h1 class="text-2xl font-bold mb-2">' + e(task.title) + '</h1>';
+      if (task.status) {
+        const ok = task.status.toLowerCase().includes('submitted');
+        h += '<span class="inline-block px-3 py-1 rounded-full text-sm font-medium mb-4 ' +
+          (ok ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800') + '">' + e(task.status) + '</span>';
+      }
+
+      // Due date
+      if (task.due_date) {
+        h += '<div class="mb-4 p-3 bg-slate-50 rounded-lg text-sm text-slate-600">Due: <strong>' + e(task.due_date) + '</strong></div>';
+      }
+
+      // Description
+      if (task.description) {
+        h += '<h2 class="text-lg font-semibold mt-5 mb-2">Description</h2>';
+        const txt = typeof task.description === 'string' ? task.description : task.description.text || '';
+        h += '<div class="prose text-sm leading-relaxed">' + txt + '</div>';
+        const links = task.description?.links || [];
+        if (links.length) {
+          h += '<ul class="mt-3 space-y-1">' + links.map(l =>
+            '<li><a href="' + e(l) + '" target="_blank" class="text-blue-600 hover:underline text-sm break-all">' + e(l) + '</a></li>'
+          ).join('') + '</ul>';
+        }
+      }
+
+      // Submitted files
+      if (task.submitted_files?.length) {
+        h += '<h2 class="text-lg font-semibold mt-5 mb-2">Your Submissions</h2>';
+        h += task.submitted_files.map(f =>
+          '<div class="flex justify-between items-center p-3 mb-2 bg-green-50 border border-green-200 rounded-lg">' +
+          '<div><p class="font-medium text-sm">' + e(f.name) + '</p>' +
+          (f.size ? '<p class="text-xs text-slate-500">' + e(f.size) + '</p>' : '') + '</div>' +
+          (f.url ? '<button class="text-blue-600 text-sm hover:underline view-file" data-url="' + e(f.url) + '">View</button>' : '') +
+          '</div>'
+        ).join('');
+      }
+
+      // Open link
+      if (task.url) {
+        h += '<div class="mt-8 pt-5 border-t border-slate-200">' +
+          '<a href="' + e(task.url) + '" target="_blank" class="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Open in ManageBac &#8599;</a>' +
+          '</div>';
+      }
+
+      document.getElementById('root').innerHTML = h;
+
+      document.querySelectorAll('.view-file').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.parent.postMessage({
+            jsonrpc: '2.0', id: Math.random(),
+            method: 'tools/call',
+            params: { name: 'get_file_content', arguments: { url: btn.dataset.url } }
+          }, '*');
+        });
+      });
     }
-    return data
+
+    render(window.openai?.toolOutput);
+
+    window.addEventListener('message', e => {
+      if (e.source !== window.parent) return;
+      if (e.data?.method === 'ui/notifications/tool-result') render(e.data.params?.structuredContent);
+    }, { passive: true });
+
+    window.addEventListener('openai:set_globals', e => {
+      if (e.detail?.globals?.theme === 'dark') {
+        document.body.classList.add('dark');
+        document.body.style.background = '#0f172a';
+        document.body.style.color = '#f1f5f9';
+      }
+    }, { passive: true });
+  </script>
+</body>
+</html>"""
+
+_WIDGETS = {
+    _TEST_WIDGET_URI: _TEST_WIDGET_HTML,
+    _TASK_DETAIL_URI: _TASK_DETAIL_HTML,
+}
+
+
+@server.list_resources()
+async def list_resources() -> list[types.Resource]:
+    return [
+        types.Resource(uri=uri, name=uri, mimeType=WIDGET_MIME)
+        for uri in _WIDGETS
+    ]
+
+
+@server.read_resource()
+async def read_resource(uri) -> list:
+    from mcp.server.lowlevel.helper_types import ReadResourceContents
+    uri_str = str(uri)
+    html = _WIDGETS.get(uri_str)
+    if html is None:
+        raise ValueError(f"Unknown resource: {uri_str}")
+    return [ReadResourceContents(content=html, mime_type=WIDGET_MIME)]
 
 
 @server.list_tools()
@@ -213,6 +343,11 @@ async def list_tools() -> list[types.Tool]:
                         },
                     },
                 },
+            },
+            _meta={
+                "openai/outputTemplate": _TASK_DETAIL_URI,
+                "openai/toolInvocation/invoking": "Loading task...",
+                "openai/toolInvocation/invoked": "Task loaded",
             },
         ),
         types.Tool(
@@ -383,13 +518,13 @@ async def list_tools() -> list[types.Tool]:
             name="test_ui",
             description=(
                 "TEST TOOL: Simple UI test to verify the iframe infrastructure is working. "
-                "Call this to see if ChatGPT can render embedded UI components. "
-                "Should display a green success message with tool input/output."
+                "Call this to see if ChatGPT can render embedded UI components."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {},
-                "required": [],
+            inputSchema={"type": "object", "properties": {}, "required": []},
+            _meta={
+                "openai/outputTemplate": _TEST_WIDGET_URI,
+                "openai/toolInvocation/invoking": "Loading test widget...",
+                "openai/toolInvocation/invoked": "Test widget loaded",
             },
         ),
     ]
@@ -481,13 +616,18 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
         elif name == "get_task_detail":
             tasks_arg = arguments.get("tasks")
             if tasks_arg:
-                # Batch: [{class_id, task_id}, ...]
                 results = await asyncio.gather(*[
                     fetch_task_detail(t["class_id"], t["task_id"]) for t in tasks_arg
                 ])
-                result = [_add_ui_metadata(r) for r in results]
+                result = list(results)
             else:
-                result = _add_ui_metadata(await fetch_task_detail(arguments["class_id"], arguments["task_id"]))
+                task = await fetch_task_detail(arguments["class_id"], arguments["task_id"])
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)
+                return [types.CallToolResult(
+                    content=[types.TextContent(type="text", text=json.dumps(task, ensure_ascii=False, separators=(",", ":")))],
+                    structuredContent=task,
+                )]
 
         elif name == "get_units":
             cid = arguments["class_id"]
@@ -536,13 +676,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 result = {"error": "Task not found", "tool": name}
 
         elif name == "test_ui":
-            # Test tool to verify UI infrastructure works
-            result = {
-                "message": "This is a test UI component",
-                "timestamp": time.time(),
-                "status": "ok"
-            }
-            result = _add_ui_metadata(result, resource_name="test")
+            sc = {"message": "UI infrastructure test", "status": "ok", "timestamp": time.time()}
+            duration_ms = int((time.monotonic() - t0) * 1000)
+            cache.log_request(name, arguments, sc, source="mcp", duration_ms=duration_ms)
+            return [types.CallToolResult(
+                content=[types.TextContent(type="text", text="Test widget rendered.")],
+                structuredContent=sc,
+            )]
 
         else:
             result = {"error": f"Unknown tool: {name}", "tool": name}
