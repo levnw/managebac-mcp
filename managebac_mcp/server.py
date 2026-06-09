@@ -61,7 +61,8 @@ server = Server("managebac", instructions=SERVER_INSTRUCTIONS)
 # Maps widget name -> (uri, html_content)
 # mimetype must be text/html+skybridge for ChatGPT to render the iframe
 
-WIDGET_MIME = "text/html+skybridge"
+WIDGET_MIME = "text/html+skybridge"  # official Python examples
+WIDGET_MIME_ALT = "text/html;profile=mcp-app"  # troubleshooting guide
 
 _TEST_WIDGET_URI = "ui://widget/test.html"
 _TEST_WIDGET_HTML = """<!DOCTYPE html>
@@ -195,6 +196,7 @@ _WIDGETS = {
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
     return {
         "openai/outputTemplate": uri,
+        "ui": {"resourceUri": uri},  # alternate key some clients check
         "openai/toolInvocation/invoking": invoking,
         "openai/toolInvocation/invoked": invoked,
         "openai/widgetAccessible": True,
@@ -227,7 +229,11 @@ async def read_resource(uri) -> list:
     info = _WIDGETS.get(uri_str)
     if info is None:
         raise ValueError(f"Unknown resource: {uri_str}")
-    return [ReadResourceContents(content=info["html"], mime_type=WIDGET_MIME)]
+    # Return both mimetypes as separate content items so client finds whichever it expects
+    return [
+        ReadResourceContents(content=info["html"], mime_type=WIDGET_MIME),
+        ReadResourceContents(content=info["html"], mime_type=WIDGET_MIME_ALT),
+    ]
 
 
 @server.list_tools()
