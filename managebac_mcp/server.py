@@ -942,24 +942,7 @@ async def list_tools() -> list[types.Tool]:
                     },
                 },
             },
-            outputSchema={
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "url":   {"type": "string"},
-                    "description": {
-                        "type": "object",
-                        "properties": {
-                            "text":  {"type": "string"},
-                            "links": {"type": "array", "items": {"type": "string"}},
-                        },
-                    },
-                    "resources":      {"type": "array"},
-                    "submitted_files":{"type": "array"},
-                    "task_history":   {"type": "array"},
-                    "discussions":    {"type": "array"},
-                },
-            },
+            outputSchema={"type": "object", "additionalProperties": True},
             _meta=_TASK_META_STATIC,
         ),
         types.Tool(
@@ -1192,18 +1175,7 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["query"],
             },
-            outputSchema={
-                "type": "object",
-                "properties": {
-                    "title":          {"type": "string"},
-                    "url":            {"type": "string"},
-                    "description":    {"type": "object"},
-                    "resources":      {"type": "array"},
-                    "submitted_files":{"type": "array"},
-                    "task_history":   {"type": "array"},
-                    "discussions":    {"type": "array"},
-                },
-            },
+            outputSchema={"type": "object", "additionalProperties": True},
         ),
         types.Tool(
             name="test_ui",
