@@ -484,8 +484,7 @@ function statusRightPanel(status) {
 // ─── Main render ────────────────────────────────────────────────────
 function renderCard(task) {
   let h = '';
-  const scoredGrades = (task.grades || []).filter(g => g.score !== null && g.score !== undefined);
-  const hasGrades = scoredGrades.length > 0;
+  const hasGrades = !!(task.grades && task.grades.length);
   const hasDropbox = task.submitted_files !== null && task.submitted_files !== undefined;
   const status = (task.status || '').toLowerCase();
   const isSubmitted = status.includes('submit') && !status.includes('not sub');
@@ -542,12 +541,13 @@ function renderCard(task) {
   // Right panel: criteria column OR status
   if (hasGrades) {
     h += '<div class="criteria-col"><div class="criteria-scores">';
-    scoredGrades.forEach(g => {
+    task.grades.forEach(g => {
+      const scoreStr = (g.score === null || g.score === undefined) ? 'N/A' : g.score;
       h += `<div class="criterion">
         <span class="criterion-label">${esc(g.label)}:</span>
         <div class="label-group">
-          <span class="label label-score">${esc(g.score)}</span>
-          <span class="label label-points">${esc(g.max)}</span>
+          <span class="label label-score">${esc(scoreStr)}</span>
+          ${scoreStr !== 'N/A' ? `<span class="label label-points">${esc(g.max)}</span>` : ''}
         </div>
       </div>`;
     });
