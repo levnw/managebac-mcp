@@ -533,7 +533,7 @@ _THEME_COLORS = {
     "plum":   "#5d3460",
     "teal":   "#00857d",
 }
-_DEFAULT_THEME_COLOR = _THEME_COLORS["teal"]
+_DEFAULT_THEME_COLOR = _THEME_COLORS["blue"]  # ManageBac's default theme
 
 
 def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> dict:

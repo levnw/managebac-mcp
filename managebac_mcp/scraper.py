@@ -1013,10 +1013,11 @@ def parse_theme(html: str) -> str:
     """Return the student's selected ManageBac colour theme.
 
     ManageBac stamps the chosen theme onto the <body> class of every page as
-    `theme-<name>` (blue / orange / red / plum / teal). Defaults to 'teal'.
+    `theme-<name>` (blue / orange / red / plum / teal). Defaults to 'blue'
+    (ManageBac's own default theme).
     """
     m = re.search(r"theme-(blue|orange|red|plum|teal)\b", html)
-    return m.group(1) if m else "teal"
+    return m.group(1) if m else "blue"
 
 
 async def fetch_task_detail(class_id: str, task_id: str) -> dict:
