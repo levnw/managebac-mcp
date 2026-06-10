@@ -822,7 +822,11 @@ async def list_tools() -> list[types.Tool]:
             name="get_task_detail",
             description=(
                 "Returns the full detail for one or more tasks. "
-                "Single task: pass class_id + task_id, OR pass the task url (class_id and task_id will be extracted automatically). "
+                "Single task: pass class_id + task_id. "
+                "If the student gives you a ManageBac URL like "
+                "https://es.managebac.com/student/classes/12345678/core_tasks/87654321, "
+                "extract class_id=12345678 and task_id=87654321 from the URL path and pass them directly — "
+                "do NOT pass the raw URL as a parameter. "
                 "BATCH SUPPORTED: pass a 'tasks' list of {class_id, task_id} pairs — all fetched concurrently. "
                 "Returns per task: title, url, "
                 "description.text (full instructions as Markdown), "
@@ -837,15 +841,15 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "class_id": {
                         "type": "string",
-                        "description": "Class ID — from get_upcoming, get_tasks, etc.",
+                        "description": "Class ID — the number after /classes/ in the ManageBac URL, or from get_upcoming/get_tasks.",
                     },
                     "task_id": {
                         "type": "string",
-                        "description": "Task ID — from get_upcoming, get_tasks, etc.",
+                        "description": "Task ID — the number after /core_tasks/ in the ManageBac URL, or from get_upcoming/get_tasks.",
                     },
                     "url": {
                         "type": "string",
-                        "description": "Full ManageBac task URL — class_id and task_id are extracted automatically. Use this if you have the URL but not the IDs.",
+                        "description": "Fallback: full ManageBac task URL — class_id and task_id are extracted from the path automatically.",
                     },
                     "tasks": {
                         "type": "array",
