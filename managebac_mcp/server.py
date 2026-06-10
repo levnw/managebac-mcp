@@ -689,13 +689,15 @@ def _make_task_widget(task_obj: dict) -> str:
     return _TASK_DETAIL_URI
 
 
-# Content-Security-Policy for the widget iframe. resource_domains controls which
-# hosts the widget may load images/media from — needed so embedded ManageBac
-# description images (served from *.managebac.com, incl. the regional CDNs the
-# /attachments permalinks redirect to) actually render inside ChatGPT's sandbox.
+# Content-Security-Policy for the widget iframe (Apps SDK `_meta.ui.csp`).
+# resourceDomains controls which hosts the widget may load images/fonts/scripts
+# from — needed so embedded ManageBac description images (served from
+# *.managebac.com, incl. the regional CDNs the /attachments permalinks redirect
+# to) actually render inside ChatGPT's sandbox. Keys are camelCase.
 _WIDGET_CSP = {
-    "connect_domains": [],
-    "resource_domains": [
+    "connectDomains": [],
+    "resourceDomains": [
+        "https://*.managebac.com",
         "https://es.managebac.com",
         "https://assets.managebac.com",
         "https://cdn.ca.managebac.com",
@@ -708,11 +710,10 @@ _WIDGET_CSP = {
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
     return {
         "openai/outputTemplate": uri,
-        "ui": {"resourceUri": uri},
+        "ui": {"resourceUri": uri, "csp": _WIDGET_CSP},
         "openai/toolInvocation/invoking": invoking,
         "openai/toolInvocation/invoked": invoked,
         "openai/widgetAccessible": True,
-        "openai/widgetCSP": _WIDGET_CSP,
     }
 
 _TEST_META = _widget_meta(_TEST_WIDGET_URI, "Loading test widget...", "Test widget loaded")
@@ -724,7 +725,7 @@ _TASK_META_STATIC = _widget_meta(_TASK_DETAIL_URI, "Loading task...", "Task load
 def _resource_meta(uri: str) -> dict | None:
     # Attach the image CSP to the task-detail widget so embedded ManageBac
     # description images are allowed to load inside ChatGPT's sandbox.
-    return {"openai/widgetCSP": _WIDGET_CSP} if uri == _TASK_DETAIL_URI else None
+    return {"ui": {"csp": _WIDGET_CSP}} if uri == _TASK_DETAIL_URI else None
 
 
 @server.list_resources()
