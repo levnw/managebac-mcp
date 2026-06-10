@@ -428,8 +428,18 @@ _STATIC_WIDGETS = {
     _TASK_DETAIL_URI: {"html": _TASK_CARD_HTML, "title": "Task Detail"},
 }
 
-# Per-task dynamic widgets: URI → {html, title}  (LRU capped at 60)
+# Per-task dynamic widgets: hash → {html, title}  (LRU capped at 60)
+# Keyed by the short SHA1 hash; served at /ui/task/{hash} over HTTPS.
 _TASK_WIDGETS: OrderedDict = OrderedDict()
+
+# Public base URL — set by http_server.py at startup so we can build widget URLs.
+_SERVER_PUBLIC_URL: str = "http://localhost:8000"
+
+
+def set_server_public_url(url: str) -> None:
+    """Called by http_server.build_app() once the public URL is known."""
+    global _SERVER_PUBLIC_URL
+    _SERVER_PUBLIC_URL = url.rstrip("/")
 
 def _md_to_html(md: str) -> str:
     """Convert the simple Markdown produced by scraper._html_to_markdown → HTML for the card."""
@@ -644,24 +654,23 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
 
 
 def _make_task_widget(task_obj: dict) -> str:
-    """Bake task data directly into the new polished card HTML; return unique URI.
+    """Bake task data into the polished card HTML; return HTTPS URL ChatGPT loads in an iframe.
 
-    task_obj must match the TASK shape the card's renderCard() expects.
-    Because toolOutput is only set on page-refresh (not live calls), the
-    only reliable delivery channel is the widget HTML itself.
+    The URL is served by http_server.py at /ui/task/{hash}.
+    Data is baked directly into the HTML so it's available immediately without
+    a separate structuredContent payload (which has a ~1 KB limit).
     """
     data_json = json.dumps(task_obj, ensure_ascii=False, separators=(",", ":"))
     # Escape '</' to prevent breaking the <script> block
     data_safe = data_json.replace("</", r"<\/")
-    uri_hash = hashlib.sha1(data_json.encode()).hexdigest()[:14]
-    uri = f"ui://widget/task/{uri_hash}.html"
-    if uri not in _TASK_WIDGETS:
+    h = hashlib.sha1(data_json.encode()).hexdigest()[:14]
+    if h not in _TASK_WIDGETS:
         html = _TASK_CARD_HTML.replace("/*INJECT_TASK*/null", data_safe)
         title = task_obj.get("title") or "Task"
-        _TASK_WIDGETS[uri] = {"html": html, "title": title}
+        _TASK_WIDGETS[h] = {"html": html, "title": title}
         if len(_TASK_WIDGETS) > 60:
             _TASK_WIDGETS.popitem(last=False)
-    return uri
+    return f"{_SERVER_PUBLIC_URL}/ui/task/{h}"
 
 
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
@@ -681,19 +690,22 @@ _TASK_META_STATIC = _widget_meta(_TASK_DETAIL_URI, "Loading task...", "Task load
 
 @server.list_resources()
 async def list_resources() -> list[types.Resource]:
-    all_widgets = {**_STATIC_WIDGETS, **_TASK_WIDGETS}
-    return [
+    # Static widgets use their URI as key; task widgets use hash as key (served via HTTPS)
+    resources = [
         types.Resource(uri=uri, name=info["title"], title=info["title"], mimeType=WIDGET_MIME)
-        for uri, info in all_widgets.items()
+        for uri, info in _STATIC_WIDGETS.items()
     ]
+    for h, info in _TASK_WIDGETS.items():
+        url = f"{_SERVER_PUBLIC_URL}/ui/task/{h}"
+        resources.append(types.Resource(uri=url, name=info["title"], title=info["title"], mimeType=WIDGET_MIME))
+    return resources
 
 
 @server.list_resource_templates()
 async def list_resource_templates() -> list[types.ResourceTemplate]:
-    all_widgets = {**_STATIC_WIDGETS, **_TASK_WIDGETS}
     return [
         types.ResourceTemplate(uri_template=uri, name=info["title"], title=info["title"], mimeType=WIDGET_MIME)
-        for uri, info in all_widgets.items()
+        for uri, info in _STATIC_WIDGETS.items()
     ]
 
 
@@ -701,7 +713,7 @@ async def list_resource_templates() -> list[types.ResourceTemplate]:
 async def read_resource(uri) -> list:
     from mcp.server.lowlevel.helper_types import ReadResourceContents
     uri_str = str(uri)
-    info = _STATIC_WIDGETS.get(uri_str) or _TASK_WIDGETS.get(uri_str)
+    info = _STATIC_WIDGETS.get(uri_str)
     if info is None:
         raise ValueError(f"Unknown resource: {uri_str}")
     return [

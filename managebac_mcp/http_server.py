@@ -21,7 +21,7 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
 from . import users, config, admin, cache
 from .context import set_current_user, reset_user, User
-from .server import server
+from .server import server, _TASK_WIDGETS, set_server_public_url
 
 # Public URL for UI component links (set by build_app)
 _PUBLIC_URL = "http://localhost:8000"
@@ -656,6 +656,15 @@ async def _ui_task_detail(request):
     return HTMLResponse(html)
 
 
+async def _ui_task(request):
+    """Serve a baked task card widget by hash — called by ChatGPT to render the iframe."""
+    h = request.path_params.get("hash", "")
+    info = _TASK_WIDGETS.get(h)
+    if info is None:
+        return PlainTextResponse("Widget not found", status_code=404)
+    return HTMLResponse(info["html"])
+
+
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
@@ -664,6 +673,8 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
     global _PUBLIC_URL
     if public_url:
         _PUBLIC_URL = public_url.rstrip("/")
+    # Tell server.py the public URL so _make_task_widget generates correct HTTPS URLs
+    set_server_public_url(_PUBLIC_URL)
 
     session_manager = StreamableHTTPSessionManager(
         app=server,
@@ -731,6 +742,7 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
             # UI components (served to ChatGPT iframes)
             Route("/ui/test", _ui_test, methods=["GET"]),
             Route("/ui/task-detail", _ui_task_detail, methods=["GET"]),
+            Route("/ui/task/{hash}", _ui_task, methods=["GET"]),
         ],
         lifespan=lifespan,
     )
