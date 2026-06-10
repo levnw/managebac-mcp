@@ -484,7 +484,8 @@ function statusRightPanel(status) {
 // ─── Main render ────────────────────────────────────────────────────
 function renderCard(task) {
   let h = '';
-  const hasGrades = !!(task.grades && task.grades.length);
+  const scoredGrades = (task.grades || []).filter(g => g.score !== null && g.score !== undefined);
+  const hasGrades = scoredGrades.length > 0;
   const hasDropbox = task.submitted_files !== null && task.submitted_files !== undefined;
   const status = (task.status || '').toLowerCase();
   const isSubmitted = status.includes('submit') && !status.includes('not sub');
@@ -541,12 +542,11 @@ function renderCard(task) {
   // Right panel: criteria column OR status
   if (hasGrades) {
     h += '<div class="criteria-col"><div class="criteria-scores">';
-    task.grades.forEach(g => {
-      const scoreStr = (g.score === null || g.score === undefined) ? 'N/A' : g.score;
+    scoredGrades.forEach(g => {
       h += `<div class="criterion">
         <span class="criterion-label">${esc(g.label)}:</span>
         <div class="label-group">
-          <span class="label label-score">${esc(scoreStr)}</span>
+          <span class="label label-score">${esc(g.score)}</span>
           <span class="label label-points">${esc(g.max)}</span>
         </div>
       </div>`;
@@ -643,8 +643,8 @@ function renderCard(task) {
     h += '</div>'; // dropbox section
   }
 
-  // ── Discussions ── (null = hide; [] = show empty; [...] = show posts)
-  if (task.discussions !== null && task.discussions !== undefined) {
+  // ── Discussions ── only show when there are actual posts
+  if (task.discussions && task.discussions.length) {
     h += `<div class="section" style="margin:0 0 10px">
       <div class="section-header">
         <span class="section-title">💬 Discussions</span>
@@ -653,13 +653,6 @@ function renderCard(task) {
           <a class="btn-gdrive" href="${esc(task.url)}" target="_blank">View All Discussions</a>
         </div>
       </div>`;
-    if (!task.discussions.length) {
-      h += `<div class="discussions-empty">
-        <svg viewBox="0 0 64 64" fill="none"><circle cx="22" cy="28" r="14" stroke="#667085" stroke-width="2.5" fill="none"/><circle cx="42" cy="36" r="12" stroke="#667085" stroke-width="2.5" fill="none"/><path d="M22 42v4l-6-4" stroke="#667085" stroke-width="2" stroke-linecap="round"/></svg>
-        <strong>No Discussions</strong>
-        No discussions have been added yet.
-      </div>`;
-    }
     h += '</div>';
   }
 
