@@ -720,16 +720,19 @@ function _doRender(taskObj) {
   requestAnimationFrame(initShowMore);
 }
 
-// If we already have injected data, use it immediately
-if (_INJECTED_TASK) {
+// Priority 1: window.openai.toolOutput — ChatGPT sets this to the CURRENT call's
+// structuredContent before the script runs. Always up-to-date even when the widget
+// HTML is cached from a previous call (which causes _INJECTED_TASK to be stale).
+// Priority 2: _INJECTED_TASK — only reliable on first load; stale when HTML is cached.
+// Priority 3: async message / event listeners.
+const _liveData = window.openai?.toolOutput;
+if (_liveData && _liveData.title) {
+  _doRender(_liveData);
+} else if (_INJECTED_TASK) {
+  // No live data (e.g. standalone preview) — use baked data
   _doRender(_INJECTED_TASK);
 } else {
-  // Try window.openai.toolOutput (set synchronously by ChatGPT before script runs)
-  const _sync = window.openai?.toolOutput;
-  if (_sync && _sync.title) {
-    _doRender(_sync);
-  } else {
-    // Show a clean spinner — no school-specific content while waiting for real data
+  // Show a clean spinner — no school-specific content while waiting for real data
     document.getElementById('card').innerHTML =
       '<div class="_loading-wrap">' +
         '<div class="_loading-ring"></div>' +
