@@ -28,8 +28,8 @@
       overflow: hidden;
     }
 
-    /* ── Teal header banner ── */
-    .mb-header { background: #1a8c7a; padding: 14px 20px 13px; }
+    /* ── Header banner (default teal; overridden inline per student theme) ── */
+    .mb-header { background: #00857d; padding: 14px 20px 13px; }
     .mb-header h1 { font-size: 1.15rem; font-weight: 700; color: #fff; line-height: 1.3; }
     .mb-header .class-name { font-size: 0.78rem; color: rgba(255,255,255,0.75); margin-top: 2px; font-weight: 400; }
 
@@ -509,8 +509,9 @@ function renderCard(task) {
   const isSubmitted = status.includes('submit') && !status.includes('not sub');
   const isPending   = status === 'pending';
 
-  // ── Header ──
-  h += `<div class="mb-header">
+  // ── Header ── (background follows the student's ManageBac colour theme)
+  const themeColor = task.theme_color || '#00857d';
+  h += `<div class="mb-header" style="background:${esc(themeColor)}">
     <h1>${esc(task.title)}</h1>
     ${task.class_name ? `<div class="class-name">${esc(task.class_name)}</div>` : ''}
   </div>`;

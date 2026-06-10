@@ -1009,6 +1009,16 @@ def parse_discussions(html: str, class_id: str, task_id: str) -> list[dict]:
     return posts
 
 
+def parse_theme(html: str) -> str:
+    """Return the student's selected ManageBac colour theme.
+
+    ManageBac stamps the chosen theme onto the <body> class of every page as
+    `theme-<name>` (blue / orange / red / plum / teal). Defaults to 'teal'.
+    """
+    m = re.search(r"theme-(blue|orange|red|plum|teal)\b", html)
+    return m.group(1) if m else "teal"
+
+
 async def fetch_task_detail(class_id: str, task_id: str) -> dict:
     cache_key = f"get_task_detail:{class_id}:{task_id}"
     cached = cache.get(cache_key)
@@ -1021,6 +1031,7 @@ async def fetch_task_detail(class_id: str, task_id: str) -> dict:
 
     result = parse_task_detail(r.text, class_id, task_id)
     result["discussions"] = parse_discussions(r_disc.text, class_id, task_id)
+    result["theme"] = parse_theme(r.text)  # free: read from the page we already fetched
     cache.set(cache_key, result, "get_task_detail")
     return result
 

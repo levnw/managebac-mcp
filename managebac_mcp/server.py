@@ -523,6 +523,19 @@ def _md_to_html(md: str) -> str:
     return "\n".join(html_parts)
 
 
+# ManageBac personalisation themes → their primary brand colour (from ManageBac's
+# own CSS). The widget header uses this so the card matches the student's chosen
+# ManageBac theme. Keys match the `theme-<name>` body class on every MB page.
+_THEME_COLORS = {
+    "blue":   "#1570ef",
+    "orange": "#dc6803",
+    "red":    "#d92d20",
+    "plum":   "#5d3460",
+    "teal":   "#00857d",
+}
+_DEFAULT_THEME_COLOR = _THEME_COLORS["teal"]
+
+
 def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> dict:
     """Combine fetch_task_detail + fetch_tasks metadata into the TASK object the card expects."""
     import re as _re
@@ -649,6 +662,7 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
         "submitted_files": submitted_files,
         "discussions": discussions,
         "due_passed_late": due_past,
+        "theme_color": _THEME_COLORS.get(detail.get("theme"), _DEFAULT_THEME_COLOR),
     }
     return task_obj
 
