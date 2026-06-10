@@ -654,23 +654,24 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
 
 
 def _make_task_widget(task_obj: dict) -> str:
-    """Bake task data into the polished card HTML; return HTTPS URL ChatGPT loads in an iframe.
+    """Bake task data into the polished card HTML and register it as a MCP resource.
 
-    The URL is served by http_server.py at /ui/task/{hash}.
-    Data is baked directly into the HTML so it's available immediately without
-    a separate structuredContent payload (which has a ~1 KB limit).
+    Returns a ui:// URI that ChatGPT fetches via read_resource.  The data is
+    baked into the HTML as a fallback; the primary delivery path is structuredContent
+    → window.openai.toolOutput (handled in the card's JS).
     """
     data_json = json.dumps(task_obj, ensure_ascii=False, separators=(",", ":"))
     # Escape '</' to prevent breaking the <script> block
     data_safe = data_json.replace("</", r"<\/")
     h = hashlib.sha1(data_json.encode()).hexdigest()[:14]
-    if h not in _TASK_WIDGETS:
+    uri = f"ui://widget/task/{h}.html"
+    if uri not in _TASK_WIDGETS:
         html = _TASK_CARD_HTML.replace("/*INJECT_TASK*/null", data_safe)
         title = task_obj.get("title") or "Task"
-        _TASK_WIDGETS[h] = {"html": html, "title": title}
+        _TASK_WIDGETS[uri] = {"html": html, "title": title}
         if len(_TASK_WIDGETS) > 60:
             _TASK_WIDGETS.popitem(last=False)
-    return f"{_SERVER_PUBLIC_URL}/ui/task/{h}"
+    return uri
 
 
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
@@ -713,7 +714,7 @@ async def list_resource_templates() -> list[types.ResourceTemplate]:
 async def read_resource(uri) -> list:
     from mcp.server.lowlevel.helper_types import ReadResourceContents
     uri_str = str(uri)
-    info = _STATIC_WIDGETS.get(uri_str)
+    info = _STATIC_WIDGETS.get(uri_str) or _TASK_WIDGETS.get(uri_str)
     if info is None:
         raise ValueError(f"Unknown resource: {uri_str}")
     return [
@@ -1217,7 +1218,14 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             )
 
             full = task if isinstance(task, dict) else {"tasks": task}
-            sc = _widget_sc(detail if isinstance(detail, dict) else (task or [{}])[0])
+            # Pass the full TASK object as structuredContent → card reads it via
+            # window.openai.toolOutput / ui/notifications/tool-result message.
+            # Truncate long fields to keep payload under ~2 KB so ChatGPT doesn't drop it.
+            sc = dict(task_obj)
+            if sc.get("description") and len(sc["description"]) > 600:
+                sc["description"] = sc["description"][:600] + "…"
+            if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 400:
+                sc["teacher_comment"] = sc["teacher_comment"][:400] + "…"
             widget_uri = _make_task_widget(task_obj)
             task_meta = _widget_meta(widget_uri, "Loading task...", "Task loaded")
             duration_ms = int((time.monotonic() - t0) * 1000)
@@ -1292,7 +1300,11 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 except Exception:
                     pass
                 task_obj = _build_task_obj(task, ft_meta, ft_class_name)
-                sc = _widget_sc(task)
+                sc = dict(task_obj)
+                if sc.get("description") and len(sc["description"]) > 600:
+                    sc["description"] = sc["description"][:600] + "…"
+                if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 400:
+                    sc["teacher_comment"] = sc["teacher_comment"][:400] + "…"
                 widget_uri = _make_task_widget(task_obj)
                 task_meta = _widget_meta(widget_uri, "Loading task...", "Task loaded")
                 duration_ms = int((time.monotonic() - t0) * 1000)

@@ -702,8 +702,40 @@ function initShowMore() {
 // Server injection point — replaced with real task data at render time.
 // When null, falls back to the static TASK example object above.
 const _INJECTED_TASK = /*INJECT_TASK*/null;
-renderCard(_INJECTED_TASK || TASK);
-requestAnimationFrame(initShowMore);
+
+function _doRender(taskObj) {
+  renderCard(taskObj);
+  requestAnimationFrame(initShowMore);
+}
+
+// If we already have injected data, use it immediately
+if (_INJECTED_TASK) {
+  _doRender(_INJECTED_TASK);
+} else {
+  // Try window.openai.toolOutput (set synchronously by ChatGPT before script runs)
+  const _sync = window.openai?.toolOutput;
+  if (_sync && _sync.title) {
+    _doRender(_sync);
+  } else {
+    // Render fallback first, then re-render when ChatGPT sends real data via postMessage
+    _doRender(TASK);
+    window.addEventListener('message', (ev) => {
+      if (ev.source !== window.parent) return;
+      const msg = ev.data;
+      if (msg.method === 'ui/notifications/tool-result') {
+        const d = msg.params?.structuredContent;
+        if (d && d.title) {
+          _doRender(d);
+        }
+      }
+    });
+    // Also listen for openai:set_globals which fires when globals are available
+    window.addEventListener('openai:set_globals', () => {
+      const d = window.openai?.toolOutput;
+      if (d && d.title) _doRender(d);
+    });
+  }
+}
 </script>
 </body>
 </html>
