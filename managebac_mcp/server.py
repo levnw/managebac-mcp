@@ -654,26 +654,20 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
 
 
 def _make_task_widget(task_obj: dict) -> str:
-    """Bake task data into the polished card HTML and register it as a MCP resource.
+    """Return the stable task-detail widget URI.
 
-    Returns a per-task ui:// URI (unique per task) so ChatGPT cannot use a cached
-    version — each new task forces a fresh read_resource call.
-    Also overwrites the static _TASK_DETAIL_URI entry as a fallback.
+    We deliberately do NOT bake task data into the served HTML anymore.
+    The widget HTML at _TASK_DETAIL_URI stays a clean template (_INJECTED_TASK
+    is null) and the per-call task data reaches the widget via
+    window.openai.toolOutput (the CallToolResult.structuredContent).
+
+    Why: the widget URI is shared across every task and every user. Baking
+    one task's data into that single shared HTML meant the LAST call's task
+    leaked into earlier widgets (and across users) whenever a widget fell back
+    to the baked _INJECTED_TASK instead of toolOutput. Relying solely on
+    toolOutput keeps every widget showing its own task.
     """
-    data_json = json.dumps(task_obj, ensure_ascii=False, separators=(",", ":"))
-    # Escape '</' to prevent breaking the <script> block
-    data_safe = data_json.replace("</", r"<\/")
-    html = _TASK_CARD_HTML.replace("/*INJECT_TASK*/null", data_safe)
-    title = task_obj.get("title") or "Task"
-    # Per-task URI (unique hash → cache miss every time)
-    h = hashlib.sha1(data_json.encode()).hexdigest()[:14]
-    task_uri = f"ui://widget/task/{h}.html"
-    _TASK_WIDGETS[task_uri] = {"html": html, "title": title}
-    if len(_TASK_WIDGETS) > 60:
-        _TASK_WIDGETS.popitem(last=False)
-    # Also overwrite the static URI so ChatGPT gets baked data when it calls read_resource
-    _STATIC_WIDGETS[_TASK_DETAIL_URI] = {"html": html, "title": title}
-    return task_uri
+    return _TASK_DETAIL_URI
 
 
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
@@ -1401,7 +1395,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 sc["description"] = sc["description"][:600] + "…"
             if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 400:
                 sc["teacher_comment"] = sc["teacher_comment"][:400] + "…"
-            _make_task_widget(task_obj)  # bakes HTML into _STATIC_WIDGETS[_TASK_DETAIL_URI]
+            # Data reaches the widget via structuredContent → window.openai.toolOutput.
             duration_ms = int((time.monotonic() - t0) * 1000)
             cache.log_request(name, arguments, full, source="mcp", duration_ms=duration_ms)
             return types.CallToolResult(
@@ -1479,7 +1473,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     sc["description"] = sc["description"][:600] + "…"
                 if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 400:
                     sc["teacher_comment"] = sc["teacher_comment"][:400] + "…"
-                _make_task_widget(task_obj)  # bakes HTML into _STATIC_WIDGETS[_TASK_DETAIL_URI]
+                # Data reaches the widget via structuredContent → window.openai.toolOutput.
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
