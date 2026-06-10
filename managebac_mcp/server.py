@@ -737,6 +737,19 @@ async def list_tools() -> list[types.Tool]:
                 "Call this first to get class IDs."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
+            outputSchema={
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id":          {"type": "string"},
+                        "name":        {"type": "string"},
+                        "url":         {"type": "string"},
+                        "level_tags":  {"type": "array", "items": {"type": "string"}},
+                        "has_journal": {"type": "boolean"},
+                    },
+                },
+            },
         ),
         types.Tool(
             name="get_timetable",
@@ -748,6 +761,37 @@ async def list_tools() -> list[types.Tool]:
                 "class_id, teacher, room, and task_count (pending tasks for that class)."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "current": {
+                        "type": "object",
+                        "properties": {
+                            "weekday":  {"type": "string"},
+                            "date":     {"type": "string"},
+                            "time":     {"type": "string"},
+                            "timezone": {"type": "string"},
+                        },
+                    },
+                    "timetable": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "period":     {"type": "string"},
+                                "day":        {"type": "string"},
+                                "time_start": {"type": "string"},
+                                "time_end":   {"type": "string"},
+                                "class_name": {"type": "string"},
+                                "class_id":   {"type": "string"},
+                                "teacher":    {"type": "string"},
+                                "room":       {"type": "string"},
+                                "task_count": {"type": "integer"},
+                            },
+                        },
+                    },
+                },
+            },
         ),
         types.Tool(
             name="refresh",
@@ -760,6 +804,13 @@ async def list_tools() -> list[types.Tool]:
                 "again (e.g. get_upcoming) to get the fresh result."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "status":  {"type": "string"},
+                    "message": {"type": "string"},
+                },
+            },
         ),
         types.Tool(
             name="get_upcoming",
@@ -786,6 +837,30 @@ async def list_tools() -> list[types.Tool]:
                     }
                 },
                 "required": [],
+            },
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "current": {"type": "object"},
+                    "view":    {"type": "string"},
+                    "tasks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title":            {"type": "string"},
+                                "url":              {"type": "string"},
+                                "class_name":       {"type": "string"},
+                                "class_id":         {"type": "string"},
+                                "due":              {"type": "string"},
+                                "due_group":        {"type": "string"},
+                                "type":             {"type": "string"},
+                                "status":           {"type": "string"},
+                                "needs_submission": {"type": "boolean"},
+                            },
+                        },
+                    },
+                },
             },
         ),
         types.Tool(
@@ -816,6 +891,11 @@ async def list_tools() -> list[types.Tool]:
                     }
                 },
                 "required": ["class_id"],
+            },
+            outputSchema={
+                "type": "object",
+                "description": "Single class: array of tasks. Batch: object keyed by class_id.",
+                "additionalProperties": True,
             },
         ),
         types.Tool(
@@ -862,6 +942,24 @@ async def list_tools() -> list[types.Tool]:
                     },
                 },
             },
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "url":   {"type": "string"},
+                    "description": {
+                        "type": "object",
+                        "properties": {
+                            "text":  {"type": "string"},
+                            "links": {"type": "array", "items": {"type": "string"}},
+                        },
+                    },
+                    "resources":      {"type": "array"},
+                    "submitted_files":{"type": "array"},
+                    "task_history":   {"type": "array"},
+                    "discussions":    {"type": "array"},
+                },
+            },
             _meta=_TASK_META_STATIC,
         ),
         types.Tool(
@@ -886,6 +984,11 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["class_id"],
             },
+            outputSchema={
+                "type": "object",
+                "description": "Single class: array of files. Batch: object keyed by class_id.",
+                "additionalProperties": True,
+            },
         ),
         types.Tool(
             name="get_journal",
@@ -908,6 +1011,11 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["class_id"],
             },
+            outputSchema={
+                "type": "object",
+                "description": "Single class: array of journal entries. Batch: object keyed by class_id.",
+                "additionalProperties": True,
+            },
         ),
         types.Tool(
             name="get_file_content",
@@ -928,6 +1036,14 @@ async def list_tools() -> list[types.Tool]:
                     }
                 },
                 "required": ["url"],
+            },
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "kind":    {"type": "string", "enum": ["text", "image"]},
+                    "text":    {"type": "string"},
+                    "content_type": {"type": "string"},
+                },
             },
         ),
         types.Tool(
@@ -954,6 +1070,11 @@ async def list_tools() -> list[types.Tool]:
                     }
                 },
                 "required": ["class_id"],
+            },
+            outputSchema={
+                "type": "object",
+                "description": "Single class: array of units. Batch: object keyed by class_id.",
+                "additionalProperties": True,
             },
         ),
         types.Tool(
@@ -982,6 +1103,25 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": [],
             },
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "scope":   {"type": "string"},
+                    "classes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "class_id":    {"type": "string"},
+                                "class_name":  {"type": "string"},
+                                "criteria":    {"type": "object"},
+                                "graded_tasks":{"type": "array"},
+                            },
+                        },
+                    },
+                    "fetch_errors": {"type": "array"},
+                },
+            },
         ),
         types.Tool(
             name="tag_search",
@@ -1008,6 +1148,31 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["tag"],
             },
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "scope": {"type": "string"},
+                    "count": {"type": "integer"},
+                    "tasks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title":       {"type": "string"},
+                                "url":         {"type": "string"},
+                                "class_name":  {"type": "string"},
+                                "type":        {"type": "string"},
+                                "tags":        {"type": "array"},
+                                "status":      {"type": "string"},
+                                "date":        {"type": "string"},
+                                "due_day_time":{"type": "string"},
+                                "grades":      {"type": "object"},
+                            },
+                        },
+                    },
+                },
+            },
         ),
         types.Tool(
             name="find_task",
@@ -1027,6 +1192,18 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["query"],
             },
+            outputSchema={
+                "type": "object",
+                "properties": {
+                    "title":          {"type": "string"},
+                    "url":            {"type": "string"},
+                    "description":    {"type": "object"},
+                    "resources":      {"type": "array"},
+                    "submitted_files":{"type": "array"},
+                    "task_history":   {"type": "array"},
+                    "discussions":    {"type": "array"},
+                },
+            },
         ),
         types.Tool(
             name="test_ui",
@@ -1035,6 +1212,7 @@ async def list_tools() -> list[types.Tool]:
                 "Call this to see if ChatGPT can render embedded UI components."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
+            outputSchema={"type": "object", "properties": {"status": {"type": "string"}}},
             _meta=_TEST_META,
         ),
     ]
