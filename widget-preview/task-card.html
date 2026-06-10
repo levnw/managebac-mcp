@@ -298,10 +298,30 @@
     .open-in-mb:hover { background: #f9fafb; }
 
     .empty { color: #98a2b3; font-size: 0.82rem; font-style: italic; padding: 8px 0; }
+
+    /* ── Loading spinner ── */
+    @keyframes _spin { to { transform: rotate(360deg); } }
+    ._loading-wrap {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 60px 24px; gap: 14px; min-height: 200px;
+    }
+    ._loading-ring {
+      width: 36px; height: 36px;
+      border: 3px solid #e5e7eb;
+      border-top-color: #1a7a5e;
+      border-radius: 50%;
+      animation: _spin 0.75s linear infinite;
+    }
+    ._loading-text { color: #98a2b3; font-size: 0.82rem; }
   </style>
 </head>
 <body>
-<div class="mb-card" id="card"></div>
+<div class="mb-card" id="card">
+  <div class="_loading-wrap">
+    <div class="_loading-ring"></div>
+    <div class="_loading-text">Loading task…</div>
+  </div>
+</div>
 
 <script>
 // ══════════════════════════════════════════════════════════════════
@@ -710,8 +730,12 @@ if (_INJECTED_TASK) {
   if (_sync && _sync.title) {
     _doRender(_sync);
   } else {
-    // Render fallback first, then re-render when ChatGPT sends real data via postMessage
-    _doRender(TASK);
+    // Show a clean spinner — no school-specific content while waiting for real data
+    document.getElementById('card').innerHTML =
+      '<div class="_loading-wrap">' +
+        '<div class="_loading-ring"></div>' +
+        '<div class="_loading-text">Loading task…</div>' +
+      '</div>';
     window.addEventListener('message', (ev) => {
       if (ev.source !== window.parent) return;
       const msg = ev.data;

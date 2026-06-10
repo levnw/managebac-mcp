@@ -1196,20 +1196,37 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                         content=[types.TextContent(type="text", text=json.dumps(result))],
                         isError=True,
                     )
-                detail = await fetch_task_detail(cid, tid)
+                # Fetch detail, tasks metadata, and class list concurrently
+                _results = await asyncio.gather(
+                    fetch_task_detail(cid, tid),
+                    fetch_tasks(cid),
+                    fetch_classes(),
+                    return_exceptions=True,
+                )
+                _det, _tlist, _clist = _results
+                # Re-raise if the primary fetch failed
+                if isinstance(_det, BaseException):
+                    raise _det
+                detail = _det
                 task = detail
 
             # ── Pull task metadata (date/status/grades/tags) from tasks cache ─
             task_meta_obj: dict = {}
             class_name = ""
             try:
-                task_list = await fetch_tasks(cid)
+                # _tlist / _clist come from the gather above (single-task path)
+                # or may not exist yet (batch path — fetch them now)
+                if not tasks_arg:
+                    task_list = _tlist if not isinstance(_tlist, BaseException) else []
+                    classes   = _clist if not isinstance(_clist, BaseException) else []
+                else:
+                    task_list = await fetch_tasks(cid)
+                    classes   = await fetch_classes()
                 task_meta_obj = next(
                     (t for t in task_list if str(t.get("id")) == str(tid)),
                     {}
                 )
                 # Fetch class name from classes cache (24h TTL — almost free)
-                classes = await fetch_classes()
                 cls_match = next((c for c in classes if str(c.get("id")) == str(cid)), None)
                 if cls_match:
                     class_name = cls_match.get("name") or cls_match.get("title") or ""
