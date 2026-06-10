@@ -108,7 +108,7 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_TASK_DETAIL_URI = "ui://widget/task-detail-v8.html"
+_TASK_DETAIL_URI = "ui://widget/task-detail-v7.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
