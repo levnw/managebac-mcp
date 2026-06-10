@@ -656,22 +656,25 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
 def _make_task_widget(task_obj: dict) -> str:
     """Bake task data into the polished card HTML and register it as a MCP resource.
 
-    Returns a ui:// URI that ChatGPT fetches via read_resource.  The data is
-    baked into the HTML as a fallback; the primary delivery path is structuredContent
-    → window.openai.toolOutput (handled in the card's JS).
+    Returns the static task-detail URI (_TASK_DETAIL_URI).  ChatGPT always fetches
+    that static URI via read_resource — it ignores per-task URIs in _meta.  So we
+    overwrite the static entry with the freshly-baked HTML each time a task is loaded.
+    The per-task hash URI is also stored in _TASK_WIDGETS for HTTPS fallback.
     """
     data_json = json.dumps(task_obj, ensure_ascii=False, separators=(",", ":"))
     # Escape '</' to prevent breaking the <script> block
     data_safe = data_json.replace("</", r"<\/")
+    html = _TASK_CARD_HTML.replace("/*INJECT_TASK*/null", data_safe)
+    title = task_obj.get("title") or "Task"
+    # Overwrite the static URI so ChatGPT gets baked data when it calls read_resource
+    _STATIC_WIDGETS[_TASK_DETAIL_URI] = {"html": html, "title": title}
+    # Also store under a per-task hash URI (for HTTPS /ui/task/{hash} route)
     h = hashlib.sha1(data_json.encode()).hexdigest()[:14]
     uri = f"ui://widget/task/{h}.html"
-    if uri not in _TASK_WIDGETS:
-        html = _TASK_CARD_HTML.replace("/*INJECT_TASK*/null", data_safe)
-        title = task_obj.get("title") or "Task"
-        _TASK_WIDGETS[uri] = {"html": html, "title": title}
-        if len(_TASK_WIDGETS) > 60:
-            _TASK_WIDGETS.popitem(last=False)
-    return uri
+    _TASK_WIDGETS[uri] = {"html": html, "title": title}
+    if len(_TASK_WIDGETS) > 60:
+        _TASK_WIDGETS.popitem(last=False)
+    return _TASK_DETAIL_URI
 
 
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
