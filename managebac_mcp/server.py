@@ -1183,15 +1183,19 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             else:
                 cid = arguments.get("class_id")
                 tid = arguments.get("task_id")
-                # Fallback: extract IDs from a task URL if class_id/task_id not provided
+                # Fallback: extract IDs from any URL argument ChatGPT might pass
                 if not cid or not tid:
-                    url_arg = arguments.get("url", "")
+                    url_arg = (arguments.get("url") or arguments.get("task_url")
+                               or arguments.get("link") or "")
                     m = _re.search(r"/classes/(\d+)/core_tasks/(\d+)", url_arg)
                     if m:
                         cid, tid = m.group(1), m.group(2)
                 if not cid or not tid:
-                    result = {"error": "class_id and task_id are required (or pass url)", "tool": name}
-                    raise KeyError("class_id and task_id missing — provide them or pass url")
+                    result = {"error": "Please provide the task URL (pass it as the 'url' argument)", "tool": name}
+                    return types.CallToolResult(
+                        content=[types.TextContent(type="text", text=json.dumps(result))],
+                        isError=True,
+                    )
                 detail = await fetch_task_detail(cid, tid)
                 task = detail
 
