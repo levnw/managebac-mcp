@@ -172,6 +172,11 @@ def _parse_grades_from_task_row(row: Tag) -> dict[str, dict]:
     for match in re.finditer(r'([A-D]):\s*(\d+)\s+(\d+)', text):
         criterion, score, max_score = match.groups()
         grades[criterion] = {"score": int(score), "max": int(max_score)}
+    # Also capture N/A grades: "B: N/A" or "B:N/A"
+    for match in re.finditer(r'\b([A-D]):\s*N/A\b', text, re.IGNORECASE):
+        criterion = match.group(1).upper()
+        if criterion not in grades:
+            grades[criterion] = {"score": None, "max": None}
 
     return grades
 
@@ -473,11 +478,15 @@ def parse_tasks(html: str, class_id: str = "") -> list[dict]:
 
         has_submission_box = bool(row.find(string=re.compile(r'Submit Coursework', re.I)))
 
-        # Grades — pattern "A: 7 8"
+        # Grades — pattern "A: 7 8" or "B: N/A"
         grades = {}
         for match in re.finditer(r'\b([A-D]):\s*(\d+)\s+(\d+)', row_text):
             criterion, score, max_score = match.groups()
             grades[criterion] = {"score": int(score), "max": int(max_score)}
+        for match in re.finditer(r'\b([A-D]):\s*N/A\b', row_text, re.IGNORECASE):
+            criterion = match.group(1).upper()
+            if criterion not in grades:
+                grades[criterion] = {"score": None, "max": None}
 
         # Teacher comment — inside div.assessment-comments > div.show-more > div.fix-body-margins
         comment = ""
