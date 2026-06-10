@@ -668,6 +668,7 @@ def _make_task_widget(task_obj: dict) -> str:
     title = task_obj.get("title") or "Task"
     # Overwrite the static URI so ChatGPT gets baked data when it calls read_resource
     _STATIC_WIDGETS[_TASK_DETAIL_URI] = {"html": html, "title": title}
+    print(f"[_make_task_widget] baked title={title!r} uri={_TASK_DETAIL_URI!r}", flush=True)
     # Also store under a per-task hash URI (for HTTPS /ui/task/{hash} route)
     h = hashlib.sha1(data_json.encode()).hexdigest()[:14]
     uri = f"ui://widget/task/{h}.html"
@@ -718,6 +719,8 @@ async def read_resource(uri) -> list:
     from mcp.server.lowlevel.helper_types import ReadResourceContents
     uri_str = str(uri)
     info = _STATIC_WIDGETS.get(uri_str) or _TASK_WIDGETS.get(uri_str)
+    injected = "/*INJECT_TASK*/null" not in (info["html"] if info else "")
+    print(f"[read_resource] uri={uri_str!r} found={info is not None} injected={injected}", flush=True)
     if info is None:
         raise ValueError(f"Unknown resource: {uri_str}")
     return [
