@@ -623,7 +623,11 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
     # ── Description ───────────────────────────────────────────────────────────
     desc_raw = detail.get("description") or {}
     desc_md = desc_raw.get("text", "") if isinstance(desc_raw, dict) else str(desc_raw)
+    # Images are rendered as separate <img> elements in the card (see `images`
+    # below), so strip the inline ![](…) markdown from the text to avoid artifacts.
+    desc_md = _re.sub(r'!\[[^\]]*\]\([^)]*\)', '', desc_md)
     description = _md_to_html(desc_md) if desc_md.strip() else None
+    desc_images = desc_raw.get("images") if isinstance(desc_raw, dict) else None
 
     # ── Discussions ───────────────────────────────────────────────────────────
     discussions_raw = detail.get("discussions")
@@ -663,6 +667,7 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
         "discussions": discussions,
         "due_passed_late": due_past,
         "theme_color": _THEME_COLORS.get(detail.get("theme"), _DEFAULT_THEME_COLOR),
+        "images": desc_images or [],
     }
     return task_obj
 
@@ -684,6 +689,22 @@ def _make_task_widget(task_obj: dict) -> str:
     return _TASK_DETAIL_URI
 
 
+# Content-Security-Policy for the widget iframe. resource_domains controls which
+# hosts the widget may load images/media from — needed so embedded ManageBac
+# description images (served from *.managebac.com, incl. the regional CDNs the
+# /attachments permalinks redirect to) actually render inside ChatGPT's sandbox.
+_WIDGET_CSP = {
+    "connect_domains": [],
+    "resource_domains": [
+        "https://es.managebac.com",
+        "https://assets.managebac.com",
+        "https://cdn.ca.managebac.com",
+        "https://cdn.uk.managebac.com",
+        "https://cdn.managebac.com",
+    ],
+}
+
+
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
     return {
         "openai/outputTemplate": uri,
@@ -691,6 +712,7 @@ def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
         "openai/toolInvocation/invoking": invoking,
         "openai/toolInvocation/invoked": invoked,
         "openai/widgetAccessible": True,
+        "openai/widgetCSP": _WIDGET_CSP,
     }
 
 _TEST_META = _widget_meta(_TEST_WIDGET_URI, "Loading test widget...", "Test widget loaded")
@@ -699,11 +721,18 @@ _TEST_META = _widget_meta(_TEST_WIDGET_URI, "Loading test widget...", "Test widg
 _TASK_META_STATIC = _widget_meta(_TASK_DETAIL_URI, "Loading task...", "Task loaded")
 
 
+def _resource_meta(uri: str) -> dict | None:
+    # Attach the image CSP to the task-detail widget so embedded ManageBac
+    # description images are allowed to load inside ChatGPT's sandbox.
+    return {"openai/widgetCSP": _WIDGET_CSP} if uri == _TASK_DETAIL_URI else None
+
+
 @server.list_resources()
 async def list_resources() -> list[types.Resource]:
     # Static widgets use their URI as key; task widgets use hash as key (served via HTTPS)
     resources = [
-        types.Resource(uri=uri, name=info["title"], title=info["title"], mimeType=WIDGET_MIME)
+        types.Resource(uri=uri, name=info["title"], title=info["title"],
+                       mimeType=WIDGET_MIME, _meta=_resource_meta(uri))
         for uri, info in _STATIC_WIDGETS.items()
     ]
     for h, info in _TASK_WIDGETS.items():
@@ -715,7 +744,8 @@ async def list_resources() -> list[types.Resource]:
 @server.list_resource_templates()
 async def list_resource_templates() -> list[types.ResourceTemplate]:
     return [
-        types.ResourceTemplate(uri_template=uri, name=info["title"], title=info["title"], mimeType=WIDGET_MIME)
+        types.ResourceTemplate(uri_template=uri, name=info["title"], title=info["title"],
+                               mimeType=WIDGET_MIME, _meta=_resource_meta(uri))
         for uri, info in _STATIC_WIDGETS.items()
     ]
 
@@ -1409,6 +1439,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 sc["description"] = sc["description"][:600] + "…"
             if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 400:
                 sc["teacher_comment"] = sc["teacher_comment"][:400] + "…"
+            if sc.get("images"):
+                sc["images"] = sc["images"][:3]  # cap to keep payload small
             # Data reaches the widget via structuredContent → window.openai.toolOutput.
             duration_ms = int((time.monotonic() - t0) * 1000)
             cache.log_request(name, arguments, full, source="mcp", duration_ms=duration_ms)
@@ -1487,6 +1519,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     sc["description"] = sc["description"][:600] + "…"
                 if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 400:
                     sc["teacher_comment"] = sc["teacher_comment"][:400] + "…"
+                if sc.get("images"):
+                    sc["images"] = sc["images"][:3]  # cap to keep payload small
                 # Data reaches the widget via structuredContent → window.openai.toolOutput.
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)

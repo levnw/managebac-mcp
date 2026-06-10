@@ -300,6 +300,12 @@
 
     .empty { color: #98a2b3; font-size: 0.82rem; font-style: italic; padding: 8px 0; }
 
+    /* Teacher-embedded description images */
+    .desc-img {
+      max-width: 100%; height: auto; display: block;
+      border-radius: 6px; margin: 4px 0 10px; border: 1px solid #eaecf0;
+    }
+
     /* ── Loading spinner ── */
     @keyframes _spin { to { transform: rotate(360deg); } }
     ._loading-wrap {
@@ -622,16 +628,23 @@ function renderCard(task) {
 
   h += '</div>'; // task-card
 
-  // ── Description ──
-  if (task.description) {
-    h += `<div class="section">
-      <div class="section-header"><span class="section-title">Description</span></div>
-      <div class="section-body">
-        <div class="description-content show-more-text collapsed" id="desc-body">${task.description}</div>
+  // ── Description ── (text and/or teacher-embedded images)
+  const descImgs = (task.images || []).filter(Boolean);
+  if (task.description || descImgs.length) {
+    let body = '';
+    // Images first (teacher prompt images usually lead the description)
+    descImgs.forEach(src => {
+      body += `<a href="${esc(src)}" target="_blank" rel="noopener"><img class="desc-img" src="${esc(src)}" alt="" loading="lazy"></a>`;
+    });
+    if (task.description) {
+      body += `<div class="description-content show-more-text collapsed" id="desc-body">${task.description}</div>
         <button class="show-toggle" onclick="toggleShowMore('desc-body',this)" style="margin-top:8px">
           Show More ${ICONS.chevDown}
-        </button>
-      </div>
+        </button>`;
+    }
+    h += `<div class="section">
+      <div class="section-header"><span class="section-title">Description</span></div>
+      <div class="section-body">${body}</div>
     </div>`;
   }
 

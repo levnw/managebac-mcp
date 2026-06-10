@@ -57,6 +57,15 @@ def _html_to_markdown(el) -> str:
             return "".join(node(c) for c in el.children)
 
         # --- block elements ---
+        if tag == "img":
+            src = el.get("src", "")
+            if src.startswith("//"):
+                src = "https:" + src
+            elif src.startswith("/"):
+                src = _base() + src
+            if not src.startswith("http"):
+                return ""
+            return f"\n\n![{el.get('alt', '')}]({src})\n\n"
         if tag == "br":
             return "\n"
         if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
@@ -795,9 +804,22 @@ def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
     desc_text = ""
     desc_links = []
     desc_files = []
+    desc_images = []
 
     if desc_block:
         desc_text = _html_to_markdown(desc_block)
+
+        # Embedded images (teacher pastes/uploads into the rich-text description).
+        # Use the stable /attachments permalink (never expires) — the CDN URL it
+        # redirects to is signed and expires, so we must not cache that.
+        for img in desc_block.find_all("img"):
+            s = img.get("src", "")
+            if s.startswith("//"):
+                s = "https:" + s
+            elif s.startswith("/"):
+                s = _base() + s
+            if s.startswith("http") and s not in desc_images:
+                desc_images.append(s)
 
         for a in desc_block.find_all("a", href=True):
             href = a.get("href", "")
@@ -920,6 +942,7 @@ def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
             "text": desc_text,
             "links": desc_links,
             "embedded_files": desc_files,
+            "images": desc_images,
         },
         "resources": resources,
         "submitted_files": submitted_files,
