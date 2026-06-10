@@ -822,11 +822,8 @@ async def list_tools() -> list[types.Tool]:
             name="get_task_detail",
             description=(
                 "Returns the full detail for one or more tasks. "
-                "Single task: pass class_id + task_id. "
-                "If the student gives you a ManageBac URL like "
-                "https://es.managebac.com/student/classes/12345678/core_tasks/87654321, "
-                "extract class_id=12345678 and task_id=87654321 from the URL path and pass them directly — "
-                "do NOT pass the raw URL as a parameter. "
+                "Single task: pass class_id + task_id (preferred), or pass the ManageBac task URL and the IDs will be parsed from it. "
+                "ManageBac URLs follow the pattern …/classes/{class_id}/core_tasks/{task_id} — you can read the IDs directly from the URL. "
                 "BATCH SUPPORTED: pass a 'tasks' list of {class_id, task_id} pairs — all fetched concurrently. "
                 "Returns per task: title, url, "
                 "description.text (full instructions as Markdown), "
@@ -841,15 +838,15 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "class_id": {
                         "type": "string",
-                        "description": "Class ID — the number after /classes/ in the ManageBac URL, or from get_upcoming/get_tasks.",
+                        "description": "Class ID — from get_upcoming, get_tasks, or the number after /classes/ in the task URL.",
                     },
                     "task_id": {
                         "type": "string",
-                        "description": "Task ID — the number after /core_tasks/ in the ManageBac URL, or from get_upcoming/get_tasks.",
+                        "description": "Task ID — from get_upcoming, get_tasks, or the number after /core_tasks/ in the task URL.",
                     },
                     "url": {
                         "type": "string",
-                        "description": "Fallback: full ManageBac task URL — class_id and task_id are extracted from the path automatically.",
+                        "description": "Full ManageBac task URL — class_id and task_id are parsed from the path automatically. Use when you have the URL but prefer not to extract the IDs manually.",
                     },
                     "tasks": {
                         "type": "array",
@@ -1173,6 +1170,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
         elif name == "get_task_detail":
             import re as _re
+            print(f"[get_task_detail] args={list(arguments.keys())} cid={arguments.get('class_id')} tid={arguments.get('task_id')} url={arguments.get('url','')[:60]}", flush=True)
 
             # ── Resolve class_id + task_id ───────────────────────────────────
             tasks_arg = arguments.get("tasks")
