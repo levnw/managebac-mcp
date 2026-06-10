@@ -1251,14 +1251,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 sc["description"] = sc["description"][:600] + "…"
             if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 400:
                 sc["teacher_comment"] = sc["teacher_comment"][:400] + "…"
-            widget_uri = _make_task_widget(task_obj)
-            task_meta = _widget_meta(widget_uri, "Loading task...", "Task loaded")
+            _make_task_widget(task_obj)  # bakes HTML into _STATIC_WIDGETS[_TASK_DETAIL_URI]
             duration_ms = int((time.monotonic() - t0) * 1000)
             cache.log_request(name, arguments, full, source="mcp", duration_ms=duration_ms)
             return types.CallToolResult(
                 content=[types.TextContent(type="text", text=json.dumps(full, ensure_ascii=False, separators=(",", ":")))],
                 structuredContent=sc,
-                _meta=task_meta,
+                _meta=_TASK_META_STATIC,  # stable URI survives server restarts
             )
 
         elif name == "get_units":
@@ -1330,14 +1329,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     sc["description"] = sc["description"][:600] + "…"
                 if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 400:
                     sc["teacher_comment"] = sc["teacher_comment"][:400] + "…"
-                widget_uri = _make_task_widget(task_obj)
-                task_meta = _widget_meta(widget_uri, "Loading task...", "Task loaded")
+                _make_task_widget(task_obj)  # bakes HTML into _STATIC_WIDGETS[_TASK_DETAIL_URI]
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
                     content=[types.TextContent(type="text", text=json.dumps(task, ensure_ascii=False, separators=(",", ":")))],
                     structuredContent=sc,
-                    _meta=task_meta,
+                    _meta=_TASK_META_STATIC,  # stable URI survives server restarts
                 )
 
         elif name == "test_ui":
