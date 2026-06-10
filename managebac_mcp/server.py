@@ -417,30 +417,247 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-# Static widgets (test widget + task template stub registered so ChatGPT
+# New polished task card — loaded from disk so it's easy to iterate on.
+_TASK_CARD_PATH = Path(__file__).parent.parent / "widget-preview" / "task-card.html"
+_TASK_CARD_HTML: str = _TASK_CARD_PATH.read_text(encoding="utf-8")
+
+# Static widgets (test widget + task card stub registered so ChatGPT
 # sees a widget for get_task_detail in list_resources).
 _STATIC_WIDGETS = {
     _TEST_WIDGET_URI: {"html": _TEST_WIDGET_HTML, "title": "Test Widget"},
-    _TASK_DETAIL_URI: {"html": _TASK_DETAIL_HTML.replace("const _D = /*D*/null;", "const _D = null;"), "title": "Task Detail"},
+    _TASK_DETAIL_URI: {"html": _TASK_CARD_HTML, "title": "Task Detail"},
 }
 
 # Per-task dynamic widgets: URI → {html, title}  (LRU capped at 60)
 _TASK_WIDGETS: OrderedDict = OrderedDict()
 
-def _make_task_widget(sc: dict) -> str:
-    """Bake task data directly into widget HTML; return unique URI.
+def _md_to_html(md: str) -> str:
+    """Convert the simple Markdown produced by scraper._html_to_markdown → HTML for the card."""
+    import re as _re
+    if not md:
+        return ""
+    lines = md.split("\n")
+    html_parts = []
+    in_ul = False
+    in_ol = False
+    buffer = []
 
+    def flush_para():
+        nonlocal buffer
+        text = " ".join(buffer).strip()
+        buffer = []
+        if text:
+            html_parts.append(f"<p>{text}</p>")
+
+    def flush_list():
+        nonlocal in_ul, in_ol
+        if in_ul:
+            html_parts.append("</ul>")
+            in_ul = False
+        if in_ol:
+            html_parts.append("</ol>")
+            in_ol = False
+
+    def inline(text: str) -> str:
+        # Links [text](url)
+        text = _re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2" target="_blank">\1</a>', text)
+        # Bold **text** or __text__ (underline treated as bold-underline)
+        text = _re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+        text = _re.sub(r'__(.+?)__', r'<u>\1</u>', text)
+        # Italic *text*
+        text = _re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+        return text
+
+    for line in lines:
+        # Heading
+        hm = _re.match(r'^(#{1,6})\s+(.*)', line)
+        if hm:
+            flush_para(); flush_list()
+            level = min(len(hm.group(1)) + 2, 6)  # h1→h3, h6→h6 (keep readable size)
+            html_parts.append(f"<h{level}>{inline(hm.group(2).strip())}</h{level}>")
+            continue
+
+        # Unordered list
+        if _re.match(r'^[-*]\s+', line):
+            flush_para()
+            if not in_ul:
+                flush_list()
+                html_parts.append("<ul>")
+                in_ul = True
+            item = _re.sub(r'^[-*]\s+', '', line)
+            html_parts.append(f"<li>{inline(item)}</li>")
+            continue
+
+        # Ordered list
+        olm = _re.match(r'^(\d+)\.\s+(.*)', line)
+        if olm:
+            flush_para()
+            if not in_ol:
+                flush_list()
+                html_parts.append("<ol>")
+                in_ol = True
+            html_parts.append(f"<li>{inline(olm.group(2))}</li>")
+            continue
+
+        # Blank line — flush paragraph + close lists
+        if not line.strip():
+            flush_para()
+            flush_list()
+            continue
+
+        flush_list()
+        buffer.append(inline(line))
+
+    flush_para()
+    flush_list()
+    return "\n".join(html_parts)
+
+
+def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> dict:
+    """Combine fetch_task_detail + fetch_tasks metadata into the TASK object the card expects."""
+    import re as _re
+    from datetime import date as _date
+
+    meta = meta or {}
+
+    # ── Date ──────────────────────────────────────────────────────────────────
+    # parse_tasks gives date as e.g. "MAY 22" or "JAN 3"
+    date_str = meta.get("date", "")
+    due_month = ""
+    due_day = ""
+    due_past = True  # default: assume past (gray badge)
+    if date_str:
+        dm = _re.match(r'([A-Za-z]+)\s+(\d+)', date_str.strip())
+        if dm:
+            month_abbr = dm.group(1).capitalize()  # "MAY" → "May"
+            day_num = dm.group(2)
+            due_month = month_abbr
+            due_day = day_num
+            # Determine if past: compare with today
+            month_map = {
+                "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+                "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+            }
+            m_num = month_map.get(month_abbr, 0)
+            today = _date.today()
+            if m_num:
+                # Guess year: if month/day is in the future relative to June, it's current year
+                due_year = today.year
+                try:
+                    due_d = _date(due_year, m_num, int(day_num))
+                    # If it's way in the past (e.g. Jan in a June-start year), try next year
+                    if (today - due_d).days > 180:
+                        due_d = _date(due_year + 1, m_num, int(day_num))
+                    elif (due_d - today).days > 180:
+                        due_d = _date(due_year - 1, m_num, int(day_num))
+                    due_past = due_d < today
+                except ValueError:
+                    due_past = True
+
+    # ── Labels ────────────────────────────────────────────────────────────────
+    _LABEL_STYLES = {
+        "summative": "label-summative",
+        "formative": "label-formative",
+        "homework": "label-homework",
+        "classwork": "label-classwork",
+    }
+    labels = []
+    task_type = meta.get("type", "")
+    if task_type:
+        style = _LABEL_STYLES.get(task_type.lower(), "label-formative")
+        labels.append({"text": task_type, "style": style})
+    for tag in (meta.get("tags") or []):
+        style = _LABEL_STYLES.get(tag.lower(), "label-classwork")
+        labels.append({"text": tag, "style": style})
+
+    # ── Grades ────────────────────────────────────────────────────────────────
+    grades_raw = meta.get("grades") or {}
+    grades = None
+    if grades_raw:
+        grades = [
+            {"label": k, "score": v["score"], "max": v["max"]}
+            for k, v in sorted(grades_raw.items())
+        ]
+
+    # ── Submitted files ───────────────────────────────────────────────────────
+    has_sub_box = meta.get("has_submission_box", False)
+    raw_files = detail.get("submitted_files") or []
+    submitted_files: list | None
+    if not has_sub_box:
+        submitted_files = None   # no dropbox at all
+    elif raw_files:
+        submitted_files = [
+            {
+                "name": f.get("name", ""),
+                "uploaded": f.get("uploaded_at", ""),
+                "url": f.get("url", "#"),
+            }
+            for f in raw_files
+        ]
+    else:
+        submitted_files = []    # dropbox exists but empty
+
+    # ── Description ───────────────────────────────────────────────────────────
+    desc_raw = detail.get("description") or {}
+    desc_md = desc_raw.get("text", "") if isinstance(desc_raw, dict) else str(desc_raw)
+    description = _md_to_html(desc_md) if desc_md.strip() else None
+
+    # ── Discussions ───────────────────────────────────────────────────────────
+    discussions_raw = detail.get("discussions")
+    discussions: list | None
+    if discussions_raw is None:
+        discussions = None
+    else:
+        discussions = [
+            {
+                "author": d.get("author", ""),
+                "body": d.get("body", "") or d.get("text", ""),
+                "posted": d.get("posted_at", "") or d.get("date", ""),
+            }
+            for d in (discussions_raw or [])
+            if isinstance(d, dict)
+        ]
+
+    # ── Teacher comment ───────────────────────────────────────────────────────
+    teacher_comment = meta.get("teacher_comment") or None
+
+    # ── Assemble ──────────────────────────────────────────────────────────────
+    task_obj: dict = {
+        "title": detail.get("title") or meta.get("title") or "Task",
+        "class_name": class_name,
+        "url": detail.get("url") or meta.get("url") or "",
+        "due_month": due_month,
+        "due_day": due_day,
+        "due_past": due_past,
+        "labels": labels,
+        "status": meta.get("status") or "",
+        "due_time": meta.get("due_day_time") or None,
+        "grades": grades,
+        "teacher_comment": teacher_comment,
+        "unit": None,   # not available from task list; could be added later
+        "description": description,
+        "submitted_files": submitted_files,
+        "discussions": discussions,
+        "due_passed_late": due_past,
+    }
+    return task_obj
+
+
+def _make_task_widget(task_obj: dict) -> str:
+    """Bake task data directly into the new polished card HTML; return unique URI.
+
+    task_obj must match the TASK shape the card's renderCard() expects.
     Because toolOutput is only set on page-refresh (not live calls), the
     only reliable delivery channel is the widget HTML itself.
     """
-    data_json = json.dumps(sc, ensure_ascii=False, separators=(",", ":"))
+    data_json = json.dumps(task_obj, ensure_ascii=False, separators=(",", ":"))
     # Escape '</' to prevent breaking the <script> block
     data_safe = data_json.replace("</", r"<\/")
     uri_hash = hashlib.sha1(data_json.encode()).hexdigest()[:14]
     uri = f"ui://widget/task/{uri_hash}.html"
     if uri not in _TASK_WIDGETS:
-        html = _TASK_DETAIL_HTML.replace("const _D = /*D*/null;", f"const _D = {data_safe};")
-        title = sc.get("title") or "Task"
+        html = _TASK_CARD_HTML.replace("/*INJECT_TASK*/null", data_safe)
+        title = task_obj.get("title") or "Task"
         _TASK_WIDGETS[uri] = {"html": html, "title": title}
         if len(_TASK_WIDGETS) > 60:
             _TASK_WIDGETS.popitem(last=False)
@@ -937,16 +1154,21 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
         elif name == "get_task_detail":
             import re as _re
+
+            # ── Resolve class_id + task_id ───────────────────────────────────
             tasks_arg = arguments.get("tasks")
             if tasks_arg:
-                fetched = await asyncio.gather(*[
-                    fetch_task_detail(t["class_id"], t["task_id"]) for t in tasks_arg
-                ])
+                # Batch: just use the first task for the widget, return all
+                pairs = [(t["class_id"], t["task_id"]) for t in tasks_arg]
+                fetched = await asyncio.gather(*[fetch_task_detail(c, t) for c, t in pairs])
                 task = list(fetched)[0] if len(fetched) == 1 else list(fetched)
+                detail = fetched[0] if fetched else {}
+                cid = pairs[0][0] if pairs else None
+                tid = pairs[0][1] if pairs else None
             else:
                 cid = arguments.get("class_id")
                 tid = arguments.get("task_id")
-                # Fallback: extract IDs from a task URL if class_id/task_id not provided directly
+                # Fallback: extract IDs from a task URL if class_id/task_id not provided
                 if not cid or not tid:
                     url_arg = arguments.get("url", "")
                     m = _re.search(r"/classes/(\d+)/core_tasks/(\d+)", url_arg)
@@ -955,10 +1177,36 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 if not cid or not tid:
                     result = {"error": "class_id and task_id are required (or pass url)", "tool": name}
                     raise KeyError("class_id and task_id missing — provide them or pass url")
-                task = await fetch_task_detail(cid, tid)
+                detail = await fetch_task_detail(cid, tid)
+                task = detail
+
+            # ── Pull task metadata (date/status/grades/tags) from tasks cache ─
+            task_meta_obj: dict = {}
+            class_name = ""
+            try:
+                task_list = await fetch_tasks(cid)
+                task_meta_obj = next(
+                    (t for t in task_list if str(t.get("id")) == str(tid)),
+                    {}
+                )
+                # Fetch class name from classes cache (24h TTL — almost free)
+                classes = await fetch_classes()
+                cls_match = next((c for c in classes if str(c.get("id")) == str(cid)), None)
+                if cls_match:
+                    class_name = cls_match.get("name") or cls_match.get("title") or ""
+            except Exception:
+                pass  # best-effort; card degrades gracefully without meta
+
+            # ── Build the TASK object the card expects ────────────────────────
+            task_obj = _build_task_obj(
+                detail if isinstance(detail, dict) else {},
+                task_meta_obj,
+                class_name,
+            )
+
             full = task if isinstance(task, dict) else {"tasks": task}
-            sc = _widget_sc(task) if isinstance(task, dict) else _widget_sc((task or [{}])[0])
-            widget_uri = _make_task_widget(sc)
+            sc = _widget_sc(detail if isinstance(detail, dict) else (task or [{}])[0])
+            widget_uri = _make_task_widget(task_obj)
             task_meta = _widget_meta(widget_uri, "Loading task...", "Task loaded")
             duration_ms = int((time.monotonic() - t0) * 1000)
             cache.log_request(name, arguments, full, source="mcp", duration_ms=duration_ms)
@@ -1014,8 +1262,26 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             if task is None:
                 result = {"error": "Task not found", "tool": name}
             else:
+                # Enrich with task metadata for the visual card
+                ft_cid = task.get("class_id")
+                ft_tid = task.get("task_id")
+                ft_meta: dict = {}
+                ft_class_name = ""
+                try:
+                    if ft_cid and ft_tid:
+                        ft_tasks = await fetch_tasks(ft_cid)
+                        ft_meta = next(
+                            (t for t in ft_tasks if str(t.get("id")) == str(ft_tid)), {}
+                        )
+                        ft_classes = await fetch_classes()
+                        ft_cls = next((c for c in ft_classes if str(c.get("id")) == str(ft_cid)), None)
+                        if ft_cls:
+                            ft_class_name = ft_cls.get("name") or ft_cls.get("title") or ""
+                except Exception:
+                    pass
+                task_obj = _build_task_obj(task, ft_meta, ft_class_name)
                 sc = _widget_sc(task)
-                widget_uri = _make_task_widget(sc)
+                widget_uri = _make_task_widget(task_obj)
                 task_meta = _widget_meta(widget_uri, "Loading task...", "Task loaded")
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)

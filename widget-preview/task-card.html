@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ManageBac Task Preview</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-size: 14px;
+      color: #101828;
+      background: #f2f4f7;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 24px 16px 48px;
+    }
+
+    /* ── Outer card shell ── */
+    .mb-card {
+      width: 100%;
+      max-width: 860px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+
+    /* ── Teal header banner ── */
+    .mb-header { background: #1a8c7a; padding: 14px 20px 13px; }
+    .mb-header h1 { font-size: 1.15rem; font-weight: 700; color: #fff; line-height: 1.3; }
+    .mb-header .class-name { font-size: 0.78rem; color: rgba(255,255,255,0.75); margin-top: 2px; font-weight: 400; }
+
+    /* ── Content area ── */
+    .content-area { padding: 10px; }
+
+    /* ── Main task card box ── */
+    .task-card {
+      border: 1px solid #d9e7f7;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+
+    /* ── Task row (date + meta + right panel) ── */
+    .task-row { display: flex; align-items: stretch; flex-wrap: nowrap; }
+
+    /* Left: date + meta */
+    .task-row-main {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* Right: criteria column (graded tasks) */
+    .criteria-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 12px;
+      border-left: 1px solid #eaecf0;
+      background-color: #f9fafb;
+      border-radius: 0 5px 5px 0;
+      flex-shrink: 0;
+    }
+    .criteria-scores {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .criterion { display: flex; align-items: center; gap: 4px; }
+    .criterion-label { color: #667085; font-size: 0.72rem; }
+
+    /* Right: status panel (non-graded tasks) — same cell style as criteria-col */
+    .task-status-right {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 14px;
+      border-left: 1px solid #eaecf0;
+      background-color: #f9fafb;
+      border-radius: 0 5px 5px 0;
+      flex-shrink: 0;
+      gap: 3px;
+      min-width: 90px;
+    }
+    .task-status-right svg { width: 18px; height: 18px; }
+    .task-status-right .status-label {
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-align: center;
+      line-height: 1.3;
+    }
+    .status-complete   { color: #027a48; }
+    .status-submitted  { color: #027a48; }
+    .status-not-sub    { color: #c01048; }
+    .status-incomplete { color: #b42318; }
+    .status-not-assessed { color: #b54708; }
+    .status-na         { color: #667085; }
+
+    /* ── Date badge ── */
+    .date-badge { text-align: center; min-width: 48px; flex-shrink: 0; }
+    .date-badge .month {
+      background-color: #d92d20;
+      border-top-left-radius: 3px; border-top-right-radius: 3px;
+      color: #fff; text-transform: uppercase; font-size: 12px; line-height: 17px; padding: 0 4px;
+    }
+    .date-badge.past-due .month { background-color: #667085; }
+    .date-badge .day {
+      line-height: 1.6666; border: 1px solid #a6bedc; border-top: none;
+      font-size: 15px; border-bottom-left-radius: 3px; border-bottom-right-radius: 3px;
+      background-color: #fff; font-weight: 400; padding: 0 4px; color: #101828;
+    }
+
+    /* ── Task meta ── */
+    .task-meta { flex: 1; min-width: 0; }
+    .task-title {
+      font-size: 1rem; font-weight: 700; color: #101828;
+      display: flex; align-items: center; gap: 5px; margin-bottom: 7px;
+    }
+    .task-title .info-icon { color: #98a2b3; cursor: pointer; flex-shrink: 0; }
+    .labels-row { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+
+    /* ── Labels ── */
+    .label {
+      display: inline-block; position: relative; overflow: hidden;
+      font-size: 12px; line-height: 16px; padding: 1px 5px; border-radius: 6px;
+      font-weight: 400; color: var(--lc, #475467); white-space: nowrap;
+    }
+    .label::after { content: ''; position: absolute; inset: 0; background: currentColor; opacity: .12; }
+    .label-summative   { --lc: #478cfe; }
+    .label-formative   { --lc: #039855; }
+    .label-homework    { --lc: #2175C6; }
+    .label-classwork   { --lc: #7a5af8; }
+    .label-pending     { --lc: #344054; display: inline-flex; align-items: center; gap: 3px; }
+    .label-start       { --lc: #f79009; display: inline-flex; align-items: center; }
+    .label-unit-current { --lc: #ff8c00; }
+
+    /* Submitted badge (in labels row, graded tasks) */
+    .badge-submitted {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 400;
+      border: 1px solid #a6f4c5; background: #ecfdf3; color: #027a48;
+    }
+
+    /* Due time */
+    .due-row {
+      display: inline-flex; align-items: center; gap: 4px;
+      color: #475467; font-size: 0.78rem;
+    }
+
+    /* label-group (score/points pill pair) */
+    .label-group { display: inline-flex; }
+    .label-group > .label:not(:first-child) { margin-left: -1px; }
+    .label-score  { --lc: #478cfe; border-radius: 6px 0 0 6px; }
+    .label-points { --lc: #1aaf5d; border-radius: 0 6px 6px 0; }
+
+    /* ── Teacher comment ── */
+    .teacher-comment { padding: 10px; border-top: 1px solid #eaecf0; }
+    .teacher-comment-body { font-size: 0.875rem; line-height: 1.7; color: #344054; }
+    .show-more-text.collapsed {
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .show-toggle {
+      margin-top: 6px; color: #1570ef; font-size: 0.8rem; font-weight: 600;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 3px;
+      background: none; border: none; padding: 0;
+    }
+    .show-toggle:hover { text-decoration: underline; }
+
+    /* ── Unit section ── */
+    .unit-outer { border-top: 1px solid #eaecf0; padding: 8px 10px; }
+    .unit-container {
+      display: flex; align-items: center; gap: 8px; padding: 8px;
+      border: 1px solid #d9e7f7; border-radius: 6px;
+    }
+    .unit-nested-arrow { flex-shrink: 0; }
+    .unit-card { display: flex; gap: 12px; align-items: flex-start; flex: 1; min-width: 0; }
+    .unit-thumb {
+      width: 50px; height: 42px; min-width: 50px; border-radius: 6px;
+      background-size: cover; background-position: center; flex-shrink: 0;
+    }
+    .unit-details { flex: 1; min-width: 0; }
+    .unit-name {
+      font-weight: 700; font-size: 0.88rem; color: #1570ef;
+      text-decoration: none; display: block; margin-bottom: 4px;
+    }
+    .unit-name:hover { text-decoration: underline; }
+    .unit-labels { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .unit-progress-wrapper {
+      border: 1px solid #ff8c00; height: 18px; width: 60px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .unit-progress-track { background: #d0d5dd; border-radius: 5px; height: 3px; width: calc(100% - 8px); overflow: hidden; }
+    .unit-progress-fill  { height: 100%; border-radius: 5px; background: #ff8c00; }
+    .unit-duration { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #475467; }
+    .unit-duration svg { width: 14px; height: 14px; }
+
+    /* ── Section boxes ── */
+    .section { border: 1px solid #eaecf0; border-radius: 6px; margin: 0 0 10px; overflow: hidden; }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between; padding: 10px 15px 6px;
+    }
+    .section-title { font-size: 0.95rem; font-weight: 700; color: #101828; }
+    .section-body  { padding: 0 15px 14px; }
+
+    /* ── Description ── */
+    .description-content { font-size: 0.875rem; line-height: 1.75; color: #344054; }
+    .description-content p  { margin-bottom: 8px; }
+    .description-content ol,
+    .description-content ul { padding-left: 20px; margin-bottom: 8px; }
+    .description-content strong { font-weight: 700; }
+    .description-content em { font-style: italic; }
+    .description-content u  { text-decoration: underline; }
+
+    /* ── Dropbox ── */
+    .dropbox-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 15px; margin: 0 10px;
+    }
+    .dropbox-table { width: 100%; border-collapse: collapse; }
+    .dropbox-table th {
+      font-size: 0.72rem; font-weight: 600; color: #667085;
+      text-transform: uppercase; letter-spacing: .04em;
+      padding: 6px 8px; text-align: left; border-bottom: 1px solid #eaecf0;
+    }
+    .dropbox-table th:first-child { padding-left: 15px; }
+    .dropbox-table td { padding: 10px 8px; vertical-align: middle; }
+    .dropbox-table td:first-child { padding-left: 15px; }
+    .dropbox-table th:nth-child(2), .dropbox-table td:nth-child(2) { width: 70px; }
+    .dropbox-table th:last-child, .dropbox-table td:last-child {
+      width: 1%; white-space: nowrap; padding-right: 20px; text-align: right;
+    }
+    .dropbox-table tr:not(:last-child) td { border-bottom: 1px solid #f2f4f7; }
+    .file-link {
+      display: flex; align-items: center; gap: 8px;
+      color: #1570ef; text-decoration: none; font-size: 0.875rem; font-weight: 500;
+    }
+    .file-link:hover { text-decoration: underline; }
+    .file-meta { font-size: 0.75rem; color: #667085; margin-top: 2px; }
+    .btn-feedback {
+      display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px;
+      border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; color: #344054;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer; text-decoration: none; white-space: nowrap;
+    }
+    .btn-feedback:hover { background: #f9fafb; }
+    .btn-row { display: flex; gap: 8px; align-items: center; }
+    .btn-gdrive {
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
+      border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; color: #344054;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer; text-decoration: none;
+    }
+    .btn-upload {
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
+      border-radius: 6px; background: #1a8c7a; color: #fff;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer; text-decoration: none; border: none;
+    }
+    .btn-upload:hover { background: #157a6a; }
+
+    /* Empty dropbox state */
+    .dropbox-empty {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 28px 20px; color: #667085; font-size: 0.82rem; text-align: center;
+    }
+    .dropbox-empty svg { width: 44px; height: 44px; margin-bottom: 10px; }
+    .dropbox-empty strong { display: block; font-size: 0.9rem; color: #344054; margin-bottom: 4px; font-weight: 600; }
+    .dropbox-empty-actions { display: flex; gap: 10px; margin-top: 14px; }
+    .dropbox-late-note { font-size: 0.75rem; color: #c01048; margin-top: 8px; }
+
+    /* Discussions empty state */
+    .discussions-empty {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 28px 20px; color: #667085; font-size: 0.82rem; text-align: center;
+    }
+    .discussions-empty svg { width: 44px; height: 44px; margin-bottom: 10px; opacity: .4; }
+    .discussions-empty strong { display: block; font-size: 0.9rem; color: #344054; margin-bottom: 4px; font-weight: 600; }
+
+    /* SVG icons */
+    svg.icon    { width: 14px; height: 14px; flex-shrink: 0; }
+    svg.icon-16 { width: 16px; height: 16px; flex-shrink: 0; }
+
+    /* ── Open in ManageBac ── */
+    .open-in-mb {
+      display: flex; align-items: center; justify-content: center; padding: 14px 20px;
+      gap: 6px; color: #1570ef; font-size: 0.82rem; font-weight: 600;
+      text-decoration: none; border-top: 1px solid #eaecf0;
+    }
+    .open-in-mb:hover { background: #f9fafb; }
+
+    .empty { color: #98a2b3; font-size: 0.82rem; font-style: italic; padding: 8px 0; }
+  </style>
+</head>
+<body>
+<div class="mb-card" id="card"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  TASK DATA — swap this object out to render any task
+//
+//  Fields:
+//    title         string   — task name
+//    class_name    string   — class display name (shown under header)
+//    url           string   — ManageBac task URL
+//    due_month     string   — e.g. "May"
+//    due_day       string   — e.g. "22"
+//    due_past      bool     — true = gray badge, false = red badge
+//    labels        array    — [{ text, style }]  styles: label-summative | label-formative | label-homework | label-classwork
+//    status        string   — "Submitted" | "Not Submitted" | "Pending" | "Complete" | "Incomplete" | "Not Assessed Yet" | "N/A"
+//    due_time      string   — e.g. "Friday at 9:20 AM"  (null to hide)
+//    grades        array|null — [{ label:"A", score:7, max:8 }]  null = ungraded
+//    teacher_comment string|null — plain text, null to hide section
+//    unit          object|null  — { name, url, color, start_label, progress (0-100), duration }  null to hide
+//    description   string|null  — HTML string, null to hide section
+//    submitted_files array|null — null = NO dropbox; [] = dropbox but empty; [{name,uploaded,url}] = with files
+//    discussions   array|null   — null = hide section; [] = show empty state; [{...}] = show posts
+//    due_passed_late bool   — true = show "deadline passed" note in empty dropbox
+// ══════════════════════════════════════════════════════════════════
+
+// ── Example 1: Graded summative, submitted, with teacher comment ──
+const TASK = {
+  title: "Summative",
+  class_name: "IB MYP Geography (Grade 8) B",
+  url: "https://es.managebac.com/student/classes/12905543/core_tasks/48166538",
+  due_month: "May",
+  due_day: "22",
+  due_past: true,
+  labels: [
+    { text: "Summative", style: "label-summative" },
+    { text: "Homework",  style: "label-homework" },
+  ],
+  status: "Submitted",
+  due_time: "Friday at 9:20 AM",
+  grades: [
+    { label: "A", score: 7, max: 8 },
+    { label: "B", score: 6, max: 8 },
+    { label: "C", score: 8, max: 8 },
+    { label: "D", score: 7, max: 8 },
+  ],
+  teacher_comment: `Your work stood out because it explored both the successes and limitations of Copenhagen's sustainability strategies and recognized that sustainable urban management often involves difficult social, economic, and environmental trade-offs.\n\nTo further strengthen your investigation, focus on developing and evaluating your research methodology in greater detail by explaining why specific methods were chosen, how effective they were, and what limitations they may have had. This would make your investigation even more academically rigorous and strengthen the overall quality of your research.`,
+  unit: {
+    name: "City Limits",
+    url: "https://es.managebac.com/student/classes/12905543/units/1622652/presentations#show_at_a_glance",
+    color: "#f59e0b",
+    start_label: "Starts W4 Mar",
+    progress: 93,
+    duration: "11 Weeks",
+  },
+  description: `<p><strong><u>Instruction:</u></strong></p>
+<ol>
+  <li><p><strong><u>Introduction:</u></strong></p></li>
+</ol>
+<p>Introduce the topic of <strong><em><u>sustainable urban management</u></em></strong> and the central question: "Can urban areas ever be managed sustainably?" Briefly mention examples of cities known for their sustainable initiatives.</p>`,
+  submitted_files: [
+    { name: "Levan_Japaridze.pdf", uploaded: "May 29, 2026 at 5:44 AM", url: "#" },
+  ],
+  discussions: null,
+};
+
+// ── Example 2: Pending, not submitted, empty dropbox ──
+// const TASK = {
+//   title: "End_Of_Unit_Reflection",
+//   class_name: "IB MYP Geography (Grade 8) B",
+//   url: "https://es.managebac.com/student/classes/12905543/core_tasks/48319273",
+//   due_month: "Jun", due_day: "5", due_past: true,
+//   labels: [{ text: "Formative", style: "label-formative" }, { text: "Classwork", style: "label-classwork" }],
+//   status: "Not Submitted",
+//   due_time: "Friday at 3:20 PM",
+//   grades: null,
+//   teacher_comment: null,
+//   unit: { name: "City Limits", url: "#", color: "#f59e0b", start_label: "Starts W4 Mar", progress: 93, duration: "11 Weeks" },
+//   description: `<p>Dear students, please answer the following questions (drawings, postcards, and presentations are possible)</p>`,
+//   submitted_files: [],
+//   discussions: [],
+//   due_passed_late: true,
+// };
+
+// ── Example 3: Complete, no grade, no dropbox, has discussions ──
+// const TASK = {
+//   title: "Assessment presentation day",
+//   class_name: "IB MYP Geography (Grade 8) B",
+//   url: "https://es.managebac.com/student/classes/12905543/core_tasks/48234004",
+//   due_month: "May", due_day: "29", due_past: true,
+//   labels: [{ text: "Formative", style: "label-formative" }, { text: "Homework", style: "label-homework" }],
+//   status: "Complete",
+//   due_time: "Friday at 9:55 AM",
+//   grades: null,
+//   teacher_comment: null,
+//   unit: { name: "City Limits", url: "#", color: "#f59e0b", start_label: "Starts W4 Mar", progress: 93, duration: "11 Weeks" },
+//   description: `<p>During the next lesson we will have the Summative Assessment Presentation Day. Every student must present their sustainability investigation and article in class.</p>`,
+//   submitted_files: null,
+//   discussions: [],
+// };
+
+// ── Example 4: Incomplete + teacher comment + empty dropbox ──
+// const TASK = {
+//   title: "Action Plan / Research draft",
+//   class_name: "IB MYP Geography (Grade 8) B",
+//   url: "https://es.managebac.com/student/classes/12905543/core_tasks/48180502",
+//   due_month: "May", due_day: "18", due_past: true,
+//   labels: [{ text: "Formative", style: "label-formative" }, { text: "Homework", style: "label-homework" }],
+//   status: "Incomplete",
+//   due_time: "Monday at 9:10 AM",
+//   grades: null,
+//   teacher_comment: `You have still not submitted the required draft work for your Geography summative assessment. Please remember that the final presentation of your completed work will take place on Friday, and the deadline is approaching quickly.`,
+//   unit: { name: "City Limits", url: "#", color: "#f59e0b", start_label: "Starts W4 Mar", progress: 93, duration: "11 Weeks" },
+//   description: `<p>For homework, you must continue working on your Geography summative assessment and come to the next lesson fully prepared.</p>`,
+//   submitted_files: [],
+//   discussions: null,
+// };
+
+// ── Example 5: Not Assessed Yet, no dropbox ──
+// const TASK = {
+//   title: "Preparation for Assessment",
+//   class_name: "IB MYP Geography (Grade 8) B",
+//   url: "https://es.managebac.com/student/classes/12905543/core_tasks/48055480",
+//   due_month: "May", due_day: "8", due_past: true,
+//   labels: [{ text: "Formative", style: "label-formative" }, { text: "Homework", style: "label-homework" }],
+//   status: "Not Assessed Yet",
+//   due_time: "Friday at 9:45 AM",
+//   grades: null,
+//   teacher_comment: null,
+//   unit: { name: "City Limits", url: "#", color: "#f59e0b", start_label: "Starts W4 Mar", progress: 93, duration: "11 Weeks" },
+//   description: `<p>You have an upcoming assessment, so please make sure you revise the following key topics carefully.</p>`,
+//   submitted_files: null,
+//   discussions: [],
+// };
+
+// ═══════════════════════════════════════════════════════════════════
+
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// SVG icons
+const ICONS = {
+  info: `<svg class="info-icon icon-16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/></svg>`,
+  check: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg>`,
+  checkLg: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg>`,
+  clock: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>`,
+  clockLg: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>`,
+  xcircle: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293z"/></svg>`,
+  chevDown: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>`,
+  chevUp: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708z"/></svg>`,
+  upload: `<svg class="icon-16" viewBox="0 0 16 16" fill="currentColor"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708z"/></svg>`,
+  file: `<svg class="icon-16" viewBox="0 0 16 16" fill="#e24329"><path d="M4 0h5.293A1 1 0 0 1 10 .293L13.707 4a1 1 0 0 1 .293.707V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2zm5.5 1.5v2a1 1 0 0 0 1 1h2z"/></svg>`,
+  doc: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path d="M5 10.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5m0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/><path d="M3 0h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2m0 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1z"/></svg>`,
+  external: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/></svg>`,
+  gdrive: `<svg width="14" height="12" viewBox="0 0 87.3 78" fill="none"><path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3L27.5 53H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/><path d="M43.65 25L29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44A9.06 9.06 0 000 53h27.5z" fill="#00ac47"/><path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75L86.1 57.5c.8-1.4 1.2-2.95 1.2-4.5H59.8l5.85 11.5z" fill="#ea4335"/><path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/><path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/><path d="M73.4 26.5l-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25 59.8 53h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>`,
+  calendar: `<svg width="12" viewBox="0 0 12 12" fill="currentColor" style="vertical-align:-1px;margin-right:2px;flex-shrink:0"><path fill-opacity="0" d="M0 0h12v12H0z"/><path d="M11 1H9.5V.5a.5.5 0 00-1 0V1h-5V.5a.5.5 0 00-1 0V1H1a1 1 0 00-1 1v9a1 1 0 001 1h4.675A4.5 4.5 0 1012 5.675V2a1 1 0 00-1-1zM3 3.5a.5.5 0 110-1 .5.5 0 010 1zm6 0a.5.5 0 110-1 .5.5 0 010 1zM8.5 5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zM9 9H7c-.275 0-.5-.225-.5-.5S6.725 8 7 8h1V7c0-.275.225-.5.5-.5s.5.225.5.5v2z"/></svg>`,
+  nestedArrow: `<svg width="14" viewBox="0 0 14 14" fill="#859BBB"><path d="M6.81 2.138a.634.634 0 01.812-.122l.083.062 6.078 5.318c.263.23.287.623.072.882l-.072.074-6.078 5.318a.635.635 0 01-.908-.882l.072-.074 5.531-4.84-5.53-4.84a.634.634 0 01-.122-.813l.062-.083z"/><path d="M.635 0c.319 0 .583.235.628.541l.007.094v6.604h12.095c.319 0 .583.235.628.541l.007.094a.635.635 0 01-.541.628l-.094.007H.635a.635.635 0 01-.628-.541L0 7.874V.634C0 .285.284 0 .635 0z"/></svg>`,
+  clockGray: `<svg xmlns="http://www.w3.org/2000/svg" width="14" viewBox="0 0 16 16" fill="#98a2b3"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>`,
+};
+
+// ─── Status right-side panel ────────────────────────────────────────
+function statusRightPanel(status) {
+  const s = (status || '').toLowerCase();
+  // Check more-specific strings first (incomplete before complete, not-sub before submitted)
+  if (s.includes('incomplet')) {
+    return `<div class="task-status-right status-incomplete">${ICONS.xcircle}<span class="status-label">Incomplete</span></div>`;
+  }
+  if (s.includes('not sub')) {
+    return `<div class="task-status-right status-not-sub">${ICONS.clockLg}<span class="status-label">Not Submitted</span></div>`;
+  }
+  if (s.includes('not assessed') || s.includes('not assess')) {
+    return `<div class="task-status-right status-not-assessed">${ICONS.clockLg}<span class="status-label">Not Assessed Yet</span></div>`;
+  }
+  if (s.includes('complete') || s === 'complete') {
+    return `<div class="task-status-right status-complete">${ICONS.checkLg}<span class="status-label">Complete</span></div>`;
+  }
+  if (s === 'n/a') {
+    return `<div class="task-status-right status-na"><span class="status-label">N/A</span></div>`;
+  }
+  return '';
+}
+
+// ─── Main render ────────────────────────────────────────────────────
+function renderCard(task) {
+  let h = '';
+  const hasGrades = !!(task.grades && task.grades.length);
+  const hasDropbox = task.submitted_files !== null && task.submitted_files !== undefined;
+  const status = (task.status || '').toLowerCase();
+  const isSubmitted = status.includes('submit') && !status.includes('not sub');
+  const isPending   = status === 'pending';
+
+  // ── Header ──
+  h += `<div class="mb-header">
+    <h1>${esc(task.title)}</h1>
+    ${task.class_name ? `<div class="class-name">${esc(task.class_name)}</div>` : ''}
+  </div>`;
+
+  h += '<div class="content-area">';
+
+  // ── Task card box ──
+  h += '<div class="task-card">';
+  h += '<div class="task-row">';
+  h += '<div class="task-row-main">';
+
+  // Date badge
+  h += `<div class="date-badge${task.due_past ? ' past-due' : ''}">
+    <div class="month">${esc(task.due_month)}</div>
+    <div class="day">${esc(task.due_day)}</div>
+  </div>`;
+
+  // Title + labels row
+  h += '<div class="task-meta">';
+  h += `<div class="task-title">${esc(task.title)} ${ICONS.info}</div>`;
+  h += '<div class="labels-row">';
+
+  // Task-type labels
+  (task.labels || []).forEach(l => {
+    h += `<span class="label ${esc(l.style)}">${esc(l.text)}</span>`;
+  });
+
+  // Submitted badge (green, in labels row) — only for graded/submitted tasks
+  if (isSubmitted) {
+    h += `<span class="badge-submitted">${ICONS.check}${esc(task.status)}</span>`;
+  }
+
+  // Pending badge (in labels row) — when status is Pending
+  if (isPending) {
+    h += `<span class="label label-pending">${ICONS.clock}Pending</span>`;
+  }
+
+  // Due time
+  if (task.due_time) {
+    h += `<span class="due-row">${ICONS.clock}${esc(task.due_time)}</span>`;
+  }
+
+  h += '</div>'; // labels-row
+  h += '</div>'; // task-meta
+  h += '</div>'; // task-row-main
+
+  // Right panel: criteria column OR status
+  if (hasGrades) {
+    h += '<div class="criteria-col"><div class="criteria-scores">';
+    task.grades.forEach(g => {
+      const scoreStr = (g.score === null || g.score === undefined) ? 'N/A' : g.score;
+      h += `<div class="criterion">
+        <span class="criterion-label">${esc(g.label)}:</span>
+        <div class="label-group">
+          <span class="label label-score">${esc(scoreStr)}</span>
+          <span class="label label-points">${esc(g.max)}</span>
+        </div>
+      </div>`;
+    });
+    h += '</div></div>'; // criteria-scores, criteria-col
+  } else if (!isPending && !isSubmitted && task.status) {
+    h += statusRightPanel(task.status);
+  }
+
+  h += '</div>'; // task-row
+
+  // ── Teacher comment ──
+  if (task.teacher_comment) {
+    const paras = task.teacher_comment.split(/\n\n+/).filter(Boolean);
+    h += `<div class="teacher-comment">
+      <div class="teacher-comment-body">
+        <div class="show-more-text collapsed" id="tc-body">
+          ${paras.map(p => `<p>${esc(p)}</p>`).join('')}
+        </div>
+        <button class="show-toggle" onclick="toggleShowMore('tc-body',this)">
+          Show More ${ICONS.chevDown}
+        </button>
+      </div>
+    </div>`;
+  }
+
+  // ── Unit ──
+  if (task.unit) {
+    const u = task.unit;
+    h += `<div class="unit-outer"><div class="unit-container">
+      ${ICONS.nestedArrow}
+      <div class="unit-card">
+        <div class="unit-thumb" style="background-color:${esc(u.color)}"></div>
+        <div class="unit-details">
+          <a class="unit-name" href="${esc(u.url||'#')}" target="_blank">${esc(u.name)}</a>
+          <div class="unit-labels">
+            ${u.start_label ? `<span class="label label-start">${ICONS.calendar}${esc(u.start_label)}</span>` : ''}
+            <span class="label label-unit-current">Current Unit</span>
+            ${u.progress != null ? `<div class="unit-progress-wrapper">
+              <div class="unit-progress-track">
+                <div class="unit-progress-fill" style="width:${u.progress}%"></div>
+              </div>
+            </div>` : ''}
+            ${u.duration ? `<div class="unit-duration">${ICONS.clockGray}${esc(u.duration)}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div></div>`;
+  }
+
+  h += '</div>'; // task-card
+
+  // ── Description ──
+  if (task.description) {
+    h += `<div class="section">
+      <div class="section-header"><span class="section-title">Description</span></div>
+      <div class="section-body">
+        <div class="description-content show-more-text collapsed" id="desc-body">${task.description}</div>
+        <button class="show-toggle" onclick="toggleShowMore('desc-body',this)" style="margin-top:8px">
+          Show More ${ICONS.chevDown}
+        </button>
+      </div>
+    </div>`;
+  }
+
+  // ── Dropbox ── (only if has_submission_box / submitted_files is not null)
+  if (hasDropbox) {
+    h += '<div class="section" style="border:none;margin:0">';
+    h += `<div class="dropbox-header">
+      <span class="section-title">Dropbox</span>
+      <div class="btn-row">
+        <a class="btn-gdrive" href="${esc(task.url)}" target="_blank">${ICONS.gdrive} Add From GDrive</a>
+        <a class="btn-upload" href="${esc(task.url)}" target="_blank">${ICONS.upload} Upload Submission</a>
+      </div>
+    </div>`;
+
+    if (task.submitted_files && task.submitted_files.length) {
+      h += '<table class="dropbox-table">';
+      h += '<thead><tr><th>File</th><th>Turnitin Similarity Index</th><th></th></tr></thead>';
+      h += '<tbody>';
+      task.submitted_files.forEach(f => {
+        h += `<tr>
+          <td>
+            <a class="file-link" href="${esc(f.url)}" target="_blank">${ICONS.file}${esc(f.name)}</a>
+            <div class="file-meta">Uploaded ${esc(f.uploaded)}</div>
+          </td>
+          <td>—</td>
+          <td><a class="btn-feedback" href="${esc(f.url)}" target="_blank">${ICONS.doc} View Teacher Feedback</a></td>
+        </tr>`;
+      });
+      h += '</tbody></table>';
+    }
+    // Empty dropbox: no content below header
+    h += '</div>'; // dropbox section
+  }
+
+  // ── Discussions ── (null = hide; [] = show empty; [...] = show posts)
+  if (task.discussions !== null && task.discussions !== undefined) {
+    h += `<div class="section" style="margin:0 0 10px">
+      <div class="section-header">
+        <span class="section-title">💬 Discussions</span>
+        <div class="btn-row">
+          <a class="btn-gdrive" href="${esc(task.url)}" target="_blank">+ Create Discussion</a>
+          <a class="btn-gdrive" href="${esc(task.url)}" target="_blank">View All Discussions</a>
+        </div>
+      </div>`;
+    if (!task.discussions.length) {
+      h += `<div class="discussions-empty">
+        <svg viewBox="0 0 64 64" fill="none"><circle cx="22" cy="28" r="14" stroke="#667085" stroke-width="2.5" fill="none"/><circle cx="42" cy="36" r="12" stroke="#667085" stroke-width="2.5" fill="none"/><path d="M22 42v4l-6-4" stroke="#667085" stroke-width="2" stroke-linecap="round"/></svg>
+        <strong>No Discussions</strong>
+        No discussions have been added yet.
+      </div>`;
+    }
+    h += '</div>';
+  }
+
+  h += '</div>'; // content-area
+
+  // ── Open in ManageBac ──
+  h += `<a class="open-in-mb" href="${esc(task.url)}" target="_blank" rel="noopener">
+    Open in ManageBac ${ICONS.external}
+  </a>`;
+
+  document.getElementById('card').innerHTML = h;
+}
+
+function toggleShowMore(id, btn) {
+  const el = document.getElementById(id);
+  const collapsed = el.classList.toggle('collapsed');
+  btn.innerHTML = collapsed
+    ? `Show More ${ICONS.chevDown}`
+    : `Show Less ${ICONS.chevUp}`;
+}
+
+// After render, hide Show More buttons where content doesn't actually overflow
+function initShowMore() {
+  document.querySelectorAll('.show-more-text').forEach(el => {
+    const btn = el.nextElementSibling;
+    if (!btn || !btn.classList.contains('show-toggle')) return;
+    // Temporarily uncollapse to measure real height
+    el.classList.remove('collapsed');
+    const fullHeight = el.scrollHeight;
+    el.classList.add('collapsed');
+    const clampedHeight = el.clientHeight;
+    if (fullHeight <= clampedHeight + 4) {
+      // Content fits — remove clamp and hide button
+      el.classList.remove('collapsed');
+      btn.style.display = 'none';
+    }
+  });
+}
+
+// Server injection point — replaced with real task data at render time.
+// When null, falls back to the static TASK example object above.
+const _INJECTED_TASK = /*INJECT_TASK*/null;
+renderCard(_INJECTED_TASK || TASK);
+requestAnimationFrame(initShowMore);
+</script>
+</body>
+</html>
