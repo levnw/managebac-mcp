@@ -20,6 +20,8 @@
 
     /* ── Outer card shell ── */
     .mb-card {
+      /* Student's ManageBac theme colour; overridden from JS per task. */
+      --theme: #1570ef;
       width: 100%;
       max-width: 860px;
       background: #fff;
@@ -29,7 +31,7 @@
     }
 
     /* ── Header banner (default blue; overridden inline per student theme) ── */
-    .mb-header { background: #1570ef; padding: 14px 20px 13px; }
+    .mb-header { background: var(--theme); padding: 14px 20px 13px; }
     .mb-header h1 { font-size: 1.15rem; font-weight: 700; color: #fff; line-height: 1.3; }
     .mb-header .class-name { font-size: 0.78rem; color: rgba(255,255,255,0.75); margin-top: 2px; font-weight: 400; }
 
@@ -171,7 +173,7 @@
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
     }
     .show-toggle {
-      margin-top: 6px; color: #1570ef; font-size: 0.8rem; font-weight: 600;
+      margin-top: 6px; color: var(--theme); font-size: 0.8rem; font-weight: 600;
       cursor: pointer; display: inline-flex; align-items: center; gap: 3px;
       background: none; border: none; padding: 0;
     }
@@ -191,7 +193,7 @@
     }
     .unit-details { flex: 1; min-width: 0; }
     .unit-name {
-      font-weight: 700; font-size: 0.88rem; color: #1570ef;
+      font-weight: 700; font-size: 0.88rem; color: var(--theme);
       text-decoration: none; display: block; margin-bottom: 4px;
     }
     .unit-name:hover { text-decoration: underline; }
@@ -243,7 +245,7 @@
     .dropbox-table tr:not(:last-child) td { border-bottom: 1px solid #f2f4f7; }
     .file-link {
       display: flex; align-items: center; gap: 8px;
-      color: #1570ef; text-decoration: none; font-size: 0.875rem; font-weight: 500;
+      color: var(--theme); text-decoration: none; font-size: 0.875rem; font-weight: 500;
     }
     .file-link:hover { text-decoration: underline; }
     .file-meta { font-size: 0.75rem; color: #667085; margin-top: 2px; }
@@ -261,10 +263,10 @@
     }
     .btn-upload {
       display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
-      border-radius: 6px; background: #1a8c7a; color: #fff;
+      border-radius: 6px; background: var(--theme); color: #fff;
       font-size: 0.78rem; font-weight: 600; cursor: pointer; text-decoration: none; border: none;
     }
-    .btn-upload:hover { background: #157a6a; }
+    .btn-upload:hover { filter: brightness(0.92); }
 
     /* Empty dropbox state */
     .dropbox-empty {
@@ -291,7 +293,7 @@
     /* ── Open in ManageBac ── */
     .open-in-mb {
       display: flex; align-items: center; justify-content: center; padding: 14px 20px;
-      gap: 6px; color: #1570ef; font-size: 0.82rem; font-weight: 600;
+      gap: 6px; color: var(--theme); font-size: 0.82rem; font-weight: 600;
       text-decoration: none; border-top: 1px solid #eaecf0;
     }
     .open-in-mb:hover { background: #f9fafb; }
@@ -307,7 +309,7 @@
     ._loading-ring {
       width: 36px; height: 36px;
       border: 3px solid #e5e7eb;
-      border-top-color: #1a7a5e;
+      border-top-color: var(--theme);
       border-radius: 50%;
       animation: _spin 0.75s linear infinite;
     }
@@ -509,9 +511,10 @@ function renderCard(task) {
   const isSubmitted = status.includes('submit') && !status.includes('not sub');
   const isPending   = status === 'pending';
 
-  // ── Header ── (background follows the student's ManageBac colour theme)
+  // ── Header ── (all accent colours follow the student's ManageBac theme)
   const themeColor = task.theme_color || '#1570ef';
-  h += `<div class="mb-header" style="background:${esc(themeColor)}">
+  document.getElementById('card').style.setProperty('--theme', themeColor);
+  h += `<div class="mb-header">
     <h1>${esc(task.title)}</h1>
     ${task.class_name ? `<div class="class-name">${esc(task.class_name)}</div>` : ''}
   </div>`;
