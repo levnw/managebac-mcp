@@ -108,7 +108,7 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_TASK_DETAIL_URI = "ui://widget/task-detail-v7.html"
+_TASK_DETAIL_URI = "ui://widget/task-detail-v8.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -656,26 +656,25 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
 def _make_task_widget(task_obj: dict) -> str:
     """Bake task data into the polished card HTML and register it as a MCP resource.
 
-    Returns the static task-detail URI (_TASK_DETAIL_URI).  ChatGPT always fetches
-    that static URI via read_resource — it ignores per-task URIs in _meta.  So we
-    overwrite the static entry with the freshly-baked HTML each time a task is loaded.
-    The per-task hash URI is also stored in _TASK_WIDGETS for HTTPS fallback.
+    Returns a per-task ui:// URI (unique per task) so ChatGPT cannot use a cached
+    version — each new task forces a fresh read_resource call.
+    Also overwrites the static _TASK_DETAIL_URI entry as a fallback.
     """
     data_json = json.dumps(task_obj, ensure_ascii=False, separators=(",", ":"))
     # Escape '</' to prevent breaking the <script> block
     data_safe = data_json.replace("</", r"<\/")
     html = _TASK_CARD_HTML.replace("/*INJECT_TASK*/null", data_safe)
     title = task_obj.get("title") or "Task"
-    # Overwrite the static URI so ChatGPT gets baked data when it calls read_resource
-    _STATIC_WIDGETS[_TASK_DETAIL_URI] = {"html": html, "title": title}
-    print(f"[_make_task_widget] baked title={title!r} uri={_TASK_DETAIL_URI!r}", flush=True)
-    # Also store under a per-task hash URI (for HTTPS /ui/task/{hash} route)
+    # Per-task URI (unique hash → cache miss every time)
     h = hashlib.sha1(data_json.encode()).hexdigest()[:14]
-    uri = f"ui://widget/task/{h}.html"
-    _TASK_WIDGETS[uri] = {"html": html, "title": title}
+    task_uri = f"ui://widget/task/{h}.html"
+    _TASK_WIDGETS[task_uri] = {"html": html, "title": title}
     if len(_TASK_WIDGETS) > 60:
         _TASK_WIDGETS.popitem(last=False)
-    return _TASK_DETAIL_URI
+    # Also overwrite the static URI (fallback for sessions that cached v8 uninjected)
+    _STATIC_WIDGETS[_TASK_DETAIL_URI] = {"html": html, "title": title}
+    print(f"[_make_task_widget] baked title={title!r} task_uri={task_uri!r}", flush=True)
+    return task_uri
 
 
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
