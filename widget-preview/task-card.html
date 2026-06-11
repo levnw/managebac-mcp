@@ -732,7 +732,16 @@ function initShowMore() {
 // When null, falls back to the static TASK example object above.
 const _INJECTED_TASK = /*INJECT_TASK*/null;
 
+// Dedupe renders: ChatGPT can fire the data through several events
+// (tool-result message + openai:set_globals, sometimes repeatedly). Re-running
+// renderCard rebuilds the DOM and reloads the description image, which makes the
+// iframe height bounce and shifts the page text around. Skip identical re-renders.
+let _lastRenderKey = null;
 function _doRender(taskObj) {
+  if (!taskObj) return;
+  const key = (taskObj.url || '') + '|' + (taskObj.title || '') + '|' + (taskObj.status || '');
+  if (key === _lastRenderKey) return;
+  _lastRenderKey = key;
   renderCard(taskObj);
   requestAnimationFrame(initShowMore);
 }
