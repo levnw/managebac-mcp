@@ -306,6 +306,28 @@
       border-radius: 6px; margin: 4px 0 10px; border: 1px solid #eaecf0;
     }
 
+    /* ── Resources (teacher-posted file cards) ── */
+    .resource-card { border: 1px solid #eaecf0; border-radius: 8px; padding: 12px 14px; }
+    .resource-card + .resource-card { margin-top: 10px; }
+    .resource-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .resource-avatar {
+      width: 30px; height: 30px; border-radius: 6px; background: #f2f4f7;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #98a2b3;
+    }
+    .resource-meta { min-width: 0; }
+    .resource-author { font-size: 0.84rem; font-weight: 600; color: #344054; line-height: 1.25; }
+    .resource-posted { font-size: 0.72rem; color: #98a2b3; line-height: 1.25; margin-top: 1px; }
+    .resource-label { font-size: 0.84rem; font-weight: 600; color: #344054; margin: 0 0 8px; }
+    .resource-file {
+      display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+      border: 1px solid #eaecf0; border-radius: 6px; text-decoration: none; background: #fff;
+    }
+    .resource-file + .resource-file { margin-top: 6px; }
+    .resource-file:hover { background: #f9fafb; }
+    .rf-info { min-width: 0; }
+    .rf-name { font-size: 0.85rem; font-weight: 500; color: var(--theme); word-break: break-word; }
+    .rf-size { font-size: 0.72rem; color: #98a2b3; margin-top: 1px; }
+
     /* ── Loading spinner ── */
     @keyframes _spin { to { transform: rotate(360deg); } }
     ._loading-wrap {
@@ -648,16 +670,34 @@ function renderCard(task) {
     </div>`;
   }
 
-  // ── Resources ── (teacher-posted files on the task)
-  const resFiles = (task.resources || []).filter(r => r && r.name);
-  if (resFiles.length) {
+  // ── Resources ── (teacher-posted files, grouped by post like ManageBac)
+  const resPosts = (task.resources || []).filter(r => r && r.files && r.files.length);
+  if (resPosts.length) {
     let rb = '';
-    resFiles.forEach(r => {
-      const sz = r.size ? ` (${esc(r.size)})` : '';
-      rb += `<a class="file-link" href="${esc(r.url || '#')}" target="_blank" rel="noopener" style="padding:6px 0">${ICONS.file}<span>${esc(r.name)}${sz}</span></a>`;
+    resPosts.forEach(r => {
+      let card = '<div class="resource-card">';
+      card += `<div class="resource-head">
+        <div class="resource-avatar">${ICONS.doc}</div>
+        <div class="resource-meta">
+          ${r.author ? `<div class="resource-author">${esc(r.author)}</div>` : ''}
+          ${r.posted ? `<div class="resource-posted">${esc(r.posted)}</div>` : ''}
+        </div>
+      </div>`;
+      if (r.label) card += `<div class="resource-label">${esc(r.label)}</div>`;
+      r.files.forEach(f => {
+        card += `<a class="resource-file" href="${esc(f.url || '#')}" target="_blank" rel="noopener">
+          ${ICONS.file}
+          <div class="rf-info">
+            <div class="rf-name">${esc(f.name)}</div>
+            ${f.size ? `<div class="rf-size">${esc(f.size)}</div>` : ''}
+          </div>
+        </a>`;
+      });
+      card += '</div>';
+      rb += card;
     });
     h += `<div class="section">
-      <div class="section-header"><span class="section-title">Resources</span></div>
+      <div class="section-header"><span class="section-title">📁 Resources</span></div>
       <div class="section-body">${rb}</div>
     </div>`;
   }

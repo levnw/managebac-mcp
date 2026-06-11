@@ -652,12 +652,23 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
     # ── Teacher comment ───────────────────────────────────────────────────────
     teacher_comment = meta.get("teacher_comment") or None
 
-    # ── Resources (teacher-posted files) ──────────────────────────────────────
-    resources = [
-        {"name": r.get("name", ""), "url": r.get("url", "#"), "size": r.get("size", "")}
-        for r in (detail.get("resources") or [])
-        if isinstance(r, dict) and r.get("name")
-    ]
+    # ── Resources (teacher-posted files, grouped by post) ─────────────────────
+    resources = []
+    for r in (detail.get("resources") or []):
+        if not isinstance(r, dict):
+            continue
+        files = [
+            {"name": f.get("name", ""), "url": f.get("url", "#"), "size": f.get("size", "")}
+            for f in (r.get("files") or [])
+            if isinstance(f, dict) and f.get("name")
+        ]
+        if files:
+            resources.append({
+                "author": r.get("author", ""),
+                "posted": r.get("posted", ""),
+                "label": r.get("label", ""),
+                "files": files,
+            })
 
     # ── Assemble ──────────────────────────────────────────────────────────────
     task_obj: dict = {

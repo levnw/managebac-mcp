@@ -851,26 +851,44 @@ def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
                     desc_links.append({"text": url, "url": url})
                     linked_urls.add(url)
 
-    # Resources section (teacher-posted files on the task). The real markup is
-    # <div class="core-task-resources"> containing <div class="file"> entries,
-    # each with an <a href="…cdn…"> whose text is the filename. Returns a flat
-    # list of {name, url, size} files.
+    # Resources (teacher-posted files). Each post is a <div class="resource-container">
+    # with an author (.author-name), a posted date (.posted-date), an optional title
+    # (.resource-title), and one or more files. Returns a grouped list:
+    #   [{author, posted, label, files: [{name, url, size}]}]
+    def _files_in(scope) -> list:
+        out, seen = [], set()
+        for a in scope.find_all("a", href=re.compile(r"/uploads/asset/|cdn\.[^/]*managebac", re.I)):
+            name = a.get_text(strip=True)
+            href = a.get("href", "")
+            if not name or not href or href in seen:
+                continue
+            seen.add(href)
+            cont = a.find_parent(class_="file") or a.parent
+            sz = cont.find(string=re.compile(r'\d+(\.\d+)?\s*(KB|MB|GB)', re.I)) if cont else None
+            out.append({"name": name, "url": href, "size": str(sz).strip() if sz else ""})
+        return out
+
     resources = []
-    res_div = soup.find("div", class_="core-task-resources")
-    if res_div:
-        for fdiv in res_div.find_all("div", class_="file"):
-            link = next((a for a in fdiv.find_all("a", href=True) if a.get_text(strip=True)), None)
-            link = link or fdiv.find("a", href=True)
-            if not link:
-                continue
-            name = link.get_text(strip=True)
-            href = link.get("href", "")
-            if not name or not href:
-                continue
-            size_el = fdiv.find(string=re.compile(r'\d+(\.\d+)?\s*(KB|MB|GB)', re.I))
-            size = str(size_el).strip() if size_el else ""
-            if not any(r["url"] == href for r in resources):
-                resources.append({"name": name, "url": href, "size": size})
+    for rc in soup.find_all("div", class_="resource-container"):
+        files = _files_in(rc)
+        if not files:
+            continue
+        author_el = rc.find(class_="author-name")
+        date_el = rc.find(class_="posted-date")
+        title_el = rc.find(class_="resource-title")
+        resources.append({
+            "author": author_el.get_text(" ", strip=True) if author_el else "",
+            "posted": date_el.get_text(" ", strip=True) if date_el else "",
+            "label": title_el.get_text(" ", strip=True) if title_el else "",
+            "files": files,
+        })
+    # Fallback for simpler markup (no resource-container): flat file list
+    if not resources:
+        res_div = soup.find("div", class_="core-task-resources")
+        if res_div:
+            files = _files_in(res_div)
+            if files:
+                resources.append({"author": "", "posted": "", "label": "", "files": files})
 
     # Dropbox / submitted files — each is a <tr class="file"> inside the dropbox table
     submitted_files = []
