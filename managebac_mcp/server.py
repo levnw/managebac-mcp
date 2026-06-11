@@ -1308,12 +1308,14 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             full = task if isinstance(task, dict) else {"tasks": task}
             # Pass the full TASK object as structuredContent → card reads it via
             # window.openai.toolOutput / ui/notifications/tool-result message.
-            # Truncate long fields to keep payload under ~2 KB so ChatGPT doesn't drop it.
+            # Cap very long fields so the toolOutput payload stays bounded, but keep
+            # them generous — the widget clamps display to a few lines and reveals the
+            # rest via "Show More", so the full text needs to actually be sent.
             sc = dict(task_obj)
-            if sc.get("description") and len(sc["description"]) > 600:
-                sc["description"] = sc["description"][:600] + "…"
-            if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 400:
-                sc["teacher_comment"] = sc["teacher_comment"][:400] + "…"
+            if sc.get("description") and len(sc["description"]) > 4000:
+                sc["description"] = sc["description"][:4000] + "…"
+            if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 2500:
+                sc["teacher_comment"] = sc["teacher_comment"][:2500] + "…"
             if sc.get("images"):
                 sc["images"] = sc["images"][:3]  # cap to keep payload small
             # Data reaches the widget via structuredContent → window.openai.toolOutput.
@@ -1390,10 +1392,10 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     pass
                 task_obj = _build_task_obj(task, ft_meta, ft_class_name)
                 sc = dict(task_obj)
-                if sc.get("description") and len(sc["description"]) > 600:
-                    sc["description"] = sc["description"][:600] + "…"
-                if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 400:
-                    sc["teacher_comment"] = sc["teacher_comment"][:400] + "…"
+                if sc.get("description") and len(sc["description"]) > 4000:
+                    sc["description"] = sc["description"][:4000] + "…"
+                if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 2500:
+                    sc["teacher_comment"] = sc["teacher_comment"][:2500] + "…"
                 if sc.get("images"):
                     sc["images"] = sc["images"][:3]  # cap to keep payload small
                 # Data reaches the widget via structuredContent → window.openai.toolOutput.
