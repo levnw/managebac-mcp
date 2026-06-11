@@ -310,12 +310,14 @@
     .resource-card { border: 1px solid #eaecf0; border-radius: 8px; padding: 12px 14px; }
     .resource-card + .resource-card { margin-top: 10px; }
     .resource-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    /* Matches ManageBac's .resource-head-icon: 30px circle, light border, no fill */
     .resource-avatar {
-      width: 30px; height: 30px; border-radius: 6px; background: #f2f4f7;
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #98a2b3;
+      width: 30px; height: 30px; min-width: 30px; border-radius: 50%;
+      background: #fff; border: 1px solid #eaecf0;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
     .mb-avatar-img { width: 18px; height: 18px; object-fit: contain; }
-    .mb-file-icon { width: 22px; height: 26px; object-fit: contain; flex-shrink: 0; }
+    .mb-file-icon { width: 24px; height: auto; object-fit: contain; flex-shrink: 0; }
     .mb-section-icon { width: 18px; height: 18px; object-fit: contain; vertical-align: -4px; margin-right: 6px; }
     .resource-meta { min-width: 0; }
     .resource-author { font-size: 0.84rem; font-weight: 600; color: #344054; line-height: 1.25; }
