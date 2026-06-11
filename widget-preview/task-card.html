@@ -314,6 +314,9 @@
       width: 30px; height: 30px; border-radius: 6px; background: #f2f4f7;
       display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #98a2b3;
     }
+    .mb-avatar-img { width: 18px; height: 18px; object-fit: contain; }
+    .mb-file-icon { width: 22px; height: 26px; object-fit: contain; flex-shrink: 0; }
+    .mb-section-icon { width: 18px; height: 18px; object-fit: contain; vertical-align: -4px; margin-right: 6px; }
     .resource-meta { min-width: 0; }
     .resource-author { font-size: 0.84rem; font-weight: 600; color: #344054; line-height: 1.25; }
     .resource-posted { font-size: 0.72rem; color: #98a2b3; line-height: 1.25; margin-top: 1px; }
@@ -508,6 +511,14 @@ const ICONS = {
   clockGray: `<svg xmlns="http://www.w3.org/2000/svg" width="14" viewBox="0 0 16 16" fill="#98a2b3"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>`,
 };
 
+// Exact ManageBac icons from ManageBac's public asset CDN (allowed by the widget
+// CSP). Mirrored in widget-preview/managebac-icons/ for reference.
+const MB_ICONS = {
+  resources:  'https://assets.managebac.com/assets/sebo/other/resources-83fce92212edf55920a489be4d3627e7d2990c45a6c0a823bba3f50aaa891236.png',
+  fileAvatar: 'https://assets.managebac.com/assets/sebo/general/file-98aba70e6922b9365874cd841c6486052b4de9f60aa9063dd2598a441429ed08.png',
+  docFile:    'https://assets.managebac.com/assets/portfolio/document_file-6964c356700faaa706c3b4807853c6f9c32f325173bd7f61abe9d2c775824867.svg',
+};
+
 // ─── Status right-side panel ────────────────────────────────────────
 function statusRightPanel(status) {
   const s = (status || '').toLowerCase();
@@ -677,7 +688,7 @@ function renderCard(task) {
     resPosts.forEach(r => {
       let card = '<div class="resource-card">';
       card += `<div class="resource-head">
-        <div class="resource-avatar">${ICONS.doc}</div>
+        <div class="resource-avatar"><img src="${MB_ICONS.fileAvatar}" alt="" class="mb-avatar-img"></div>
         <div class="resource-meta">
           ${r.author ? `<div class="resource-author">${esc(r.author)}</div>` : ''}
           ${r.posted ? `<div class="resource-posted">${esc(r.posted)}</div>` : ''}
@@ -686,7 +697,7 @@ function renderCard(task) {
       if (r.label) card += `<div class="resource-label">${esc(r.label)}</div>`;
       r.files.forEach(f => {
         card += `<a class="resource-file" href="${esc(f.url || '#')}" target="_blank" rel="noopener">
-          ${ICONS.file}
+          <img src="${MB_ICONS.docFile}" alt="" class="mb-file-icon">
           <div class="rf-info">
             <div class="rf-name">${esc(f.name)}</div>
             ${f.size ? `<div class="rf-size">${esc(f.size)}</div>` : ''}
@@ -697,7 +708,7 @@ function renderCard(task) {
       rb += card;
     });
     h += `<div class="section">
-      <div class="section-header"><span class="section-title">📁 Resources</span></div>
+      <div class="section-header"><span class="section-title"><img src="${MB_ICONS.resources}" alt="" class="mb-section-icon">Resources</span></div>
       <div class="section-body">${rb}</div>
     </div>`;
   }
