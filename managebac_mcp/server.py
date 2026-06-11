@@ -689,28 +689,32 @@ def _make_task_widget(task_obj: dict) -> str:
     return _TASK_DETAIL_URI
 
 
-# Content-Security-Policy for the widget iframe (Apps SDK `_meta.ui.csp`).
-# resourceDomains controls which hosts the widget may load images/fonts/scripts
-# from — needed so embedded ManageBac description images (served from
-# *.managebac.com, incl. the regional CDNs the /attachments permalinks redirect
-# to) actually render inside ChatGPT's sandbox. Keys are camelCase.
-_WIDGET_CSP = {
-    "connectDomains": [],
-    "resourceDomains": [
-        "https://*.managebac.com",
-        "https://es.managebac.com",
-        "https://assets.managebac.com",
-        "https://cdn.ca.managebac.com",
-        "https://cdn.uk.managebac.com",
-        "https://cdn.managebac.com",
-    ],
-}
+# Content-Security-Policy for the widget iframe. resourceDomains lists the hosts
+# the widget may load images/fonts/scripts from — needed so embedded ManageBac
+# description images (served from *.managebac.com, incl. the regional CDNs the
+# /attachments permalinks redirect to) render inside ChatGPT's sandbox.
+# CRITICAL: the CSP must be on the resource returned by resources/read, not just
+# resources/list (that's why it kept showing "CSP not set").
+_CSP_DOMAINS = [
+    "https://*.managebac.com",
+    "https://es.managebac.com",
+    "https://assets.managebac.com",
+    "https://cdn.ca.managebac.com",
+    "https://cdn.uk.managebac.com",
+    "https://cdn.managebac.com",
+]
+# Apps SDK documented format (ui.csp, camelCase)
+_WIDGET_CSP = {"connectDomains": [], "resourceDomains": _CSP_DOMAINS}
+# Alternate format some ChatGPT builds read (openai/widgetCSP, snake_case).
+# Including both maximises the chance the sandbox honours one of them.
+_WIDGET_CSP_ALT = {"connect_domains": [], "resource_domains": _CSP_DOMAINS, "redirect_domains": []}
 
 
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
     return {
         "openai/outputTemplate": uri,
         "ui": {"resourceUri": uri, "csp": _WIDGET_CSP},
+        "openai/widgetCSP": _WIDGET_CSP_ALT,
         "openai/toolInvocation/invoking": invoking,
         "openai/toolInvocation/invoked": invoked,
         "openai/widgetAccessible": True,
@@ -722,10 +726,20 @@ _TEST_META = _widget_meta(_TEST_WIDGET_URI, "Loading test widget...", "Test widg
 _TASK_META_STATIC = _widget_meta(_TASK_DETAIL_URI, "Loading task...", "Task loaded")
 
 
-def _resource_meta(uri: str) -> dict | None:
-    # Attach the image CSP to the task-detail widget so embedded ManageBac
-    # description images are allowed to load inside ChatGPT's sandbox.
-    return {"ui": {"csp": _WIDGET_CSP}} if uri == _TASK_DETAIL_URI else None
+def _resource_meta(uri: str) -> dict:
+    """Full _meta for a widget resource (list + read), including the image CSP."""
+    if uri == _TEST_WIDGET_URI:
+        invoking, invoked = "Loading test widget...", "Test widget loaded"
+    else:
+        invoking, invoked = "Loading task...", "Task loaded"
+    return {
+        "openai/outputTemplate": uri,
+        "openai/widgetAccessible": True,
+        "openai/toolInvocation/invoking": invoking,
+        "openai/toolInvocation/invoked": invoked,
+        "ui": {"csp": _WIDGET_CSP},
+        "openai/widgetCSP": _WIDGET_CSP_ALT,
+    }
 
 
 @server.list_resources()
@@ -751,17 +765,27 @@ async def list_resource_templates() -> list[types.ResourceTemplate]:
     ]
 
 
-@server.read_resource()
-async def read_resource(uri) -> list:
-    from mcp.server.lowlevel.helper_types import ReadResourceContents
+# Raw resources/read handler (not the @server.read_resource() decorator) so we can
+# attach _meta — including the widget CSP — to the returned TextResourceContents.
+# The decorator's ReadResourceContents helper cannot carry _meta, which is why the
+# CSP never reached ChatGPT and images stayed blocked.
+async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerResult:
+    uri = req.params.uri
     uri_str = str(uri)
     info = _STATIC_WIDGETS.get(uri_str) or _TASK_WIDGETS.get(uri_str)
     if info is None:
-        raise ValueError(f"Unknown resource: {uri_str}")
-    return [
-        ReadResourceContents(content=info["html"], mime_type=WIDGET_MIME),
-        ReadResourceContents(content=info["html"], mime_type=WIDGET_MIME_ALT),
+        return types.ServerResult(
+            types.ReadResourceResult(contents=[], _meta={"error": f"Unknown resource: {uri_str}"})
+        )
+    meta = _resource_meta(uri_str)
+    contents = [
+        types.TextResourceContents(uri=uri, mimeType=WIDGET_MIME, text=info["html"], _meta=meta),
+        types.TextResourceContents(uri=uri, mimeType=WIDGET_MIME_ALT, text=info["html"], _meta=meta),
     ]
+    return types.ServerResult(types.ReadResourceResult(contents=contents))
+
+
+server.request_handlers[types.ReadResourceRequest] = _handle_read_resource
 
 
 @server.list_tools()
