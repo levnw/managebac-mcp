@@ -851,29 +851,26 @@ def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
                     desc_links.append({"text": url, "url": url})
                     linked_urls.add(url)
 
-    # Resources section (teacher-posted files on the task)
+    # Resources section (teacher-posted files on the task). The real markup is
+    # <div class="core-task-resources"> containing <div class="file"> entries,
+    # each with an <a href="…cdn…"> whose text is the filename. Returns a flat
+    # list of {name, url, size} files.
     resources = []
-    resources_section = soup.find(string=re.compile(r'^Resources$', re.I))
-    if resources_section:
-        resources_container = resources_section.find_parent()
-        while resources_container and not resources_container.find_all(class_=re.compile(r'file|attachment', re.I)):
-            resources_container = resources_container.find_parent()
-        if resources_container:
-            for post in resources_container.find_all(class_=re.compile(r'post|entry|item', re.I)):
-                teacher_el = post.find(class_=re.compile(r'author|name|user', re.I))
-                teacher = teacher_el.get_text(strip=True) if teacher_el else ""
-                label_el = post.find(["p", "strong", "b"])
-                label = label_el.get_text(strip=True) if label_el else ""
-                files = []
-                for f in post.find_all(class_=re.compile(r'file|attachment', re.I)):
-                    fname = f.find("a")
-                    fsize = f.find(string=re.compile(r'\d+\s*(KB|MB)', re.I))
-                    files.append({
-                        "name": fname.get_text(strip=True) if fname else "",
-                        "size": str(fsize).strip() if fsize else "",
-                    })
-                if teacher or files:
-                    resources.append({"teacher": teacher, "label": label, "files": files})
+    res_div = soup.find("div", class_="core-task-resources")
+    if res_div:
+        for fdiv in res_div.find_all("div", class_="file"):
+            link = next((a for a in fdiv.find_all("a", href=True) if a.get_text(strip=True)), None)
+            link = link or fdiv.find("a", href=True)
+            if not link:
+                continue
+            name = link.get_text(strip=True)
+            href = link.get("href", "")
+            if not name or not href:
+                continue
+            size_el = fdiv.find(string=re.compile(r'\d+(\.\d+)?\s*(KB|MB|GB)', re.I))
+            size = str(size_el).strip() if size_el else ""
+            if not any(r["url"] == href for r in resources):
+                resources.append({"name": name, "url": href, "size": size})
 
     # Dropbox / submitted files — each is a <tr class="file"> inside the dropbox table
     submitted_files = []

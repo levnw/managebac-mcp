@@ -603,12 +603,14 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
         ]
 
     # ── Submitted files ───────────────────────────────────────────────────────
+    # Prefer what the task page actually shows: if the detail parse found
+    # submitted files, there's definitely a dropbox with submissions — show them
+    # even when the task-list meta is missing (e.g. an older task not in the
+    # recent list, where has_submission_box isn't known).
     has_sub_box = meta.get("has_submission_box", False)
     raw_files = detail.get("submitted_files") or []
     submitted_files: list | None
-    if not has_sub_box:
-        submitted_files = None   # no dropbox at all
-    elif raw_files:
+    if raw_files:
         submitted_files = [
             {
                 "name": f.get("name", ""),
@@ -617,8 +619,10 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
             }
             for f in raw_files
         ]
-    else:
+    elif has_sub_box:
         submitted_files = []    # dropbox exists but empty
+    else:
+        submitted_files = None   # no dropbox at all
 
     # ── Description ───────────────────────────────────────────────────────────
     desc_raw = detail.get("description") or {}
@@ -648,6 +652,13 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
     # ── Teacher comment ───────────────────────────────────────────────────────
     teacher_comment = meta.get("teacher_comment") or None
 
+    # ── Resources (teacher-posted files) ──────────────────────────────────────
+    resources = [
+        {"name": r.get("name", ""), "url": r.get("url", "#"), "size": r.get("size", "")}
+        for r in (detail.get("resources") or [])
+        if isinstance(r, dict) and r.get("name")
+    ]
+
     # ── Assemble ──────────────────────────────────────────────────────────────
     task_obj: dict = {
         "title": detail.get("title") or meta.get("title") or "Task",
@@ -664,6 +675,7 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
         "unit": None,   # not available from task list; could be added later
         "description": description,
         "submitted_files": submitted_files,
+        "resources": resources,
         "discussions": discussions,
         "due_passed_late": due_past,
         "theme_color": _THEME_COLORS.get(detail.get("theme"), _DEFAULT_THEME_COLOR),
@@ -1318,6 +1330,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 sc["teacher_comment"] = sc["teacher_comment"][:2500] + "…"
             if sc.get("images"):
                 sc["images"] = sc["images"][:3]  # cap to keep payload small
+            if sc.get("resources"):
+                sc["resources"] = sc["resources"][:6]
             # Data reaches the widget via structuredContent → window.openai.toolOutput.
             duration_ms = int((time.monotonic() - t0) * 1000)
             cache.log_request(name, arguments, full, source="mcp", duration_ms=duration_ms)
@@ -1398,6 +1412,8 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     sc["teacher_comment"] = sc["teacher_comment"][:2500] + "…"
                 if sc.get("images"):
                     sc["images"] = sc["images"][:3]  # cap to keep payload small
+                if sc.get("resources"):
+                    sc["resources"] = sc["resources"][:6]
                 # Data reaches the widget via structuredContent → window.openai.toolOutput.
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)

@@ -648,6 +648,20 @@ function renderCard(task) {
     </div>`;
   }
 
+  // ── Resources ── (teacher-posted files on the task)
+  const resFiles = (task.resources || []).filter(r => r && r.name);
+  if (resFiles.length) {
+    let rb = '';
+    resFiles.forEach(r => {
+      const sz = r.size ? ` (${esc(r.size)})` : '';
+      rb += `<a class="file-link" href="${esc(r.url || '#')}" target="_blank" rel="noopener" style="padding:6px 0">${ICONS.file}<span>${esc(r.name)}${sz}</span></a>`;
+    });
+    h += `<div class="section">
+      <div class="section-header"><span class="section-title">Resources</span></div>
+      <div class="section-body">${rb}</div>
+    </div>`;
+  }
+
   // ── Dropbox ── (only if has_submission_box / submitted_files is not null)
   if (hasDropbox) {
     h += '<div class="section" style="border:none;margin:0">';
