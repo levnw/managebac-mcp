@@ -229,6 +229,7 @@
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 15px; margin: 0 10px;
     }
+    .dropbox-table-wrap { border: 1px solid #eaecf0; border-radius: 8px; overflow: hidden; margin: 0 10px 10px; }
     .dropbox-table { width: 100%; border-collapse: collapse; table-layout: auto; }
     .dropbox-table th {
       font-size: 0.82rem; font-weight: 600; color: #475467;
@@ -732,7 +733,7 @@ function renderCard(task) {
     </div>`;
 
     if (task.submitted_files && task.submitted_files.length) {
-      h += '<table class="dropbox-table">';
+      h += '<div class="dropbox-table-wrap"><table class="dropbox-table">';
       h += '<thead><tr><th>File</th><th>Turnitin Similarity Index</th><th></th></tr></thead>';
       h += '<tbody>';
       task.submitted_files.forEach(f => {
@@ -752,7 +753,7 @@ function renderCard(task) {
           <td><a class="btn-feedback" href="${esc(f.url)}" target="_blank">${ICONS.doc} View Teacher Feedback</a></td>
         </tr>`;
       });
-      h += '</tbody></table>';
+      h += '</tbody></table></div>';
     }
     // Empty dropbox: no content below header
     h += '</div>'; // dropbox section
