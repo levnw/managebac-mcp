@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ManageBac Files Preview</title>
+  <style>
+    /* ── Reset & base (matches task-card.html) ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-size: 14px;
+      color: #101828;
+      background: transparent;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .mb-card {
+      --theme: #1570ef;
+      width: 100%;
+      max-width: 860px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+
+    /* ── Banner (matches ManageBac's blue "Files" bar) ── */
+    .mb-header { background: var(--theme); padding: 14px 20px 13px; }
+    .mb-header h1 { font-size: 1.3rem; font-weight: 700; color: #fff; line-height: 1.3; }
+    .mb-header .class-name { font-size: 0.78rem; color: rgba(255,255,255,0.75); margin-top: 2px; font-weight: 400; }
+
+    .content-area { padding: 16px 20px 10px; }
+
+    /* "File Information" heading */
+    .fi-heading { font-size: 1.05rem; font-weight: 700; color: #101828; padding-bottom: 12px; border-bottom: 1px solid #eaecf0; margin: 0 -20px 14px; padding-left: 20px; }
+
+    /* ── Search ── */
+    .file-search {
+      position: relative; margin-bottom: 14px;
+    }
+    .file-search input {
+      width: 100%; padding: 8px 12px 8px 32px;
+      border: 1px solid #d0d5dd; border-radius: 6px;
+      font-size: 0.85rem; color: #101828; outline: none;
+      font-family: inherit;
+    }
+    .file-search input::placeholder { color: #98a2b3; }
+    .file-search input:focus { border-color: var(--theme); }
+    .file-search svg {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      width: 14px; height: 14px; color: #98a2b3;
+    }
+
+    /* ── Table ── */
+    .files-table { width: 100%; border-collapse: collapse; }
+    .files-table th {
+      font-size: 0.82rem; font-weight: 600; color: var(--theme);
+      text-align: left; padding: 8px 8px; border-bottom: 1px solid #eaecf0;
+      white-space: nowrap;
+    }
+    .files-table th:first-child { padding-left: 8px; }
+    .files-table th.col-size { text-align: right; }
+    .files-table th.col-mod { text-align: right; }
+    .files-table td { padding: 9px 8px; vertical-align: middle; border-bottom: 1px solid #f2f4f7; }
+    .files-table tr:last-child td { border-bottom: none; }
+    .files-table tr:hover td { background: #f9fafb; }
+    .col-size, .col-mod { white-space: nowrap; }
+    td.col-size { text-align: right; color: #344054; font-size: 0.85rem; width: 90px; }
+    td.col-mod  { text-align: right; color: #344054; font-size: 0.85rem; width: 175px; }
+
+    .file-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .ft-icon { width: 20px; height: 24px; flex-shrink: 0; }
+    .ft-icon svg { width: 100%; height: 100%; display: block; }
+    .fc-info { min-width: 0; }
+    .fc-name {
+      font-size: 0.88rem; font-weight: 500; color: var(--theme);
+      text-decoration: none; word-break: break-word; display: block; line-height: 1.3;
+    }
+    .fc-name:hover { text-decoration: underline; }
+    .fc-author { font-size: 0.76rem; color: #667085; margin-top: 1px; }
+
+    .sort-arrow { font-size: 0.8rem; }
+
+    .empty { color: #98a2b3; font-size: 0.85rem; font-style: italic; padding: 14px 8px; }
+
+    /* ── Open in ManageBac ── */
+    .open-in-mb {
+      display: flex; align-items: center; justify-content: center; padding: 14px 20px;
+      gap: 6px; color: var(--theme); font-size: 0.82rem; font-weight: 600;
+      text-decoration: none; border-top: 1px solid #eaecf0;
+    }
+    .open-in-mb:hover { background: #f9fafb; }
+    svg.icon { width: 14px; height: 14px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+<div class="mb-card" id="card"></div>
+
+<script>
+const ICONS = {
+  search: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>`,
+  external: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/></svg>`,
+  // File-type icons approximating ManageBac's (Adobe-red PDF, Word-blue doc, PowerPoint-orange)
+  pdf: `<svg viewBox="0 0 20 24"><path fill="#fff" stroke="#e5484d" stroke-width="1" d="M2 .5h11L18.5 6v15.5a2 2 0 0 1-2 2H2a1.5 1.5 0 0 1-1.5-1.5V2A1.5 1.5 0 0 1 2 .5z"/><path fill="#e5484d" d="M5.2 16.9c-.6-.6-.1-1.5.8-2.2.7-.5 1.7-1 2.8-1.4.5-1 1-2.1 1.3-3.1-.3-.8-.5-1.6-.5-2.2 0-.9.4-1.5 1.1-1.5.6 0 1 .5 1 1.3 0 .7-.3 1.7-.7 2.7.4.9 1 1.8 1.6 2.4 1 .1 1.9.2 2.5.5.9.4 1.1 1 .8 1.5-.3.6-1.2.7-2.1.3-.6-.3-1.3-.8-1.9-1.4-1 .1-2 .4-2.9.7-.6 1-1.2 1.9-1.8 2.4-.7.6-1.5.7-2 0zm2.3-1.6c-.7.3-1.2.7-1.5 1 .4-.1.9-.5 1.5-1zm3.2-3.4c-.2.6-.5 1.2-.8 1.8.5-.2 1.1-.3 1.6-.4-.3-.4-.6-.9-.8-1.4zm2.9 2.2c.5.4 1 .6 1.3.6-.3-.2-.7-.4-1.3-.6zM10.6 7.7c.1-.5.2-.9.2-1.2 0-.2 0-.4-.1-.4-.1.1-.2.3-.2.6 0 .3 0 .6.1 1z"/></svg>`,
+  docx: `<svg viewBox="0 0 20 24"><path fill="#fff" stroke="#2b7cd3" stroke-width="1" d="M2 .5h11L18.5 6v15.5a2 2 0 0 1-2 2H2a1.5 1.5 0 0 1-1.5-1.5V2A1.5 1.5 0 0 1 2 .5z"/><path fill="#2b7cd3" d="M4.5 9h11v1.4h-11zM4.5 12h11v1.4h-11zM4.5 15h11v1.4h-11zM4.5 18h7v1.4h-7z"/></svg>`,
+  pptx: `<svg viewBox="0 0 20 24"><path fill="#fff" stroke="#d35230" stroke-width="1" d="M2 .5h11L18.5 6v15.5a2 2 0 0 1-2 2H2a1.5 1.5 0 0 1-1.5-1.5V2A1.5 1.5 0 0 1 2 .5z"/><path fill="#d35230" d="M9.5 9a4.8 4.8 0 1 0 4.8 4.8H9.5z"/><path fill="#e8835f" d="M10.7 7.8v4.8h4.8a4.8 4.8 0 0 0-4.8-4.8z"/></svg>`,
+  generic: `<svg viewBox="0 0 20 24"><path fill="#fff" stroke="#98a2b3" stroke-width="1" d="M2 .5h11L18.5 6v15.5a2 2 0 0 1-2 2H2a1.5 1.5 0 0 1-1.5-1.5V2A1.5 1.5 0 0 1 2 .5z"/><path fill="#98a2b3" d="M4.5 10h11v1.4h-11zM4.5 13h11v1.4h-11zM4.5 16h8v1.4h-8z"/></svg>`,
+};
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function fileIcon(name) {
+  const ext = (name || '').split('.').pop().toLowerCase();
+  if (ext === 'pdf') return ICONS.pdf;
+  if (ext === 'doc' || ext === 'docx') return ICONS.docx;
+  if (ext === 'ppt' || ext === 'pptx') return ICONS.pptx;
+  return ICONS.generic;
+}
+
+function renderFiles(data) {
+  const files = data.files || [];
+  let h = '';
+
+  h += `<div class="mb-header">
+    <h1>Files</h1>
+    ${data.class_name ? `<div class="class-name">${esc(data.class_name)}</div>` : ''}
+  </div>`;
+
+  h += '<div class="content-area">';
+  h += '<div class="fi-heading">File Information</div>';
+
+  h += `<div class="file-search">${ICONS.search}
+    <input type="text" id="file-filter" placeholder="Search by file or author name" oninput="filterFiles(this.value)">
+  </div>`;
+
+  h += '<table class="files-table"><thead><tr>';
+  h += '<th>Name</th><th class="col-size">Size</th><th class="col-mod">Modified <span class="sort-arrow">&darr;</span></th>';
+  h += '</tr></thead><tbody id="files-body">';
+  h += files.map(fileRow).join('');
+  h += '</tbody></table>';
+  if (!files.length) h += '<div class="empty">No files in this class yet.</div>';
+  h += '</div>'; // content-area
+
+  if (data.url) {
+    h += `<a class="open-in-mb" href="${esc(data.url)}" target="_blank" rel="noopener">Open in ManageBac ${ICONS.external}</a>`;
+  }
+
+  document.getElementById('card').innerHTML = h;
+}
+
+function fileRow(f) {
+  return `<tr data-search="${esc(((f.name||'') + ' ' + (f.uploaded_by||'')).toLowerCase())}">
+    <td>
+      <div class="file-cell">
+        <span class="ft-icon">${fileIcon(f.name)}</span>
+        <span class="fc-info">
+          <a class="fc-name" href="${esc(f.url || '#')}" target="_blank" rel="noopener">${esc(f.name)}</a>
+          ${f.uploaded_by ? `<span class="fc-author">by ${esc(f.uploaded_by)}</span>` : ''}
+        </span>
+      </div>
+    </td>
+    <td class="col-size">${esc(f.size || '')}</td>
+    <td class="col-mod">${esc(f.uploaded_at || '')}</td>
+  </tr>`;
+}
+
+function filterFiles(q) {
+  q = q.trim().toLowerCase();
+  document.querySelectorAll('#files-body tr').forEach(tr => {
+    tr.style.display = !q || (tr.dataset.search || '').includes(q) ? '' : 'none';
+  });
+}
+
+// Server injection point
+const _INJECTED = /*INJECT_DATA*/null;
+
+const _live = window.openai?.toolOutput;
+if (_live && _live.files) {
+  renderFiles(_live);
+} else if (_INJECTED) {
+  renderFiles(_INJECTED);
+} else {
+  document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px;text-align:center">Loading files…</div>';
+  window.addEventListener('openai:set_globals', () => {
+    const d = window.openai?.toolOutput;
+    if (d && d.files) renderFiles(d);
+  });
+}
+</script>
+</body>
+</html>
