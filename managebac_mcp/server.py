@@ -796,11 +796,18 @@ async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerR
     uri = req.params.uri
     uri_str = str(uri)
     info = _STATIC_WIDGETS.get(uri_str) or _TASK_WIDGETS.get(uri_str)
+    if info is None and uri_str.startswith("ui://widget/task"):
+        # Stale task URI (old per-task hash from a previous conversation or a
+        # restarted server). All task widgets share the same template now —
+        # data arrives via toolOutput — so serve the current template instead
+        # of returning empty contents (which ChatGPT shows as
+        # "Failed to fetch template" with no way to recover).
+        info = _STATIC_WIDGETS.get(_TASK_DETAIL_URI)
     if info is None:
         return types.ServerResult(
             types.ReadResourceResult(contents=[], _meta={"error": f"Unknown resource: {uri_str}"})
         )
-    meta = _resource_meta(uri_str)
+    meta = _resource_meta(uri_str if uri_str in _STATIC_WIDGETS else _TASK_DETAIL_URI)
     contents = [
         types.TextResourceContents(uri=uri, mimeType=WIDGET_MIME, text=info["html"], _meta=meta),
         types.TextResourceContents(uri=uri, mimeType=WIDGET_MIME_ALT, text=info["html"], _meta=meta),
