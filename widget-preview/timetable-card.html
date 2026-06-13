@@ -93,7 +93,18 @@ function parseDay(d){
 }
 
 function renderTimetable(data){
-  const slots = data.timetable || [];
+  // Normalise short-key slots (p,d,t,c,tr,r,n) from the server to full names so
+  // the rest of the renderer reads one shape. Also accepts legacy full keys.
+  const slots = (data.timetable || []).map(s => ({
+    period: s.period ?? s.p,
+    day: s.day ?? s.d,
+    time_start: s.time_start ?? s.t ?? '',
+    time_end: s.time_end ?? '',
+    class_name: s.class_name ?? s.c ?? '',
+    teacher: s.teacher ?? s.tr ?? '',
+    room: s.room ?? s.r ?? '',
+    task_count: s.task_count ?? s.n ?? 0,
+  }));
   const cur = data.current || {};
   // distinct days (first-appearance order) and periods (numeric sort)
   const dayOrder = [], daySeen = {};

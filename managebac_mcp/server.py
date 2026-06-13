@@ -1310,11 +1310,36 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
         elif name == "get_timetable":
             result = await fetch_timetable()
             if isinstance(result, dict) and result.get("timetable"):
+                # Slim structuredContent for the widget — the full timetable is ~7KB,
+                # which ChatGPT silently drops as oversized toolOutput. Short keys +
+                # combined time + omitted empties keep the grid renderable but small.
+                # (p=period, d=day, t=time, c=class, tr=teacher, r=room, n=task_count)
+                cur = result.get("current") or {}
+                slim_slots = []
+                for s in result["timetable"]:
+                    t = (s.get("time_start") or "")
+                    if s.get("time_end"):
+                        t = (t + "-" + s["time_end"]) if t else s["time_end"]
+                    slot = {
+                        "p": s.get("period"),
+                        "d": s.get("day"),
+                        "t": t,
+                        "c": " ".join((s.get("class_name") or "").split()),
+                    }
+                    if s.get("teacher"):    slot["tr"] = s["teacher"]
+                    if s.get("room"):       slot["r"] = s["room"]
+                    if s.get("task_count"): slot["n"] = s["task_count"]
+                    slim_slots.append(slot)
+                sc = {
+                    "current": {k: cur.get(k) for k in ("weekday", "date", "time")},
+                    "timetable": slim_slots,
+                    "url": require_user().mb_url.rstrip("/") + "/student/timetables",
+                }
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
                     content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
-                    structuredContent=result,
+                    structuredContent=sc,
                     _meta=_TIMETABLE_META_STATIC,
                 )
             # else (empty/error) → common return below
