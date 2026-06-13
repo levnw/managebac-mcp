@@ -81,7 +81,11 @@ async def get_client() -> httpx.AsyncClient:
         cookies=cookies,
         follow_redirects=True,
         timeout=30,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; ManageBac-MCP/1.0)"},
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; ManageBac-MCP/1.0)",
+            "Origin": user.mb_url,
+            "Referer": user.mb_url + "/student",
+        },
     )
 
 
