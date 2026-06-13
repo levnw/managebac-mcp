@@ -122,7 +122,13 @@ function renderTimetable(data){
   const curDayNum = (() => { const m=String(cur.date||'').match(/(\d+)/); return m?parseInt(m[1],10):null; })();
 
   let h = '';
-  const weekLabel = dayOrder.length ? (parseDay(dayOrder[0]).date + ' – ' + parseDay(dayOrder[dayOrder.length-1]).date) : '';
+  let weekLabel = '';
+  if (dayOrder.length === 1) {
+    const pd = parseDay(dayOrder[0]);
+    weekLabel = (pd.label ? pd.label + ', ' : '') + pd.date;
+  } else if (dayOrder.length) {
+    weekLabel = parseDay(dayOrder[0]).date + ' – ' + parseDay(dayOrder[dayOrder.length-1]).date;
+  }
   h += `<div class="mb-header"><h1>Timetable</h1>
     <div class="sub">${esc(weekLabel)}${cur.date ? ' · checked '+esc(cur.weekday||'')+' '+esc(cur.date)+(cur.time?' '+esc(cur.time):'') : ''}</div></div>`;
 

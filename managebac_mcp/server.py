@@ -876,9 +876,38 @@ async def list_tools() -> list[types.Tool]:
                 "badge for that class — it counts tasks scheduled on that day and may include "
                 "already-graded or past tasks, so it is NOT a to-do/unfinished count. Never tell "
                 "the student they have work due based on task_count; use get_upcoming for what is "
-                "actually due or still to submit."
+                "actually due or still to submit. "
+                "DAY FILTERING: by default returns the whole week. To show only specific days, "
+                "pass 'days' (a single value or list of: 'today', 'tomorrow', a weekday like "
+                "'Monday', or a date as shown in the timetable like 'Jun 9'). For a span of days, "
+                "pass 'from' and 'to' instead (same accepted values) — e.g. from 'Monday' to "
+                "'Wednesday'. Relative words ('today'/'tomorrow') are resolved in the school's "
+                "timezone, so just pass the student's words through."
             ),
-            inputSchema={"type": "object", "properties": {}, "required": []},
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "days": {
+                        "description": "Optional. Which day(s) to show. Omit for the whole week. "
+                                       "A single value or a list of: 'today', 'tomorrow', a weekday "
+                                       "('Monday'), or a date ('Jun 9').",
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}},
+                        ],
+                    },
+                    "from": {
+                        "type": "string",
+                        "description": "Optional start of a day range (weekday, 'today'/'tomorrow', "
+                                       "or a date like 'Jun 9'). Use together with 'to'.",
+                    },
+                    "to": {
+                        "type": "string",
+                        "description": "Optional end of a day range. Use together with 'from'.",
+                    },
+                },
+                "required": [],
+            },
             _meta=_TIMETABLE_META_STATIC,
         ),
         types.Tool(
@@ -1295,6 +1324,104 @@ def _slim_tasks(result):
     return result
 
 
+# ── Timetable day filtering ─────────────────────────────────────────────────
+# Lets the student ask for a subset of the week ("tomorrow", "Monday",
+# "Jun 9", or a range) instead of always getting all five days.
+_TT_WEEKDAYS = {
+    "monday": "mon", "mon": "mon", "tuesday": "tue", "tue": "tue", "tues": "tue",
+    "wednesday": "wed", "wed": "wed", "weds": "wed", "thursday": "thu", "thu": "thu",
+    "thur": "thu", "thurs": "thu", "friday": "fri", "fri": "fri",
+    "saturday": "sat", "sat": "sat", "sunday": "sun", "sun": "sun",
+}
+
+
+def _tt_month_day(s: str):
+    import re
+    s = (s or "").lower()
+    mm = re.search(r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)", s)
+    dd = re.search(r"(\d{1,2})", s)
+    return (mm.group(1) if mm else None, int(dd.group(1)) if dd else None)
+
+
+def _tt_matcher(token: str):
+    """Resolve a day token to a matcher: ('wd', 'mon') or ('date', (month, day))."""
+    import datetime
+    t = (token or "").strip().lower()
+    if not t:
+        return None
+    now = datetime.datetime.now().astimezone()
+    if t in ("today", "tonight"):
+        return ("wd", now.strftime("%a").lower())
+    if t == "tomorrow":
+        return ("wd", (now + datetime.timedelta(days=1)).strftime("%a").lower())
+    if t == "yesterday":
+        return ("wd", (now - datetime.timedelta(days=1)).strftime("%a").lower())
+    if t in _TT_WEEKDAYS:
+        return ("wd", _TT_WEEKDAYS[t])
+    mo, dy = _tt_month_day(t)
+    if mo or dy:
+        return ("date", (mo, dy))
+    return None
+
+
+def _tt_entry_matches(entry, matcher) -> bool:
+    # entry = (day_str, weekday_abbr_lower, date_part_lower)
+    kind, val = matcher
+    if kind == "wd":
+        return entry[1] == val
+    mo, dy = val
+    emo, edy = _tt_month_day(entry[2])
+    if mo and dy:
+        return emo == mo and edy == dy
+    if dy:
+        return edy == dy
+    if mo:
+        return emo == mo
+    return False
+
+
+def _filter_timetable(result: dict, days_arg, from_arg, to_arg) -> dict:
+    slots = result.get("timetable") or []
+    if not slots:
+        return result
+    # distinct days in week order
+    order = []
+    for s in slots:
+        d = s.get("day") or ""
+        if not any(o[0] == d for o in order):
+            parts = [p.strip() for p in d.split(",")]
+            order.append((d, parts[1].lower() if len(parts) > 1 else "",
+                          parts[0].lower() if parts else ""))
+    keep = None
+    tokens = days_arg if isinstance(days_arg, list) else ([days_arg] if days_arg else [])
+    if tokens:
+        matchers = [m for m in (_tt_matcher(t) for t in tokens) if m]
+        if matchers:
+            keep = {o[0] for o in order if any(_tt_entry_matches(o, m) for m in matchers)}
+    elif from_arg or to_arg:
+        def idx_of(tok):
+            m = _tt_matcher(tok)
+            if not m:
+                return None
+            for i, o in enumerate(order):
+                if _tt_entry_matches(o, m):
+                    return i
+            return None
+        i_from = idx_of(from_arg) if from_arg else 0
+        i_to = idx_of(to_arg) if to_arg else len(order) - 1
+        if i_from is None:
+            i_from = 0
+        if i_to is None:
+            i_to = len(order) - 1
+        lo, hi = min(i_from, i_to), max(i_from, i_to)
+        keep = {o[0] for o in order[lo:hi + 1]}
+    if keep is None:
+        return result
+    filtered = dict(result)
+    filtered["timetable"] = [s for s in slots if (s.get("day") or "") in keep]
+    return filtered
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     t0 = time.monotonic()
@@ -1309,6 +1436,13 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
         elif name == "get_timetable":
             result = await fetch_timetable()
+            # Optional day filtering: days=["tomorrow"]/"Monday"/"Jun 9", or from/to range.
+            if isinstance(result, dict) and result.get("timetable") and (
+                arguments.get("days") or arguments.get("from") or arguments.get("to")
+            ):
+                result = _filter_timetable(
+                    result, arguments.get("days"), arguments.get("from"), arguments.get("to")
+                )
             if isinstance(result, dict) and result.get("timetable"):
                 # Slim structuredContent for the widget — the full timetable is ~7KB,
                 # which ChatGPT silently drops as oversized toolOutput. Short keys +
