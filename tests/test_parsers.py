@@ -158,6 +158,22 @@ def test_parse_files_fields():
     assert "T" not in f["uploaded_at"] and "Z" not in f["uploaded_at"]
 
 
+def test_parse_files_handles_escaped_page():
+    # Chemistry's files page double-escapes its content: data-ec3-info is wrapped
+    # in \'...\' with doubled backslashes, and the "by NAME" label leaks escape
+    # artifacts. Regression for get_files silently returning [] on such pages.
+    html = load("files_chemistry.html")
+    files = parse_files(html)
+    assert len(files) == 10
+    f = files[0]
+    assert f["name"] == "Chemistry_MYP.pdf"
+    assert f["uploaded_by"] == "Nino Kavtaradze"      # not corrupted/escaped
+    assert "<" not in f["uploaded_by"] and "\\" not in f["uploaded_by"]
+    assert re.match(r"^[A-Z][a-z]{2} \d", f["uploaded_at"])
+    # download URL must be usable, not double-escaped (& instead of &)
+    assert f["url"].startswith("http") and "\\u" not in f["url"]
+
+
 # ---------------------------------------------------------------------------
 # Journal
 # ---------------------------------------------------------------------------

@@ -1131,8 +1131,20 @@ def parse_files(html: str) -> list[dict]:
     # Class files use <div class="row file" data-ec3-info='{...}'> elements
     # data-ec3-info JSON has: name, file_size, created_at, updated_at
     for row in soup.find_all(attrs={"data-ec3-info": True}):
+        raw = row["data-ec3-info"]
+        # Some class file pages (e.g. ones containing folders) double-escape their
+        # content: the attribute is wrapped in escaped quotes — \'{...}\' — and the
+        # backslashes inside are doubled (\\u0026 instead of &), which makes
+        # json.loads fail and silently drops every file. Slice from the first { to
+        # the last } to drop the wrapper, then collapse the doubled backslashes so
+        # both the clean (Physics-style) and the escaped (Chemistry-style) forms parse.
+        _i, _j = raw.find("{"), raw.rfind("}")
+        if _i != -1 and _j != -1:
+            raw = raw[_i:_j + 1]
+        if "\\\\" in raw:               # doubled-backslash escaping → collapse once
+            raw = raw.replace("\\\\", "\\")
         try:
-            info = _json.loads(row["data-ec3-info"])
+            info = _json.loads(raw)
         except Exception:
             continue
         name = info.get("name", "")
@@ -1150,11 +1162,15 @@ def parse_files(html: str) -> list[dict]:
 
         # Author — ManageBac renders the uploader as a "by NAME" <label> in the
         # title cell. The data-ec3-info JSON only carries user_id, not the name,
-        # so read the label text and strip the leading "by".
+        # so read the label text and strip the leading "by". On escaped pages the
+        # label text leaks escape artifacts (e.g. "\nby\nNino Kavtaradze\n<\/label>"),
+        # so normalise literal \n/\t to spaces and cut at any leaked markup.
         author = ""
         label_el = row.find("label")
         if label_el:
-            author = re.sub(r'^\s*by\s+', '', label_el.get_text(" ", strip=True), flags=re.I).strip()
+            txt = label_el.get_text(" ", strip=True).replace("\\n", " ").replace("\\t", " ")
+            txt = txt.split("<")[0]
+            author = re.sub(r'^\s*by\s+', '', txt, flags=re.I).strip()
         if not author:  # fallbacks for older markup variants
             author_el = row.find(class_=re.compile(r'author|uploader|user', re.I))
             if not author_el:
