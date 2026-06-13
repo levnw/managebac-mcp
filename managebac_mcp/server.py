@@ -630,6 +630,9 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
     # Images are rendered as separate <img> elements in the card (see `images`
     # below), so strip the inline ![](…) markdown from the text to avoid artifacts.
     desc_md = _re.sub(r'!\[[^\]]*\]\([^)]*\)', '', desc_md)
+    # Strip embedded-file placeholder lines (📎 …) — files render as cards via desc_files.
+    # Handles cached data that was scraped before the scraper change.
+    desc_md = _re.sub(r'📎[^\n]*\n?', '', desc_md)
     description = _md_to_html(desc_md) if desc_md.strip() else None
     desc_images = desc_raw.get("images") if isinstance(desc_raw, dict) else None
     embedded_files = desc_raw.get("embedded_files", []) if isinstance(desc_raw, dict) else []
