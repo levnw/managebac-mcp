@@ -980,8 +980,10 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_files",
             description=(
-                "Returns all resource files in a class's Files section "
-                "(class-wide materials uploaded by the teacher, not attached to a specific task). "
+                "Fetches files from the student's ManageBac school platform — specifically the Files "
+                "section of a class (class-wide materials uploaded by the teacher, NOT the student's "
+                "own uploaded files). Use this whenever the student asks about class files, teacher "
+                "resources, or worksheets on ManageBac. "
                 "BATCH SUPPORTED: class_id can be a single ID or a list. "
                 "Each file has: name, size, url (pre-signed download link), uploaded_by, uploaded_at. "
                 "Pass url to get_file_content to read the actual file contents."

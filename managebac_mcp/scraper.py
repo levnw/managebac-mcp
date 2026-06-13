@@ -225,6 +225,21 @@ def parse_classes(html: str) -> list[dict]:
     return unique
 
 
+# Per-user lock so concurrent requests (multiple ChatGPT tabs opening at once)
+# don't all race to fetch /student/classes/my simultaneously. Without this,
+# N tabs each kick off ~19 ManageBac requests instead of sharing one fetch.
+_fetch_classes_locks: dict[str, "asyncio.Lock"] = {}
+
+
+def _fetch_classes_lock(user_id: str) -> "asyncio.Lock":
+    import asyncio as _asyncio
+    lock = _fetch_classes_locks.get(user_id)
+    if lock is None:
+        lock = _asyncio.Lock()
+        _fetch_classes_locks[user_id] = lock
+    return lock
+
+
 async def fetch_classes() -> list[dict]:
     # `if cached:` (not `is not None`) deliberately treats a cached EMPTY list as
     # a miss. A student always has classes, so an empty result only ever means a
@@ -234,6 +249,17 @@ async def fetch_classes() -> list[dict]:
     cached = cache.get("get_classes")
     if cached:
         return cached
+
+    # Serialize per-user so concurrent tabs share a single live fetch rather than
+    # each racing to fire ~19 ManageBac requests at the same time.
+    from .context import get_current_user as _gcu
+    user = _gcu()
+    user_id = user.id if user else "local"
+    async with _fetch_classes_lock(user_id):
+        # Re-check cache after acquiring the lock — a sibling may have just filled it.
+        cached = cache.get("get_classes")
+        if cached:
+            return cached
 
     import asyncio as _asyncio
 
