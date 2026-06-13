@@ -3,6 +3,7 @@ Unit tests for all parsers using saved HTML fixtures.
 Run: pytest tests/test_parsers.py
 """
 import json
+import re
 import pytest
 from pathlib import Path
 from managebac_mcp.scraper import parse_classes, parse_tasks, parse_task_detail, parse_files, parse_journal, parse_timetable
@@ -146,11 +147,15 @@ def test_parse_files_returns_list():
 def test_parse_files_fields():
     html = load("files_theatre.html")
     files = parse_files(html)
-    if files:
-        f = files[0]
-        assert "name" in f
-        assert "size" in f
-        assert "uploaded_by" in f
+    assert files, "fixture should contain class files"
+    f = files[0]
+    assert "name" in f
+    assert "size" in f
+    # Uploader must be extracted from the "by NAME" label (regression: was always "")
+    assert f["uploaded_by"] == "Gurami Ghonghadze"
+    # uploaded_at must be a friendly local string, not the raw UTC ISO
+    assert re.match(r"^[A-Z][a-z]{2} \d", f["uploaded_at"])
+    assert "T" not in f["uploaded_at"] and "Z" not in f["uploaded_at"]
 
 
 # ---------------------------------------------------------------------------

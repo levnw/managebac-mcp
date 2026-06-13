@@ -840,7 +840,7 @@ server.request_handlers[types.ReadResourceRequest] = _handle_read_resource
 
 @server.list_tools()
 async def list_tools() -> list[types.Tool]:
-    return [
+    _tools = [
         types.Tool(
             name="get_classes",
             description=(
@@ -858,7 +858,11 @@ async def list_tools() -> list[types.Tool]:
                 "The result has two keys: 'current' (the live weekday, date, time, and timezone — "
                 "use this to know what day 'today'/'tomorrow' is, never assume) and 'timetable' "
                 "(the weekly slots). Each slot has: period, day, time_start, time_end, class_name, "
-                "class_id, teacher, room, and task_count (pending tasks for that class)."
+                "class_id, teacher, room, and task_count. task_count is ManageBac's per-day task "
+                "badge for that class — it counts tasks scheduled on that day and may include "
+                "already-graded or past tasks, so it is NOT a to-do/unfinished count. Never tell "
+                "the student they have work due based on task_count; use get_upcoming for what is "
+                "actually due or still to submit."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
         ),
@@ -1155,6 +1159,27 @@ async def list_tools() -> list[types.Tool]:
         ),
     ]
 
+    # Advertise an outputSchema on every tool so ChatGPT stops warning that results
+    # are unvalidated. Validation itself is intentionally loose: each tool returns a
+    # CallToolResult (see call_tool), which the MCP SDK passes through WITHOUT running
+    # jsonschema validation — so these schemas describe the shape without risking a
+    # hard failure on a field mismatch.
+    # - Data tools return their JSON mirrored under {"result": …} (see the common
+    #   return in call_tool), so their schema requires a "result" property.
+    # - Widget/content tools return their own structuredContent shape, so they get a
+    #   permissive object schema.
+    _result_schema = {
+        "type": "object",
+        "properties": {"result": {"description": "The tool's JSON result (same as the text content)."}},
+        "required": ["result"],
+    }
+    _passthrough_schema = {"type": "object", "additionalProperties": True}
+    _own_sc_tools = {"get_task_detail", "get_files", "get_file_content", "test_ui"}
+    for _t in _tools:
+        _t.outputSchema = _passthrough_schema if _t.name in _own_sc_tools else _result_schema
+
+    return _tools
+
 
 def _widget_sc(task: dict) -> dict:
     """Build a small structuredContent dict for the task-detail widget.
@@ -1288,16 +1313,49 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             import re as _re
             print(f"[get_task_detail] args={list(arguments.keys())} cid={arguments.get('class_id')} tid={arguments.get('task_id')} url={arguments.get('url','')[:60]}", flush=True)
 
+            # Build the capped structuredContent TASK object the card expects for
+            # ONE task (detail + its date/status/grades/tags meta + class name).
+            async def _detail_sc(d_cid, d_tid, detail):
+                task_meta_obj: dict = {}
+                class_name = ""
+                try:
+                    task_list = await fetch_tasks(d_cid)
+                    classes   = await fetch_classes()
+                    task_meta_obj = next(
+                        (t for t in task_list if str(t.get("id")) == str(d_tid)), {}
+                    )
+                    cls_match = next((c for c in classes if str(c.get("id")) == str(d_cid)), None)
+                    if cls_match:
+                        class_name = cls_match.get("name") or cls_match.get("title") or ""
+                except Exception:
+                    pass  # best-effort; card degrades gracefully without meta
+                sc = dict(_build_task_obj(
+                    detail if isinstance(detail, dict) else {}, task_meta_obj, class_name,
+                ))
+                # Cap long fields so the toolOutput payload stays bounded — the widget
+                # clamps display and reveals the rest via "Show More".
+                if sc.get("description") and len(sc["description"]) > 4000:
+                    sc["description"] = sc["description"][:4000] + "…"
+                if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 2500:
+                    sc["teacher_comment"] = sc["teacher_comment"][:2500] + "…"
+                if sc.get("images"):
+                    sc["images"] = sc["images"][:3]
+                if sc.get("resources"):
+                    sc["resources"] = sc["resources"][:6]
+                return sc
+
             # ── Resolve class_id + task_id ───────────────────────────────────
             tasks_arg = arguments.get("tasks")
             if tasks_arg:
-                # Batch: just use the first task for the widget, return all
+                # Batch: build a card for EVERY task so the widget can render them
+                # all and structuredContent-reading clients don't lose any.
                 pairs = [(t["class_id"], t["task_id"]) for t in tasks_arg]
                 fetched = await asyncio.gather(*[fetch_task_detail(c, t) for c, t in pairs])
-                task = list(fetched)[0] if len(fetched) == 1 else list(fetched)
-                detail = fetched[0] if fetched else {}
-                cid = pairs[0][0] if pairs else None
-                tid = pairs[0][1] if pairs else None
+                scs = await asyncio.gather(
+                    *[_detail_sc(c, t, d) for (c, t), d in zip(pairs, fetched)]
+                )
+                full = {"tasks": list(fetched)}
+                sc = {"tasks": list(scs)}
             else:
                 cid = arguments.get("class_id")
                 tid = arguments.get("task_id")
@@ -1314,65 +1372,10 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                         content=[types.TextContent(type="text", text=json.dumps(result))],
                         isError=True,
                     )
-                # Fetch detail, tasks metadata, and class list concurrently
-                _results = await asyncio.gather(
-                    fetch_task_detail(cid, tid),
-                    fetch_tasks(cid),
-                    fetch_classes(),
-                    return_exceptions=True,
-                )
-                _det, _tlist, _clist = _results
-                # Re-raise if the primary fetch failed
-                if isinstance(_det, BaseException):
-                    raise _det
-                detail = _det
-                task = detail
+                detail = await fetch_task_detail(cid, tid)
+                full = detail              # single → flat object (back-compat)
+                sc = await _detail_sc(cid, tid, detail)
 
-            # ── Pull task metadata (date/status/grades/tags) from tasks cache ─
-            task_meta_obj: dict = {}
-            class_name = ""
-            try:
-                # _tlist / _clist come from the gather above (single-task path)
-                # or may not exist yet (batch path — fetch them now)
-                if not tasks_arg:
-                    task_list = _tlist if not isinstance(_tlist, BaseException) else []
-                    classes   = _clist if not isinstance(_clist, BaseException) else []
-                else:
-                    task_list = await fetch_tasks(cid)
-                    classes   = await fetch_classes()
-                task_meta_obj = next(
-                    (t for t in task_list if str(t.get("id")) == str(tid)),
-                    {}
-                )
-                # Fetch class name from classes cache (24h TTL — almost free)
-                cls_match = next((c for c in classes if str(c.get("id")) == str(cid)), None)
-                if cls_match:
-                    class_name = cls_match.get("name") or cls_match.get("title") or ""
-            except Exception:
-                pass  # best-effort; card degrades gracefully without meta
-
-            # ── Build the TASK object the card expects ────────────────────────
-            task_obj = _build_task_obj(
-                detail if isinstance(detail, dict) else {},
-                task_meta_obj,
-                class_name,
-            )
-
-            full = task if isinstance(task, dict) else {"tasks": task}
-            # Pass the full TASK object as structuredContent → card reads it via
-            # window.openai.toolOutput / ui/notifications/tool-result message.
-            # Cap very long fields so the toolOutput payload stays bounded, but keep
-            # them generous — the widget clamps display to a few lines and reveals the
-            # rest via "Show More", so the full text needs to actually be sent.
-            sc = dict(task_obj)
-            if sc.get("description") and len(sc["description"]) > 4000:
-                sc["description"] = sc["description"][:4000] + "…"
-            if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 2500:
-                sc["teacher_comment"] = sc["teacher_comment"][:2500] + "…"
-            if sc.get("images"):
-                sc["images"] = sc["images"][:3]  # cap to keep payload small
-            if sc.get("resources"):
-                sc["resources"] = sc["resources"][:6]
             # Data reaches the widget via structuredContent → window.openai.toolOutput.
             duration_ms = int((time.monotonic() - t0) * 1000)
             cache.log_request(name, arguments, full, source="mcp", duration_ms=duration_ms)
@@ -1423,11 +1426,17 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             if f["kind"] == "image":
                 cache.log_request(name, arguments, {"kind": "image", "content_type": f.get("content_type")},
                                   source="mcp", duration_ms=duration_ms)
-                return [types.ImageContent(type="image", data=f["data_b64"], mimeType=f["content_type"])]
+                return types.CallToolResult(
+                    content=[types.ImageContent(type="image", data=f["data_b64"], mimeType=f["content_type"])],
+                    structuredContent={"kind": "image", "content_type": f.get("content_type")},
+                )
             elif f["kind"] == "text":
                 cache.log_request(name, arguments, {"kind": "text", "truncated": f.get("truncated")},
                                   source="mcp", duration_ms=duration_ms)
-                return [types.TextContent(type="text", text=f["text"])]
+                return types.CallToolResult(
+                    content=[types.TextContent(type="text", text=f["text"])],
+                    structuredContent={"kind": "text", "truncated": bool(f.get("truncated"))},
+                )
             else:
                 result = {"error": f["error"], "tool": name}
 
@@ -1508,10 +1517,16 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
     # Compact separators (no indent / no spaces) — pretty-printing wasted ~35%
     # of the payload, and oversized payloads get truncated by the connector.
     # Keep _meta in the JSON (ChatGPT reads it from the response body, not TextContent._meta)
-    return [types.TextContent(
-        type="text",
-        text=json.dumps(result, ensure_ascii=False, separators=(",", ":"))
-    )]
+    # The model reads the JSON from the text content; structuredContent={"result": …}
+    # mirrors it so these tools satisfy their declared outputSchema (returning a
+    # CallToolResult also skips the SDK's strict output validation).
+    return types.CallToolResult(
+        content=[types.TextContent(
+            type="text",
+            text=json.dumps(result, ensure_ascii=False, separators=(",", ":")),
+        )],
+        structuredContent={"result": result},
+    )
 
 
 async def main():

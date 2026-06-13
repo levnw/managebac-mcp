@@ -564,7 +564,12 @@ function statusRightPanel(status) {
 }
 
 // ─── Main render ────────────────────────────────────────────────────
-function renderCard(task) {
+// mountEl lets a batch render each task into its own .mb-card slot; defaults
+// to the single top-level #card for back-compat with single-task results.
+let _cardSeq = 0;
+function renderCard(task, mountEl) {
+  const cardEl = mountEl || document.getElementById('card');
+  const uid = ++_cardSeq;  // unique Show-More ids so cards don't toggle each other
   let h = '';
   const hasGrades = !!(task.grades && task.grades.length);
   const hasDropbox = task.submitted_files !== null && task.submitted_files !== undefined;
@@ -574,7 +579,7 @@ function renderCard(task) {
 
   // ── Header ── (all accent colours follow the student's ManageBac theme)
   const themeColor = task.theme_color || '#1570ef';
-  document.getElementById('card').style.setProperty('--theme', themeColor);
+  cardEl.style.setProperty('--theme', themeColor);
   h += `<div class="mb-header">
     <h1>${esc(task.title)}</h1>
     ${task.class_name ? `<div class="class-name">${esc(task.class_name)}</div>` : ''}
@@ -647,10 +652,10 @@ function renderCard(task) {
     const paras = task.teacher_comment.split(/\n\n+/).filter(Boolean);
     h += `<div class="teacher-comment">
       <div class="teacher-comment-body">
-        <div class="show-more-text collapsed" id="tc-body">
+        <div class="show-more-text collapsed" id="tc-body-${uid}">
           ${paras.map(p => `<p>${esc(p)}</p>`).join('')}
         </div>
-        <button class="show-toggle" onclick="toggleShowMore('tc-body',this)">
+        <button class="show-toggle" onclick="toggleShowMore('tc-body-${uid}',this)">
           Show More ${ICONS.chevDown}
         </button>
       </div>
@@ -693,8 +698,8 @@ function renderCard(task) {
       body += `<a href="${esc(src)}" target="_blank" rel="noopener"><img class="desc-img" src="${esc(src)}" alt="" loading="lazy"></a>`;
     });
     if (task.description) {
-      body += `<div class="description-content show-more-text collapsed" id="desc-body">${task.description}</div>
-        <button class="show-toggle" onclick="toggleShowMore('desc-body',this)" style="margin-top:8px">
+      body += `<div class="description-content show-more-text collapsed" id="desc-body-${uid}">${task.description}</div>
+        <button class="show-toggle" onclick="toggleShowMore('desc-body-${uid}',this)" style="margin-top:8px">
           Show More ${ICONS.chevDown}
         </button>`;
     }
@@ -810,7 +815,27 @@ function renderCard(task) {
     Open in ManageBac ${ICONS.external}
   </a>`;
 
-  document.getElementById('card').innerHTML = h;
+  cardEl.innerHTML = h;
+}
+
+// Render several task cards (batch get_task_detail) — turn #card into a plain
+// vertical stack and mount one .mb-card slot per task.
+function renderCards(tasks) {
+  const root = document.getElementById('card');
+  root.classList.remove('mb-card');
+  root.style.removeProperty('--theme');
+  root.style.background = 'transparent';
+  root.style.boxShadow = 'none';
+  root.style.display = 'flex';
+  root.style.flexDirection = 'column';
+  root.style.gap = '16px';
+  root.innerHTML = '';
+  tasks.forEach(t => {
+    const slot = document.createElement('div');
+    slot.className = 'mb-card';
+    root.appendChild(slot);
+    renderCard(t, slot);
+  });
 }
 
 function toggleShowMore(id, btn) {
@@ -848,12 +873,24 @@ const _INJECTED_TASK = /*INJECT_TASK*/null;
 // renderCard rebuilds the DOM and reloads the description image, which makes the
 // iframe height bounce and shifts the page text around. Skip identical re-renders.
 let _lastRenderKey = null;
-function _doRender(taskObj) {
-  if (!taskObj) return;
-  const key = (taskObj.url || '') + '|' + (taskObj.title || '') + '|' + (taskObj.status || '');
+// Accept either a single task object or a batch { tasks: [...] }.
+function _hasData(d) {
+  return !!(d && (d.title || (Array.isArray(d.tasks) && d.tasks.length)));
+}
+function _doRender(data) {
+  if (!data) return;
+  if (Array.isArray(data.tasks)) {
+    const key = 'batch:' + data.tasks.map(t => (t.url||'')+'|'+(t.status||'')).join(',');
+    if (key === _lastRenderKey) return;
+    _lastRenderKey = key;
+    renderCards(data.tasks);
+    requestAnimationFrame(initShowMore);
+    return;
+  }
+  const key = (data.url || '') + '|' + (data.title || '') + '|' + (data.status || '');
   if (key === _lastRenderKey) return;
   _lastRenderKey = key;
-  renderCard(taskObj);
+  renderCard(data);
   requestAnimationFrame(initShowMore);
 }
 
@@ -863,7 +900,7 @@ function _doRender(taskObj) {
 // Priority 2: _INJECTED_TASK — only reliable on first load; stale when HTML is cached.
 // Priority 3: async message / event listeners.
 const _liveData = window.openai?.toolOutput;
-if (_liveData && _liveData.title) {
+if (_hasData(_liveData)) {
   _doRender(_liveData);
 } else if (_INJECTED_TASK) {
   // No live data (e.g. standalone preview) — use baked data
@@ -880,7 +917,7 @@ if (_liveData && _liveData.title) {
       const msg = ev.data;
       if (msg.method === 'ui/notifications/tool-result') {
         const d = msg.params?.structuredContent;
-        if (d && d.title) {
+        if (_hasData(d)) {
           _doRender(d);
         }
       }
@@ -888,7 +925,7 @@ if (_liveData && _liveData.title) {
     // Also listen for openai:set_globals which fires when globals are available
     window.addEventListener('openai:set_globals', () => {
       const d = window.openai?.toolOutput;
-      if (d && d.title) _doRender(d);
+      if (_hasData(d)) _doRender(d);
     });
 }
 </script>

@@ -421,6 +421,27 @@ def _now_info() -> dict:
     }
 
 
+def _format_file_datetime(iso: str) -> str:
+    """Turn a ManageBac file ISO timestamp (UTC, e.g. '2026-04-29T12:02:39.000Z')
+    into a friendly school-local string like 'Apr 29, 2026, 4:02 PM'.
+
+    ManageBac sends file timestamps in UTC even though every other date in this
+    API is already school-local — so convert with .astimezone() (the prod server
+    runs in the school's timezone, the same convention _now_info relies on). Fall
+    back to the raw string if it can't be parsed."""
+    if not iso:
+        return ""
+    import datetime
+    try:
+        dt = datetime.datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone()
+    except (ValueError, TypeError):
+        return iso
+    return (
+        dt.strftime("%b ") + str(dt.day) + dt.strftime(", %Y, ")
+        + dt.strftime("%I:%M %p").lstrip("0")
+    )
+
+
 async def fetch_timetable() -> dict:
     # Timetable slots are cached (they change rarely); the "current" time is
     # always computed fresh so the AI knows what day/time it actually is.
@@ -1127,14 +1148,21 @@ def parse_files(html: str) -> list[dict]:
         else:
             size = ""
 
-        # Author — inside the row's author element
-        author_el = row.find(class_=re.compile(r'author|uploader|user', re.I))
-        if not author_el:
-            author_el = row.find("a", href=re.compile(r'/users/', re.I))
-        author = author_el.get_text(strip=True) if author_el else ""
+        # Author — ManageBac renders the uploader as a "by NAME" <label> in the
+        # title cell. The data-ec3-info JSON only carries user_id, not the name,
+        # so read the label text and strip the leading "by".
+        author = ""
+        label_el = row.find("label")
+        if label_el:
+            author = re.sub(r'^\s*by\s+', '', label_el.get_text(" ", strip=True), flags=re.I).strip()
+        if not author:  # fallbacks for older markup variants
+            author_el = row.find(class_=re.compile(r'author|uploader|user', re.I))
+            if not author_el:
+                author_el = row.find("a", href=re.compile(r'/users/', re.I))
+            author = author_el.get_text(strip=True) if author_el else ""
 
-        # Date and download URL from JSON
-        date = info.get("updated_at", info.get("created_at", ""))
+        # Date (ManageBac sends UTC ISO → format to school-local) + download URL
+        date = _format_file_datetime(info.get("updated_at") or info.get("created_at") or "")
         url = info.get("download_url", "")
 
         files.append({
