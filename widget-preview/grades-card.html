@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ManageBac Grades</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-size: 14px; color: #101828; background: transparent;
+      display: flex; align-items: flex-start; justify-content: center; padding: 0;
+    }
+    .mb-card {
+      --theme: #1570ef;
+      width: 100%; max-width: 860px; background: #fff; border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06); overflow: hidden;
+    }
+    .mb-header { background: var(--theme); padding: 14px 20px 13px; }
+    .mb-header h1 { font-size: 1.3rem; font-weight: 700; color: #fff; line-height: 1.3; }
+    .mb-header .scope { font-size: 0.78rem; color: rgba(255,255,255,0.8); margin-top: 2px; font-weight: 400; }
+
+    .content-area { padding: 14px 20px 8px; }
+
+    .grade-search { position: relative; margin-bottom: 14px; }
+    .grade-search input {
+      width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #d0d5dd; border-radius: 6px;
+      font-size: 0.85rem; color: #101828; outline: none; font-family: inherit;
+    }
+    .grade-search input::placeholder { color: #98a2b3; }
+    .grade-search input:focus { border-color: var(--theme); }
+    .grade-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: #98a2b3; }
+
+    /* ── One class block ── */
+    .grade-row { padding: 12px 0 13px; border-bottom: 1px solid #f2f4f7; }
+    .grade-row:last-child { border-bottom: none; }
+    .gr-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+    .gr-class { font-size: 0.92rem; font-weight: 600; color: #101828; min-width: 0; word-break: break-word; }
+
+    .gr-myp { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+    .gr-total { font-size: 0.72rem; color: #667085; white-space: nowrap; }
+    .myp-badge {
+      display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 26px;
+      padding: 0 8px; border-radius: 13px; font-size: 0.85rem; font-weight: 700; color: #fff;
+    }
+
+    /* criterion bars */
+    .gr-bars { display: grid; gap: 6px; }
+    .crit { display: grid; grid-template-columns: 18px 1fr 34px; align-items: center; gap: 9px; }
+    .crit-letter { font-size: 0.8rem; font-weight: 700; color: #475467; text-align: center; }
+    .crit-track { position: relative; height: 12px; background: #f2f4f7; border-radius: 6px; overflow: hidden; }
+    .crit-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; min-width: 3px; transition: width .3s; }
+    .crit-val { font-size: 0.78rem; font-weight: 600; color: #344054; text-align: right; white-space: nowrap; }
+    .crit-val .muted { color: #98a2b3; font-weight: 400; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 12px 0 4px; border-top: 1px solid #eaecf0; margin-top: 4px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: #667085; }
+    .legend-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+
+    .empty { color: #98a2b3; font-size: 0.85rem; font-style: italic; padding: 18px 0; text-align: center; }
+    .note { font-size: 0.72rem; color: #98a2b3; padding: 2px 0 8px; }
+
+    .open-in-mb {
+      display: flex; align-items: center; justify-content: center; padding: 13px 20px; gap: 6px;
+      color: var(--theme); font-size: 0.82rem; font-weight: 600; text-decoration: none; border-top: 1px solid #eaecf0;
+    }
+    .open-in-mb:hover { background: #f9fafb; }
+    svg.icon { width: 14px; height: 14px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+<div class="mb-card" id="card"></div>
+
+<script>
+// Per-criterion accent colours (A/B/C/D)
+const CRIT_COLORS = { A: '#1570ef', B: '#6938ef', C: '#099250', D: '#e3a008' };
+const CRIT_NAMES = {
+  A: 'Knowing & understanding', B: 'Inquiring & designing',
+  C: 'Processing & evaluating', D: 'Reflecting / impact'
+};
+const ICONS = {
+  search: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>`,
+  external: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/></svg>`,
+};
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Sum of the latest A/B/C/D (out of 32) → rough MYP 1-7 band + colour.
+function mypFromTotal(total, n) {
+  if (!n) return null;
+  // scale partial totals (fewer than 4 criteria) up to a /32 basis
+  const scaled = total * (4 / n);
+  let level = 1;
+  if (scaled >= 28) level = 7; else if (scaled >= 24) level = 6; else if (scaled >= 19) level = 5;
+  else if (scaled >= 15) level = 4; else if (scaled >= 10) level = 3; else if (scaled >= 6) level = 2; else level = 1;
+  const colors = { 7:'#099250', 6:'#1570ef', 5:'#2e90fa', 4:'#e3a008', 3:'#f79009', 2:'#f04438', 1:'#d92d20' };
+  return { level, color: colors[level], scaled };
+}
+
+function critBar(letter, c) {
+  const has = c && typeof c.latest === 'number' && c.out_of;
+  const out = (c && c.out_of) || 8;
+  const score = has ? c.latest : 0;
+  const pct = has ? Math.max(3, (score / out) * 100) : 0;
+  const color = CRIT_COLORS[letter] || '#1570ef';
+  const avg = (c && typeof c.average === 'number') ? c.average : null;
+  return `<div class="crit" title="${esc(CRIT_NAMES[letter] || letter)}${avg!=null ? ' · avg '+avg+'/'+out : ''}">
+    <span class="crit-letter" style="color:${color}">${letter}</span>
+    <span class="crit-track">${has ? `<span class="crit-fill" style="width:${pct}%;background:${color}"></span>` : ''}</span>
+    <span class="crit-val">${has ? `${score}<span class="muted">/${out}</span>` : '<span class="muted">—</span>'}</span>
+  </div>`;
+}
+
+function gradeRow(cls) {
+  const crit = cls.criteria || {};
+  const order = ['A','B','C','D'];
+  let total = 0, n = 0;
+  order.forEach(k => { const c = crit[k]; if (c && typeof c.latest === 'number') { total += c.latest; n++; } });
+  const myp = mypFromTotal(total, n);
+  const bars = order.map(k => critBar(k, crit[k])).join('');
+  const search = (cls.class_name || '').toLowerCase();
+  return `<div class="grade-row" data-search="${esc(search)}">
+    <div class="gr-top">
+      <div class="gr-class">${esc(cls.class_name || 'Class')}</div>
+      <div class="gr-myp">
+        ${n ? `<span class="gr-total">${total}/${n*8}</span>` : ''}
+        ${myp ? `<span class="myp-badge" style="background:${myp.color}" title="Estimated MYP level (best-fit may differ)">≈ ${myp.level}</span>`
+              : `<span class="gr-total">no grades yet</span>`}
+      </div>
+    </div>
+    <div class="gr-bars">${bars}</div>
+  </div>`;
+}
+
+function filterGrades(q) {
+  q = q.trim().toLowerCase();
+  document.querySelectorAll('#grades-body .grade-row').forEach(r => {
+    r.style.display = !q || (r.dataset.search || '').includes(q) ? '' : 'none';
+  });
+}
+
+function renderGrades(data) {
+  const classes = (data.classes || []).filter(c => c && c.criteria);
+  const scope = data.scope || (classes.length === 1 ? classes[0].class_name : 'All classes');
+  let h = '';
+  h += `<div class="mb-header"><h1>Grades</h1><div class="scope">${esc(scope)} · MYP criterion levels (out of 8)</div></div>`;
+  h += '<div class="content-area">';
+  if (classes.length > 6) {
+    h += `<div class="grade-search">${ICONS.search}
+      <input type="text" placeholder="Filter by class name" oninput="filterGrades(this.value)"></div>`;
+  }
+  h += '<div class="note">Bars show your latest score per criterion. ≈ MYP is a rough estimate from the latest totals — teachers use best-fit.</div>';
+  h += '<div id="grades-body">';
+  h += classes.map(gradeRow).join('');
+  h += '</div>';
+  if (!classes.length) h += '<div class="empty">No graded classes found yet.</div>';
+  // legend
+  h += `<div class="legend">` + ['A','B','C','D'].map(k =>
+    `<span class="legend-item"><span class="legend-dot" style="background:${CRIT_COLORS[k]}"></span>${k}: ${esc(CRIT_NAMES[k])}</span>`
+  ).join('') + `</div>`;
+  h += '</div>';
+  if (data.url) {
+    h += `<a class="open-in-mb" href="${esc(data.url)}" target="_blank" rel="noopener">Open in ManageBac ${ICONS.external}</a>`;
+  }
+  document.getElementById('card').innerHTML = h;
+}
+
+const _INJECTED = /*INJECT_DATA*/null;
+function _hasGrades(d) { return !!(d && Array.isArray(d.classes)); }
+
+const _live = window.openai?.toolOutput;
+if (_hasGrades(_live)) {
+  renderGrades(_live);
+} else if (_hasGrades(_INJECTED)) {
+  renderGrades(_INJECTED);
+} else {
+  document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px">Loading grades…</div>';
+  window.addEventListener('message', (ev) => {
+    if (ev.source !== window.parent) return;
+    const msg = ev.data;
+    if (msg && msg.method === 'ui/notifications/tool-result') {
+      const d = msg.params?.structuredContent;
+      if (_hasGrades(d)) renderGrades(d);
+    }
+  });
+  window.addEventListener('openai:set_globals', () => {
+    const d = window.openai?.toolOutput;
+    if (_hasGrades(d)) renderGrades(d);
+  });
+}
+</script>
+</body>
+</html>

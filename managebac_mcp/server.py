@@ -426,12 +426,24 @@ _CLASS_FILES_URI = "ui://widget/class-files-v1.html"
 _CLASS_FILES_PATH = Path(__file__).parent.parent / "widget-preview" / "class-files.html"
 _CLASS_FILES_HTML: str = _CLASS_FILES_PATH.read_text(encoding="utf-8")
 
+# Grades widget — per-class criterion bars + estimated MYP level.
+_GRADES_URI = "ui://widget/grades-v1.html"
+_GRADES_PATH = Path(__file__).parent.parent / "widget-preview" / "grades-card.html"
+_GRADES_HTML: str = _GRADES_PATH.read_text(encoding="utf-8")
+
+# Timetable widget — weekly grid of classes.
+_TIMETABLE_URI = "ui://widget/timetable-v1.html"
+_TIMETABLE_PATH = Path(__file__).parent.parent / "widget-preview" / "timetable-card.html"
+_TIMETABLE_HTML: str = _TIMETABLE_PATH.read_text(encoding="utf-8")
+
 # Static widgets (test widget + task card stub registered so ChatGPT
 # sees a widget for get_task_detail in list_resources).
 _STATIC_WIDGETS = {
     _TEST_WIDGET_URI: {"html": _TEST_WIDGET_HTML, "title": "Test Widget"},
     _TASK_DETAIL_URI: {"html": _TASK_CARD_HTML, "title": "Task Detail"},
     _CLASS_FILES_URI: {"html": _CLASS_FILES_HTML, "title": "Class Files"},
+    _GRADES_URI: {"html": _GRADES_HTML, "title": "Grades"},
+    _TIMETABLE_URI: {"html": _TIMETABLE_HTML, "title": "Timetable"},
 }
 
 # Per-task dynamic widgets: hash → {html, title}  (LRU capped at 60)
@@ -764,6 +776,8 @@ _TEST_META = _widget_meta(_TEST_WIDGET_URI, "Loading test widget...", "Test widg
 # Actual CallToolResult uses a per-task URI from _make_task_widget().
 _TASK_META_STATIC = _widget_meta(_TASK_DETAIL_URI, "Loading task...", "Task loaded")
 _FILES_META_STATIC = _widget_meta(_CLASS_FILES_URI, "Loading files...", "Files loaded")
+_GRADES_META_STATIC = _widget_meta(_GRADES_URI, "Loading grades...", "Grades loaded")
+_TIMETABLE_META_STATIC = _widget_meta(_TIMETABLE_URI, "Loading timetable...", "Timetable loaded")
 
 
 def _resource_meta(uri: str) -> dict:
@@ -865,6 +879,7 @@ async def list_tools() -> list[types.Tool]:
                 "actually due or still to submit."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
+            _meta=_TIMETABLE_META_STATIC,
         ),
         types.Tool(
             name="refresh",
@@ -1102,6 +1117,7 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": [],
             },
+            _meta=_GRADES_META_STATIC,
         ),
         types.Tool(
             name="tag_search",
@@ -1174,7 +1190,8 @@ async def list_tools() -> list[types.Tool]:
         "required": ["result"],
     }
     _passthrough_schema = {"type": "object", "additionalProperties": True}
-    _own_sc_tools = {"get_task_detail", "get_files", "get_file_content", "test_ui"}
+    _own_sc_tools = {"get_task_detail", "get_files", "get_file_content", "test_ui",
+                     "get_grades", "get_timetable"}
     for _t in _tools:
         _t.outputSchema = _passthrough_schema if _t.name in _own_sc_tools else _result_schema
 
@@ -1292,6 +1309,15 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
         elif name == "get_timetable":
             result = await fetch_timetable()
+            if isinstance(result, dict) and result.get("timetable"):
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
+                return types.CallToolResult(
+                    content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
+                    structuredContent=result,
+                    _meta=_TIMETABLE_META_STATIC,
+                )
+            # else (empty/error) → common return below
 
         elif name == "refresh":
             cache.clear_user()
@@ -1442,6 +1468,26 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
         elif name == "get_grades":
             result = await fetch_grades(arguments.get("class_id", ""))
+            if isinstance(result, dict) and result.get("classes"):
+                # Slim structuredContent for the widget: drop per-task detail
+                # (graded_tasks) so the toolOutput payload stays small; the full
+                # JSON is still in the text content for the model.
+                sc = {
+                    "scope": result.get("scope"),
+                    "url": require_user().mb_url.rstrip("/") + "/student",
+                    "classes": [
+                        {"class_name": c.get("class_name"), "criteria": c.get("criteria")}
+                        for c in result["classes"]
+                    ],
+                }
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
+                return types.CallToolResult(
+                    content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
+                    structuredContent=sc,
+                    _meta=_GRADES_META_STATIC,
+                )
+            # else (error / no classes) → common return below
 
         elif name == "tag_search":
             result = await tag_search(arguments["tag"], arguments.get("class_id", ""))

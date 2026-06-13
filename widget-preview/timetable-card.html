@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ManageBac Timetable</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-size: 14px; color: #101828; background: transparent;
+      display: flex; align-items: flex-start; justify-content: center; padding: 0;
+    }
+    .mb-card {
+      --theme: #1570ef;
+      width: 100%; max-width: 1000px; background: #fff; border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06); overflow: hidden;
+    }
+    .mb-header { background: var(--theme); padding: 14px 20px 13px; }
+    .mb-header h1 { font-size: 1.3rem; font-weight: 700; color: #fff; line-height: 1.3; }
+    .mb-header .sub { font-size: 0.78rem; color: rgba(255,255,255,0.8); margin-top: 2px; font-weight: 400; }
+
+    .tt-scroll { overflow-x: auto; padding: 12px; }
+    .tt-grid { display: grid; gap: 6px; min-width: 640px; }
+
+    .tt-head, .tt-period-label, .tt-cell, .tt-empty { border-radius: 8px; }
+    .tt-head {
+      font-size: 0.78rem; font-weight: 700; color: #344054; text-align: center;
+      padding: 7px 4px; background: #f9fafb;
+    }
+    .tt-head .date { display: block; font-size: 0.7rem; font-weight: 500; color: #98a2b3; margin-top: 1px; }
+    .tt-head.today { background: var(--theme); color: #fff; }
+    .tt-head.today .date { color: rgba(255,255,255,0.85); }
+
+    .tt-period-label {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700; color: #98a2b3; background: #f9fafb;
+    }
+    .tt-corner { background: transparent; }
+
+    .tt-cell {
+      position: relative; padding: 7px 8px 8px; min-height: 62px;
+      background: var(--c-bg, #f2f4f7); border-left: 3px solid var(--c, #98a2b3);
+      overflow: hidden;
+    }
+    .tt-time { font-size: 0.68rem; color: #667085; font-weight: 500; }
+    .tt-class { font-size: 0.78rem; font-weight: 600; color: #101828; line-height: 1.2; margin: 1px 0; word-break: break-word; }
+    .tt-teacher { font-size: 0.7rem; color: #475467; line-height: 1.2; }
+    .tt-room { font-size: 0.68rem; color: #98a2b3; }
+    .tt-empty { background: #fcfcfd; }
+
+    .tt-badge {
+      position: absolute; top: 5px; right: 5px; min-width: 16px; height: 16px; padding: 0 4px;
+      border-radius: 8px; background: #f04438; color: #fff; font-size: 0.66rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .legend { padding: 4px 20px 4px; font-size: 0.72rem; color: #98a2b3; }
+    .open-in-mb {
+      display: flex; align-items: center; justify-content: center; padding: 12px 20px; gap: 6px;
+      color: var(--theme); font-size: 0.82rem; font-weight: 600; text-decoration: none; border-top: 1px solid #eaecf0;
+    }
+    .open-in-mb:hover { background: #f9fafb; }
+    svg.icon { width: 14px; height: 14px; flex-shrink: 0; }
+    .empty { color: #98a2b3; font-size: 0.85rem; font-style: italic; padding: 30px; text-align: center; }
+  </style>
+</head>
+<body>
+<div class="mb-card" id="card"></div>
+
+<script>
+const ICONS = {
+  external: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/></svg>`,
+};
+// Soft subject palette: [border, background]
+const PALETTE = [
+  ['#1570ef','#eff6ff'], ['#6938ef','#f4f0ff'], ['#099250','#ecfdf3'], ['#e3a008','#fffaeb'],
+  ['#e5484d','#fef3f2'], ['#0ba5ec','#f0f9ff'], ['#ee46bc','#fdf2fa'], ['#4e5ba6','#f0f1f9'],
+  ['#dd2590','#fdf2fa'], ['#7839ee','#f4f3ff'], ['#15b79e','#f0fdf9'], ['#ca8504','#fefbe8'],
+];
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function colorFor(name){
+  let h=0; const s=String(name||''); for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
+  return PALETTE[h % PALETTE.length];
+}
+function cleanName(n){ return String(n||'').replace(/\s+/g,' ').trim(); }
+// "Jun 8, Mon" → {label:"Mon", date:"Jun 8", dayNum:8}
+function parseDay(d){
+  const parts = String(d||'').split(',').map(x=>x.trim());
+  const datePart = parts[0]||''; const label = parts[1]||datePart;
+  const m = datePart.match(/(\d+)/); const dayNum = m ? parseInt(m[1],10) : null;
+  return { label, date: datePart, dayNum, raw: d };
+}
+
+function renderTimetable(data){
+  const slots = data.timetable || [];
+  const cur = data.current || {};
+  // distinct days (first-appearance order) and periods (numeric sort)
+  const dayOrder = [], daySeen = {};
+  slots.forEach(s => { if(!daySeen[s.day]){ daySeen[s.day]=1; dayOrder.push(s.day); } });
+  const periods = [...new Set(slots.map(s => s.period))].sort((a,b)=>{
+    const na=parseInt(a,10), nb=parseInt(b,10);
+    if(!isNaN(na)&&!isNaN(nb)) return na-nb;
+    return String(a).localeCompare(String(b));
+  });
+  // index slots by period|day
+  const grid = {};
+  slots.forEach(s => { grid[s.period+'|'+s.day] = s; });
+
+  // today highlight: match current.date day-number to a column
+  const curDayNum = (() => { const m=String(cur.date||'').match(/(\d+)/); return m?parseInt(m[1],10):null; })();
+
+  let h = '';
+  const weekLabel = dayOrder.length ? (parseDay(dayOrder[0]).date + ' – ' + parseDay(dayOrder[dayOrder.length-1]).date) : '';
+  h += `<div class="mb-header"><h1>Timetable</h1>
+    <div class="sub">${esc(weekLabel)}${cur.date ? ' · checked '+esc(cur.weekday||'')+' '+esc(cur.date)+(cur.time?' '+esc(cur.time):'') : ''}</div></div>`;
+
+  if(!slots.length){ h += '<div class="empty">No timetable available.</div>'; document.getElementById('card').innerHTML=h; return; }
+
+  const cols = dayOrder.length;
+  h += '<div class="tt-scroll"><div class="tt-grid" style="grid-template-columns: 42px repeat('+cols+', minmax(110px, 1fr));">';
+  // header row
+  h += '<div class="tt-corner"></div>';
+  dayOrder.forEach(d => {
+    const pd = parseDay(d);
+    const today = curDayNum!=null && pd.dayNum===curDayNum ? ' today' : '';
+    h += `<div class="tt-head${today}">${esc(pd.label)}<span class="date">${esc(pd.date)}</span></div>`;
+  });
+  // period rows
+  periods.forEach(p => {
+    h += `<div class="tt-period-label">${esc(p)}</div>`;
+    dayOrder.forEach(d => {
+      const s = grid[p+'|'+d];
+      if(!s){ h += '<div class="tt-empty"></div>'; return; }
+      const [bc,bg] = colorFor(s.class_name);
+      const time = (s.time_start||'') + (s.time_end ? '–'+s.time_end : '');
+      h += `<div class="tt-cell" style="--c:${bc};--c-bg:${bg}">
+        ${s.task_count ? `<span class="tt-badge" title="${s.task_count} task(s) on ManageBac">${s.task_count}</span>` : ''}
+        ${time ? `<div class="tt-time">${esc(time)}</div>` : ''}
+        <div class="tt-class">${esc(cleanName(s.class_name))}</div>
+        ${s.teacher ? `<div class="tt-teacher">${esc(s.teacher)}</div>` : ''}
+        ${s.room ? `<div class="tt-room">${esc(s.room)}</div>` : ''}
+      </div>`;
+    });
+  });
+  h += '</div></div>';
+  h += `<div class="legend">Red badges show ManageBac's per-day task count for that class (not necessarily work due).</div>`;
+  if(data.url){
+    h += `<a class="open-in-mb" href="${esc(data.url)}" target="_blank" rel="noopener">Open in ManageBac ${ICONS.external}</a>`;
+  }
+  document.getElementById('card').innerHTML = h;
+}
+
+const _INJECTED = /*INJECT_DATA*/null;
+function _hasTT(d){ return !!(d && Array.isArray(d.timetable)); }
+const _live = window.openai?.toolOutput;
+if(_hasTT(_live)) renderTimetable(_live);
+else if(_hasTT(_INJECTED)) renderTimetable(_INJECTED);
+else {
+  document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px">Loading timetable…</div>';
+  window.addEventListener('message', (ev) => {
+    if (ev.source !== window.parent) return;
+    const msg = ev.data;
+    if (msg && msg.method === 'ui/notifications/tool-result') {
+      const d = msg.params?.structuredContent;
+      if (_hasTT(d)) renderTimetable(d);
+    }
+  });
+  window.addEventListener('openai:set_globals', () => {
+    const d = window.openai?.toolOutput;
+    if (_hasTT(d)) renderTimetable(d);
+  });
+}
+</script>
+</body>
+</html>
