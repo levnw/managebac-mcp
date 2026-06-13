@@ -24,7 +24,7 @@ from .scraper import (
     find_task,
 )
 from . import cache
-from .context import ManageBacError
+from .context import ManageBacError, require_user
 
 
 SERVER_INSTRUCTIONS = (
@@ -421,11 +421,17 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
 _TASK_CARD_PATH = Path(__file__).parent.parent / "widget-preview" / "task-card.html"
 _TASK_CARD_HTML: str = _TASK_CARD_PATH.read_text(encoding="utf-8")
 
+# Class files widget — loaded from disk.
+_CLASS_FILES_URI = "ui://widget/class-files-v1.html"
+_CLASS_FILES_PATH = Path(__file__).parent.parent / "widget-preview" / "class-files.html"
+_CLASS_FILES_HTML: str = _CLASS_FILES_PATH.read_text(encoding="utf-8")
+
 # Static widgets (test widget + task card stub registered so ChatGPT
 # sees a widget for get_task_detail in list_resources).
 _STATIC_WIDGETS = {
     _TEST_WIDGET_URI: {"html": _TEST_WIDGET_HTML, "title": "Test Widget"},
     _TASK_DETAIL_URI: {"html": _TASK_CARD_HTML, "title": "Task Detail"},
+    _CLASS_FILES_URI: {"html": _CLASS_FILES_HTML, "title": "Class Files"},
 }
 
 # Per-task dynamic widgets: hash → {html, title}  (LRU capped at 60)
@@ -757,12 +763,15 @@ _TEST_META = _widget_meta(_TEST_WIDGET_URI, "Loading test widget...", "Test widg
 # Static task meta used only in the tool *definition* so ChatGPT knows the tool has a widget.
 # Actual CallToolResult uses a per-task URI from _make_task_widget().
 _TASK_META_STATIC = _widget_meta(_TASK_DETAIL_URI, "Loading task...", "Task loaded")
+_FILES_META_STATIC = _widget_meta(_CLASS_FILES_URI, "Loading files...", "Files loaded")
 
 
 def _resource_meta(uri: str) -> dict:
     """Full _meta for a widget resource (list + read), including the image CSP."""
     if uri == _TEST_WIDGET_URI:
         invoking, invoked = "Loading test widget...", "Test widget loaded"
+    elif uri == _CLASS_FILES_URI:
+        invoking, invoked = "Loading files...", "Files loaded"
     else:
         invoking, invoked = "Loading task...", "Task loaded"
     return {
@@ -807,17 +816,18 @@ async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerR
     uri_str = str(uri)
     info = _STATIC_WIDGETS.get(uri_str) or _TASK_WIDGETS.get(uri_str)
     if info is None and uri_str.startswith("ui://widget/task"):
-        # Stale task URI (old per-task hash from a previous conversation or a
-        # restarted server). All task widgets share the same template now —
-        # data arrives via toolOutput — so serve the current template instead
-        # of returning empty contents (which ChatGPT shows as
-        # "Failed to fetch template" with no way to recover).
         info = _STATIC_WIDGETS.get(_TASK_DETAIL_URI)
+    if info is None and uri_str.startswith("ui://widget/class-files"):
+        info = _STATIC_WIDGETS.get(_CLASS_FILES_URI)
     if info is None:
         return types.ServerResult(
             types.ReadResourceResult(contents=[], _meta={"error": f"Unknown resource: {uri_str}"})
         )
-    meta = _resource_meta(uri_str if uri_str in _STATIC_WIDGETS else _TASK_DETAIL_URI)
+    canonical_uri = (
+        _CLASS_FILES_URI if uri_str.startswith("ui://widget/class-files") else
+        uri_str if uri_str in _STATIC_WIDGETS else _TASK_DETAIL_URI
+    )
+    meta = _resource_meta(canonical_uri)
     contents = [
         types.TextResourceContents(uri=uri, mimeType=WIDGET_MIME, text=info["html"], _meta=meta),
         types.TextResourceContents(uri=uri, mimeType=WIDGET_MIME_ALT, text=info["html"], _meta=meta),
@@ -989,6 +999,7 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["class_id"],
             },
+            _meta=_FILES_META_STATIC,
         ),
         types.Tool(
             name="get_journal",
@@ -1381,7 +1392,21 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             if _is_batch(cid):
                 result = await _batch(fetch_files, cid)
             else:
-                result = await fetch_files(cid)
+                files = await fetch_files(cid)
+                # Resolve class name from cached classes list (usually free).
+                classes = await fetch_classes()
+                cls = next((c for c in classes if str(c.get("id")) == str(cid)), {})
+                class_name = cls.get("name", "")
+                mb_url = require_user().mb_url.rstrip("/")
+                files_url = f"{mb_url}/student/classes/{cid}/files"
+                sc = {"files": files[:80], "class_name": class_name, "url": files_url}
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                cache.log_request(name, arguments, {"files": files}, source="mcp", duration_ms=duration_ms)
+                return types.CallToolResult(
+                    content=[types.TextContent(type="text", text=json.dumps({"files": files}, ensure_ascii=False, separators=(",", ":")))],
+                    structuredContent=sc,
+                    _meta=_FILES_META_STATIC,
+                )
 
         elif name == "get_journal":
             cid = arguments["class_id"]

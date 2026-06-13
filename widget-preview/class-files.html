@@ -187,6 +187,14 @@ if (_live && _live.files) {
   renderFiles(_INJECTED);
 } else {
   document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px;text-align:center">Loading files…</div>';
+  window.addEventListener('message', (ev) => {
+    if (ev.source !== window.parent) return;
+    const msg = ev.data;
+    if (msg.method === 'ui/notifications/tool-result') {
+      const d = msg.params?.structuredContent;
+      if (d && d.files) renderFiles(d);
+    }
+  });
   window.addEventListener('openai:set_globals', () => {
     const d = window.openai?.toolOutput;
     if (d && d.files) renderFiles(d);
