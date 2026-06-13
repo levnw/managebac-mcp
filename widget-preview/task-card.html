@@ -311,6 +311,19 @@
       border-radius: 6px; margin: 4px 0 10px; border: 1px solid #eaecf0;
     }
 
+    /* ── Description embedded file cards (matches ManageBac fr-file style) ── */
+    .desc-files { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .desc-file-card {
+      display: flex; align-items: center; gap: 10px;
+      border: 1px solid #D0D5DD; border-radius: 6px; padding: 10px;
+      text-decoration: none; color: inherit;
+    }
+    .desc-file-card:hover { background: #f9fafb; }
+    .desc-file-icon { width: 24px; height: auto; flex-shrink: 0; }
+    .desc-file-info { flex: 1; min-width: 0; }
+    .desc-file-name { font-size: 0.875rem; color: #101828; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .desc-file-size { font-size: 0.75rem; color: #667085; margin-top: 2px; }
+
     /* ── Resources (teacher-posted file cards) ── */
     .resource-card { border: 1px solid #eaecf0; border-radius: 8px; padding: 12px 14px; }
     .resource-card + .resource-card { margin-top: 10px; }
@@ -669,9 +682,10 @@ function renderCard(task) {
 
   h += '</div>'; // task-card
 
-  // ── Description ── (text and/or teacher-embedded images)
+  // ── Description ── (text, teacher-embedded images, and embedded file cards)
   const descImgs = (task.images || []).filter(Boolean);
-  if (task.description || descImgs.length) {
+  const descFiles = (task.desc_files || []).filter(f => f && f.name);
+  if (task.description || descImgs.length || descFiles.length) {
     let body = '';
     // Images first (teacher prompt images usually lead the description)
     descImgs.forEach(src => {
@@ -682,6 +696,22 @@ function renderCard(task) {
         <button class="show-toggle" onclick="toggleShowMore('desc-body',this)" style="margin-top:8px">
           Show More ${ICONS.chevDown}
         </button>`;
+    }
+    // Embedded file cards — rendered inside the Description box like ManageBac
+    if (descFiles.length) {
+      body += '<div class="desc-files">';
+      descFiles.forEach(f => {
+        const ext = (f.name || '').split('.').pop().toLowerCase();
+        const icon = ext === 'pdf' ? ICONS.pdf : `<img src="${MB_ICONS.docFile}" alt="" class="desc-file-icon">`;
+        body += `<a class="desc-file-card" href="${esc(f.url || '#')}" target="_blank" rel="noopener">
+          ${icon}
+          <div class="desc-file-info">
+            <div class="desc-file-name">${esc(f.name)}</div>
+            ${f.size ? `<div class="desc-file-size">${esc(f.size)}</div>` : ''}
+          </div>
+        </a>`;
+      });
+      body += '</div>';
     }
     h += `<div class="section">
       <div class="section-header"><span class="section-title">Description</span></div>

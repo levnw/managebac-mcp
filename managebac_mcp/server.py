@@ -632,6 +632,12 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
     desc_md = _re.sub(r'!\[[^\]]*\]\([^)]*\)', '', desc_md)
     description = _md_to_html(desc_md) if desc_md.strip() else None
     desc_images = desc_raw.get("images") if isinstance(desc_raw, dict) else None
+    embedded_files = desc_raw.get("embedded_files", []) if isinstance(desc_raw, dict) else []
+    desc_files = [
+        {"name": f.get("name", ""), "size": f.get("size", ""), "url": f.get("url", "#")}
+        for f in embedded_files
+        if isinstance(f, dict) and f.get("name")
+    ]
 
     # ── Discussions ───────────────────────────────────────────────────────────
     discussions_raw = detail.get("discussions")
@@ -685,6 +691,7 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
         "teacher_comment": teacher_comment,
         "unit": None,   # not available from task list; could be added later
         "description": description,
+        "desc_files": desc_files,
         "submitted_files": submitted_files,
         "resources": resources,
         "discussions": discussions,

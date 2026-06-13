@@ -91,14 +91,10 @@ def _html_to_markdown(el) -> str:
         if tag == "a":
             href = el.get("href", "")
             a_classes = el.get("class", [])
-            # Embedded file attachment — render as a plain label, not a link
-            # (the URL is captured separately in embedded_files)
+            # Embedded file attachment — omit from markdown text; the widget
+            # renders these as file cards via task.desc_files instead.
             if "fr-file" in a_classes or el.get("data-name"):
-                name = el.get("data-name") or ""
-                size_el = el.find(class_="fr-file-size")
-                size = size_el.get_text(strip=True) if size_el else ""
-                label = name or el.get_text(strip=True)
-                return f"📎 {label}" + (f" ({size})" if size else "")
+                return ""
             text = kids().strip()
             if href.startswith("http"):
                 label = text if (text and text != href) else href
