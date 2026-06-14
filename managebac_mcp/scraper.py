@@ -1206,18 +1206,82 @@ def parse_files(html: str) -> list[dict]:
     return files
 
 
+def parse_file_folders(html: str, class_id: str) -> list[tuple[str, str]]:
+    """Folder entries on a class Files page: links of the exact form
+    /student/classes/{cid}/files/folder/{id}. The strict `$` match excludes sort
+    headers (they carry ?query) and pagination (/page/N), so only real folder
+    rows (and breadcrumb links, filtered out later by id) come through."""
+    soup = BeautifulSoup(html, "html.parser")
+    pat = re.compile(rf"^/student/classes/{re.escape(str(class_id))}/files/folder/(\d+)$")
+    out, seen = [], set()
+    for a in soup.find_all("a", href=True):
+        m = pat.match(a["href"])
+        if not m:
+            continue
+        fid = m.group(1)
+        if fid in seen:
+            continue
+        seen.add(fid)
+        out.append((fid, a.get_text(strip=True)))
+    return out
+
+
+def _files_has_next_page(html: str, listing_path: str, page: int) -> bool:
+    return f"{listing_path}/page/{page + 1}" in html
+
+
 async def fetch_files(class_id: str) -> list[dict]:
+    """Return EVERY file in a class's Files section — across all pages AND inside
+    every folder (recursively). Each file is tagged with `folder` (the folder path,
+    "" for the class root). ManageBac paginates the listing and nests files in
+    folders, so a single-page parse misses most of them."""
     cache_key = f"get_files:{class_id}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    async with await get_client() as client:
-        r = await authed_get(client, f"/student/classes/{class_id}/files")
+    base = f"/student/classes/{class_id}/files"
+    all_files: list[dict] = []
+    queued: set[str] = set()       # folder ids already queued/visited
+    seen_assets: set[str] = set()  # dedupe key per distinct upload
 
-    result = parse_files(r.text)
-    cache.set(cache_key, result, "get_files")
-    return result
+    def _asset_key(f: dict) -> str:
+        m = re.search(r"/asset/file/(\d+)", f.get("url", "") or "")
+        return m.group(1) if m else f"{f.get('name')}|{f.get('uploaded_at')}|{f.get('size')}"
+
+    async with await get_client() as client:
+        # BFS over the root listing and each folder; queue items are
+        # (listing_path, folder_label, current_folder_id_or_None)
+        queue: list[tuple[str, str, "str | None"]] = [(base, "", None)]
+        while queue:
+            listing_path, folder_label, cur_fid = queue.pop(0)
+            page = 1
+            while page <= 30:  # safety cap against runaway pagination
+                page_path = listing_path if page == 1 else f"{listing_path}/page/{page}"
+                try:
+                    r = await authed_get(client, page_path)
+                except Exception:
+                    break
+                html = r.text
+                for f in parse_files(html):
+                    k = _asset_key(f)
+                    if k in seen_assets:
+                        continue
+                    seen_assets.add(k)
+                    f["folder"] = folder_label
+                    all_files.append(f)
+                for fid, fname in parse_file_folders(html, class_id):
+                    if fid == cur_fid or fid in queued:
+                        continue
+                    queued.add(fid)
+                    sub_label = f"{folder_label} / {fname}" if folder_label else fname
+                    queue.append((f"{base}/folder/{fid}", sub_label, fid))
+                if not _files_has_next_page(html, listing_path, page):
+                    break
+                page += 1
+
+    cache.set(cache_key, all_files, "get_files")
+    return all_files
 
 
 # ---------------------------------------------------------------------------

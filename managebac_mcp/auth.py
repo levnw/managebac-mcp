@@ -82,7 +82,14 @@ async def get_client() -> httpx.AsyncClient:
         follow_redirects=True,
         timeout=30,
         headers={
-            "User-Agent": "Mozilla/5.0 (compatible; ManageBac-MCP/1.0)",
+            # Use a real browser User-Agent: ManageBac serves a REDUCED page to
+            # non-browser UAs (e.g. the class Files page comes back without its
+            # folders — only the root files — so get_files used to miss everything
+            # inside folders). A normal Chrome UA gets the full server-rendered page.
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
             "Origin": user.mb_url,
             "Referer": user.mb_url + "/student",
         },

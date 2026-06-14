@@ -36,7 +36,16 @@
     .content-area { padding: 16px 20px 10px; }
 
     /* "File Information" heading */
-    .fi-heading { font-size: 1.05rem; font-weight: 700; color: #101828; padding-bottom: 12px; border-bottom: 1px solid #eaecf0; margin: 0 -20px 14px; padding-left: 20px; }
+    .fi-heading { font-size: 1.05rem; font-weight: 700; color: #101828; padding-bottom: 12px; border-bottom: 1px solid #eaecf0; margin: 0 -20px 14px; padding-left: 20px; padding-right: 20px; display: flex; align-items: baseline; justify-content: space-between; }
+    .fi-count { font-size: 0.74rem; font-weight: 500; color: #98a2b3; }
+
+    /* Folder section header row */
+    .folder-row td { padding: 9px 8px 6px; border-bottom: 1px solid #eaecf0; }
+    .folder-cell { display: flex; align-items: center; gap: 7px; }
+    .folder-ic { width: 15px; height: 15px; flex-shrink: 0; }
+    .folder-name { font-size: 0.82rem; font-weight: 600; color: #344054; }
+    .folder-count { font-size: 0.7rem; font-weight: 600; color: #667085; background: #f2f4f7; border-radius: 9px; padding: 1px 7px; }
+    td.indented .file-cell { padding-left: 16px; }
 
     /* ── Search ── */
     .file-search {
@@ -103,6 +112,7 @@
 <script>
 const ICONS = {
   search: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>`,
+  folder: `<svg class="folder-ic" viewBox="0 0 16 16" fill="#475467"><path d="M1.75 3A1.75 1.75 0 0 0 0 4.75v6.5C0 12.216.784 13 1.75 13h12.5A1.75 1.75 0 0 0 16 11.25V5.75A1.75 1.75 0 0 0 14.25 4H7.5L6.2 2.7A1.75 1.75 0 0 0 4.96 2.19H1.75A1.75 1.75 0 0 0 0 3.94z"/></svg>`,
   external: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/></svg>`,
   // File-type icons approximating ManageBac's (Adobe-red PDF, Word-blue doc, PowerPoint-orange)
   pdf: `<svg viewBox="0 0 20 24"><path fill="#fff" stroke="#e5484d" stroke-width="1" d="M2 .5h11L18.5 6v15.5a2 2 0 0 1-2 2H2a1.5 1.5 0 0 1-1.5-1.5V2A1.5 1.5 0 0 1 2 .5z"/><path fill="#e5484d" d="M5.2 16.9c-.6-.6-.1-1.5.8-2.2.7-.5 1.7-1 2.8-1.4.5-1 1-2.1 1.3-3.1-.3-.8-.5-1.6-.5-2.2 0-.9.4-1.5 1.1-1.5.6 0 1 .5 1 1.3 0 .7-.3 1.7-.7 2.7.4.9 1 1.8 1.6 2.4 1 .1 1.9.2 2.5.5.9.4 1.1 1 .8 1.5-.3.6-1.2.7-2.1.3-.6-.3-1.3-.8-1.9-1.4-1 .1-2 .4-2.9.7-.6 1-1.2 1.9-1.8 2.4-.7.6-1.5.7-2 0zm2.3-1.6c-.7.3-1.2.7-1.5 1 .4-.1.9-.5 1.5-1zm3.2-3.4c-.2.6-.5 1.2-.8 1.8.5-.2 1.1-.3 1.6-.4-.3-.4-.6-.9-.8-1.4zm2.9 2.2c.5.4 1 .6 1.3.6-.3-.2-.7-.4-1.3-.6zM10.6 7.7c.1-.5.2-.9.2-1.2 0-.2 0-.4-.1-.4-.1.1-.2.3-.2.6 0 .3 0 .6.1 1z"/></svg>`,
@@ -125,15 +135,25 @@ function fileIcon(name) {
 
 function renderFiles(data) {
   const files = data.files || [];
-  let h = '';
 
+  // Group by folder ("" = class root). Root first, then folders in first-seen order.
+  const groups = new Map();
+  groups.set('', []);
+  files.forEach(f => {
+    const k = f.folder || '';
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(f);
+  });
+  const folderCount = [...groups.keys()].filter(k => k).length;
+
+  let h = '';
   h += `<div class="mb-header">
     <h1>Files</h1>
     ${data.class_name ? `<div class="class-name">${esc(data.class_name)}</div>` : ''}
   </div>`;
 
   h += '<div class="content-area">';
-  h += '<div class="fi-heading">File Information</div>';
+  h += `<div class="fi-heading">File Information<span class="fi-count">${files.length} file${files.length===1?'':'s'}${folderCount?` · ${folderCount} folder${folderCount===1?'':'s'}`:''}</span></div>`;
 
   h += `<div class="file-search">${ICONS.search}
     <input type="text" id="file-filter" placeholder="Search by file or author name" oninput="filterFiles(this.value)">
@@ -142,7 +162,11 @@ function renderFiles(data) {
   h += '<table class="files-table"><thead><tr>';
   h += '<th>Name</th><th class="col-size">Size</th><th class="col-mod">Modified <span class="sort-arrow">&darr;</span></th>';
   h += '</tr></thead><tbody id="files-body">';
-  h += files.map(fileRow).join('');
+  for (const [folder, items] of groups) {
+    if (!items.length) continue;
+    if (folder) h += folderHeaderRow(folder, items.length);
+    h += items.map(f => fileRow(f, !!folder)).join('');
+  }
   h += '</tbody></table>';
   if (!files.length) h += '<div class="empty">No files in this class yet.</div>';
   h += '</div>'; // content-area
@@ -154,9 +178,16 @@ function renderFiles(data) {
   document.getElementById('card').innerHTML = h;
 }
 
-function fileRow(f) {
-  return `<tr data-search="${esc(((f.name||'') + ' ' + (f.uploaded_by||'')).toLowerCase())}">
-    <td>
+function folderHeaderRow(name, count) {
+  return `<tr class="folder-row" data-search="${esc(String(name).toLowerCase())}">
+    <td colspan="3"><span class="folder-cell">${ICONS.folder}<span class="folder-name">${esc(name)}</span><span class="folder-count">${count}</span></span></td>
+  </tr>`;
+}
+
+function fileRow(f, indented) {
+  const search = ((f.name||'') + ' ' + (f.uploaded_by||'') + ' ' + (f.folder||'')).toLowerCase();
+  return `<tr data-search="${esc(search)}">
+    <td${indented ? ' class="indented"' : ''}>
       <div class="file-cell">
         <span class="ft-icon">${fileIcon(f.name)}</span>
         <span class="fc-info">
@@ -173,6 +204,7 @@ function fileRow(f) {
 function filterFiles(q) {
   q = q.trim().toLowerCase();
   document.querySelectorAll('#files-body tr').forEach(tr => {
+    if (tr.classList.contains('folder-row')) { tr.style.display = q ? 'none' : ''; return; }
     tr.style.display = !q || (tr.dataset.search || '').includes(q) ? '' : 'none';
   });
 }

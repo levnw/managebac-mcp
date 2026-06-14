@@ -174,6 +174,23 @@ def test_parse_files_handles_escaped_page():
     assert f["url"].startswith("http") and "\\u" not in f["url"]
 
 
+def test_parse_file_folders_and_pagination():
+    from managebac_mcp.scraper import parse_file_folders, _files_has_next_page
+    cid = "12892869"
+    html = (
+        '<a class="hstack" href="/student/classes/12892869/files/folder/2412110">Experiments</a>'
+        '<a class="hstack" href="/student/classes/12892869/files/folder/2401165">PPT Chemical systems</a>'
+        # sort headers carry a query string → must NOT be treated as folders
+        '<a href="/student/classes/12892869/files/folder/2412110?direction=asc">Name</a>'
+        '<a href="/student/classes/12892869/files/page/2">Next</a>'
+    )
+    folders = parse_file_folders(html, cid)
+    assert folders == [("2412110", "Experiments"), ("2401165", "PPT Chemical systems")]
+    base = f"/student/classes/{cid}/files"
+    assert _files_has_next_page(html, base, 1) is True
+    assert _files_has_next_page(html, base, 2) is False
+
+
 # ---------------------------------------------------------------------------
 # Journal
 # ---------------------------------------------------------------------------
