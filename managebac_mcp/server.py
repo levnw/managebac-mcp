@@ -422,17 +422,17 @@ _TASK_CARD_PATH = Path(__file__).parent.parent / "widget-preview" / "task-card.h
 _TASK_CARD_HTML: str = _TASK_CARD_PATH.read_text(encoding="utf-8")
 
 # Class files widget — loaded from disk.
-_CLASS_FILES_URI = "ui://widget/class-files-v1.html"
+_CLASS_FILES_URI = "ui://widget/class-files-v2.html"
 _CLASS_FILES_PATH = Path(__file__).parent.parent / "widget-preview" / "class-files.html"
 _CLASS_FILES_HTML: str = _CLASS_FILES_PATH.read_text(encoding="utf-8")
 
 # Grades widget — per-class criterion bars + estimated MYP level.
-_GRADES_URI = "ui://widget/grades-v1.html"
+_GRADES_URI = "ui://widget/grades-v2.html"
 _GRADES_PATH = Path(__file__).parent.parent / "widget-preview" / "grades-card.html"
 _GRADES_HTML: str = _GRADES_PATH.read_text(encoding="utf-8")
 
 # Timetable widget — weekly grid of classes.
-_TIMETABLE_URI = "ui://widget/timetable-v1.html"
+_TIMETABLE_URI = "ui://widget/timetable-v2.html"
 _TIMETABLE_PATH = Path(__file__).parent.parent / "widget-preview" / "timetable-card.html"
 _TIMETABLE_HTML: str = _TIMETABLE_PATH.read_text(encoding="utf-8")
 
@@ -1631,13 +1631,22 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 # Slim structuredContent for the widget: drop per-task detail
                 # (graded_tasks) so the toolOutput payload stays small; the full
                 # JSON is still in the text content for the model.
+                def _sc_class(c):
+                    out = {"class_name": c.get("class_name"), "criteria": c.get("criteria")}
+                    # For a single-class request, include slimmed per-task grades so
+                    # the widget can draw ManageBac's task-by-task progress chart.
+                    gts = c.get("graded_tasks")
+                    if gts and len(result["classes"]) == 1:
+                        out["graded_tasks"] = [
+                            {"title": t.get("title"), "type": t.get("type"),
+                             "date": t.get("date"), "grades": t.get("grades")}
+                            for t in gts[:40] if t.get("grades")
+                        ]
+                    return out
                 sc = {
                     "scope": result.get("scope"),
                     "url": require_user().mb_url.rstrip("/") + "/student",
-                    "classes": [
-                        {"class_name": c.get("class_name"), "criteria": c.get("criteria")}
-                        for c in result["classes"]
-                    ],
+                    "classes": [_sc_class(c) for c in result["classes"]],
                 }
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
