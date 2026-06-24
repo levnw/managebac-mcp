@@ -394,8 +394,11 @@ async def _admin_login(request):
     username = (body.get("username") or "").strip()
     password = body.get("password") or ""
     if not admin.verify_admin(username, password):
+        admin.log_audit(username or "unknown", "login_failed")
         return JSONResponse({"error": "Invalid username or password"}, status_code=401)
-    return JSONResponse(admin.create_session(username))
+    session = admin.create_session(username)
+    admin.log_audit(username, "login")
+    return JSONResponse(session)
 
 
 async def _admin_codes_get(request):
@@ -412,13 +415,19 @@ async def _admin_codes_post(request):
     except Exception:
         body = {}
     note = (body.get("note") or "").strip()
-    return JSONResponse(admin.create_code(note))
+    result = admin.create_code(note)
+    actor = _require_admin(request)
+    admin.log_audit(actor, "create_invite_code", {"code": result["code"], "note": note})
+    return JSONResponse(result)
 
 
 async def _admin_code_delete(request):
-    if not _require_admin(request):
+    actor = _require_admin(request)
+    if not actor:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
-    admin.delete_code(request.path_params["code"])
+    code = request.path_params["code"]
+    admin.delete_code(code)
+    admin.log_audit(actor, "revoke_invite_code", {"code": code})
     return JSONResponse({"ok": True})
 
 
@@ -444,7 +453,10 @@ async def _admin_user_delete(request):
         cache.clear_user()
     finally:
         reset_user(ctx)
+    u = users.get_user_by_id(user_id)
+    actor = _require_admin(request)
     users.delete_user(user_id)
+    admin.log_audit(actor, "delete_user", {"user_id": user_id, "email": u.email if u else None})
     return JSONResponse({"ok": True})
 
 
@@ -456,7 +468,12 @@ async def _admin_user_pause(request):
     except Exception:
         body = {}
     enabled = bool(body.get("enabled", False))
-    users.set_enabled(request.path_params["user_id"], enabled)
+    user_id = request.path_params["user_id"]
+    users.set_enabled(user_id, enabled)
+    actor = _require_admin(request)
+    u = users.get_user_by_id(user_id)
+    admin.log_audit(actor, "resume_user" if enabled else "pause_user",
+                    {"user_id": user_id, "email": u.email if u else None})
     return JSONResponse({"ok": True, "enabled": enabled})
 
 
@@ -513,12 +530,20 @@ async def _admin_user_credentials(request):
     if not email and not password:
         return JSONResponse({"error": "Provide a new email and/or password."}, status_code=400)
 
+    old_user = users.get_user_by_id(user_id)
     if email:
         users.update_email(user_id, email)
     if password:
         users.update_password(user_id, password)
     # Old cookies are tied to the old login — clear so the next fetch re-logs-in.
     users.save_cookies(user_id, {})
+    actor = _require_admin(request)
+    if email:
+        admin.log_audit(actor, "edit_email", {"user_id": user_id,
+                        "old_email": old_user.email if old_user else None, "new_email": email})
+    if password:
+        admin.log_audit(actor, "reset_password", {"user_id": user_id,
+                        "email": old_user.email if old_user else None})
 
     result = {"ok": True}
     if verify:
@@ -553,7 +578,9 @@ async def _admin_activity(request):
 async def _admin_logout(request):
     token = _bearer(request)
     if token:
+        actor = admin.validate_session(token) or "unknown"
         admin.revoke_session(token)
+        admin.log_audit(actor, "logout")
     return JSONResponse({"ok": True})
 
 
@@ -630,6 +657,7 @@ async def _admin_change_password(request):
         return JSONResponse({"error": "password required"}, status_code=400)
     username = _require_admin(request)
     admin.set_admin(username, new_pw)
+    admin.log_audit(username, "change_admin_password")
     return JSONResponse({"ok": True})
 
 
@@ -650,6 +678,8 @@ async def _admin_broadcast(request):
     if not text:
         return JSONResponse({"error": "text required"}, status_code=400)
     msg = admin.create_message(text=text, target_user_id=None)
+    actor = _require_admin(request)
+    admin.log_audit(actor, "broadcast", {"text": text[:100]})
     return JSONResponse(msg)
 
 
@@ -663,8 +693,19 @@ async def _admin_user_message(request):
     text = (body.get("text") or "").strip()
     if not text:
         return JSONResponse({"error": "text required"}, status_code=400)
-    msg = admin.create_message(text=text, target_user_id=request.path_params["user_id"])
+    user_id = request.path_params["user_id"]
+    u = users.get_user_by_id(user_id)
+    actor = _require_admin(request)
+    msg = admin.create_message(text=text, target_user_id=user_id)
+    admin.log_audit(actor, "send_message",
+                    {"user_id": user_id, "email": u.email if u else None, "text": text[:100]})
     return JSONResponse(msg)
+
+
+async def _admin_audit(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse({"audit": admin.list_audit(limit=200)})
 
 
 async def _admin_panel(request):
@@ -1039,6 +1080,7 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
             Route("/admin/users/{user_id}/cache/{key}", _admin_user_cache_delete, methods=["DELETE"]),
             Route("/admin/users/{user_id}/message", _admin_user_message, methods=["POST"]),
             Route("/admin/activity", _admin_activity, methods=["GET"]),
+            Route("/admin/audit", _admin_audit, methods=["GET"]),
             Route("/admin/messages", _admin_messages_get, methods=["GET"]),
             Route("/admin/broadcast", _admin_broadcast, methods=["POST"]),
             # UI components (served to ChatGPT iframes)

@@ -500,7 +500,7 @@
       <div class="page-hdr"><div><h1>Audit Log</h1><p>Admin actions and security events</p></div></div>
       <div class="card">
         <table>
-          <thead><tr><th>Time</th><th>Tool</th><th>User</th><th>Duration</th></tr></thead>
+          <thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Detail</th></tr></thead>
           <tbody id="auditTable"><tr><td colspan="4" class="loading"><span class="spinner"></span></td></tr></tbody>
         </table>
       </div>
@@ -1126,17 +1126,20 @@ async function loadLogs() {
 }
 
 async function loadAudit() {
-  const data = await api.get('/admin/activity');
+  const data = await api.get('/admin/audit');
   if (!data) return;
   const tbody = document.getElementById('auditTable');
-  if (!data.activity?.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">No activity yet.</td></tr>'; return; }
-  tbody.innerHTML = data.activity.map(a => `
-    <tr>
-      <td style="font-size:12px;color:var(--gray-500);">${fmtRelative(a.ts)}</td>
-      <td class="td-mono">${esc(a.tool)}</td>
-      <td style="font-size:12px;color:var(--gray-500);">${esc(a.user_id || '—')}</td>
-      <td style="font-size:12px;">${a.duration_ms ? a.duration_ms + 'ms' : '—'}</td>
-    </tr>`).join('');
+  if (!data.audit?.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">No admin actions recorded yet.</td></tr>'; return; }
+  tbody.innerHTML = data.audit.map(a => {
+    const detail = a.detail ? Object.entries(a.detail).filter(([k]) => k !== 'user_id').map(([k, v]) => `${k}: ${v}`).join(' · ') : '—';
+    const actionLabel = a.action.replace(/_/g, ' ');
+    return `<tr>
+      <td style="font-size:12px;color:var(--gray-500);">${fmtRelative(a.created_at * 1000)}</td>
+      <td class="td-mono" style="font-size:12px;">${esc(actionLabel)}</td>
+      <td style="font-size:12px;color:var(--gray-500);">${esc(a.actor)}</td>
+      <td style="font-size:12px;color:var(--gray-500);">${esc(detail)}</td>
+    </tr>`;
+  }).join('');
 }
 
 async function loadHealth() {

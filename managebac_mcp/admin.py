@@ -65,6 +65,15 @@ def _connect() -> sqlite3.Connection:
             read_by        TEXT
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            actor      TEXT NOT NULL,
+            action     TEXT NOT NULL,
+            detail     TEXT,
+            created_at INTEGER NOT NULL
+        )
+    """)
     conn.commit()
     return conn
 
@@ -233,6 +242,38 @@ def delete_pending(token: str) -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM pending_enrollments WHERE token = ?", (token,))
         conn.execute("DELETE FROM pending_enrollments WHERE expires_at < ?", (int(time.time()),))
+
+
+# ---------------------------------------------------------------------------
+# Audit log
+# ---------------------------------------------------------------------------
+
+def log_audit(actor: str, action: str, detail: dict | None = None) -> None:
+    import json as _json
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO audit_log (actor, action, detail, created_at) VALUES (?,?,?,?)",
+            (actor, action, _json.dumps(detail) if detail else None, int(time.time())),
+        )
+
+
+def list_audit(limit: int = 200) -> list[dict]:
+    import json as _json
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, actor, action, detail, created_at FROM audit_log ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    result = []
+    for r in rows:
+        detail = None
+        if r[3]:
+            try:
+                detail = _json.loads(r[3])
+            except Exception:
+                detail = r[3]
+        result.append({"id": r[0], "actor": r[1], "action": r[2], "detail": detail, "created_at": r[4]})
+    return result
 
 
 # ---------------------------------------------------------------------------
