@@ -1465,7 +1465,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                               duration_ms=int((time.monotonic() - t0) * 1000))
             return types.CallToolResult(
                 content=[types.TextContent(type="text", text=prompt)],
-                structuredContent={"result": {"suspended": True}},
+                isError=True,
             )
 
         # 2. Pending admin message — deliver it and swallow the tool call
@@ -1476,7 +1476,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                               duration_ms=int((time.monotonic() - t0) * 1000))
             return types.CallToolResult(
                 content=[types.TextContent(type="text", text=prompt)],
-                structuredContent={"result": {"admin_message": True}},
+                isError=True,
             )
     # ── End pre-flight ─────────────────────────────────────────────────────
 
