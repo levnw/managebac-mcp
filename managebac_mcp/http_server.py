@@ -104,6 +104,15 @@ _STYLE = """
    word-break:break-all;margin:14px 0;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#101828}}
  .warn{{background:#fffaeb;border:1px solid #fedf89;color:#b54708;padding:12px;border-radius:6px;font-size:13px;
    margin:0 24px 22px}}
+ .tip{{position:relative;cursor:default;color:#98a2b3;font-size:13px;font-weight:400;line-height:1;user-select:none}}
+ .tip:hover{{color:#1570ef}}
+ .tip-box{{display:none;position:absolute;right:0;top:calc(100% + 6px);width:220px;background:#101828;
+   color:#f2f4f7;font-size:12px;font-weight:400;padding:8px 10px;border-radius:6px;line-height:1.5;
+   z-index:20;white-space:normal;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.25)}}
+ .tip-box b{{color:#fff}}
+ .tip-box code{{background:rgba(255,255,255,.15);border-radius:3px;padding:1px 4px;
+   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}}
+ .tip:hover .tip-box{{display:block}}
 """
 
 # Field icons matching ManageBac's login (mail in Login, lock in Password); URL
@@ -136,7 +145,7 @@ _ENROLL_FORM = """<!doctype html>
    {error}
    <p class="sub">Connect your ManageBac so you can ask ChatGPT about your classes,
    tasks, deadlines, grades and files.</p>
-   <div class="labelrow"><label>ManageBac URL<span class="req">*</span></label></div>
+   <div class="labelrow"><label>ManageBac URL<span class="req">*</span></label><span class="tip">ⓘ<span class="tip-box"><b>Where to find this:</b> Open your school's ManageBac login page in a browser and copy the URL from the address bar. You only need the base address — any path after the domain is stripped automatically.<br>Example: <code>https://es.managebac.com</code></span></span></div>
    <div class="field"><input name="mb_url" value="https://es.managebac.com" required>""" + _IC_GLOBE + """</div>
    <div class="labelrow"><label>Login<span class="req">*</span></label></div>
    <div class="field"><input name="email" type="email" placeholder="you@school.edu" required autocomplete="off">""" + _IC_MAIL + """</div>
@@ -289,9 +298,20 @@ async def _create_and_verify(mb_url, email, password, invite, existing):
     return user, None
 
 
+def _normalize_mb_url(raw: str) -> str:
+    from urllib.parse import urlparse
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    if not raw.startswith("http"):
+        raw = "https://" + raw
+    parsed = urlparse(raw)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 async def _handle_enroll_post(request):
     form = await request.form()
-    mb_url = (form.get("mb_url") or "").strip()
+    mb_url = _normalize_mb_url(form.get("mb_url") or "")
     email = (form.get("email") or "").strip()
     password = (form.get("password") or "").strip()
     invite = (form.get("invite") or "").strip()

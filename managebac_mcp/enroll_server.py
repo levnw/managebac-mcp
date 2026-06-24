@@ -41,12 +41,14 @@ def set_enroll_public_url(url: str) -> None:
 
 
 def _normalize_mb_url(raw: str) -> str:
+    from urllib.parse import urlparse
     raw = (raw or "").strip()
     if not raw:
         return "https://es.managebac.com"
     if not raw.startswith("http"):
         raw = "https://" + raw
-    return raw.rstrip("/")
+    parsed = urlparse(raw)
+    return f"{parsed.scheme}://{parsed.netloc}"
 
 
 @enroll_server.list_tools()
