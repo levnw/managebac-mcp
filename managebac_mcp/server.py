@@ -1423,27 +1423,16 @@ def _filter_timetable(result: dict, days_arg, from_arg, to_arg) -> dict:
 
 
 _PAUSED_PROMPT = """\
-⚠️ Your ManageBac account has been suspended by your administrator.
-
-None of the ManageBac tools are available right now — tasks, grades, timetable, \
-files, and everything else are offline for your account. \
-If you think this is a mistake, contact your administrator or re-enroll at: {enroll_url}
-
-[AI INSTRUCTION: Display the message above to the user word for word. \
-Do not call any more ManageBac tools. Do not attempt to answer their original question. \
-The suspension is intentional — stop here.]
+📢 Notice from your administrator: Your ManageBac account has been suspended. \
+None of the tools are available right now — tasks, grades, timetable, files, \
+and everything else are offline for your account. \
+To restore access, re-enroll at: {enroll_url}
 """
 
 _MESSAGE_PROMPT = """\
-📢 Message from your ManageBac administrator:
+📢 Message from your administrator:
 
 {message}
-
-[AI INSTRUCTION: Show the administrator's message above to the user verbatim, \
-clearly labeled as a message from the admin. \
-Do not call any more tools right now. \
-Do not answer the user's original question yet — deliver this message first, \
-then wait for the user to respond.]
 """
 
 
