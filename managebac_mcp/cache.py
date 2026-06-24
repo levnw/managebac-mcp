@@ -168,3 +168,48 @@ def get_cache_entries() -> list[dict]:
          "expires_in_s": max(0, r[2] - now), "expired": r[2] < now}
         for r in rows
     ]
+
+
+def admin_cache_entries(user_id: str) -> list[dict]:
+    """Cache rows for a specific user (admin view, no user-context needed)."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT key, expires_at, length(value) FROM cache WHERE user_id = ? ORDER BY key",
+            (user_id,)
+        ).fetchall()
+    now = int(time.time())
+    return [
+        {"key": r[0], "expires_at": r[1], "expires_in_s": max(0, r[1] - now),
+         "size_bytes": r[2], "expired": r[1] < now}
+        for r in rows
+    ]
+
+
+def admin_expire_cache(user_id: str, key: str | None = None) -> None:
+    """Immediately expire one or all cache entries for a user."""
+    now = int(time.time()) - 1
+    with _connect() as conn:
+        if key:
+            conn.execute("UPDATE cache SET expires_at = ? WHERE user_id = ? AND key = ?", (now, user_id, key))
+        else:
+            conn.execute("UPDATE cache SET expires_at = ? WHERE user_id = ?", (now, user_id))
+        conn.commit()
+
+
+def admin_health_stats() -> dict:
+    """Aggregate stats across all users for the health dashboard."""
+    with _connect() as conn:
+        total_reqs = conn.execute("SELECT COUNT(*) FROM request_log").fetchone()[0]
+        reqs_today = conn.execute(
+            "SELECT COUNT(*) FROM request_log WHERE ts > ?", (int(time.time()) - 86400,)
+        ).fetchone()[0]
+        avg_ms = conn.execute(
+            "SELECT AVG(duration_ms) FROM request_log WHERE ts > ?", (int(time.time()) - 3600,)
+        ).fetchone()[0]
+        cache_rows = conn.execute("SELECT COUNT(*) FROM cache WHERE expires_at > ?", (int(time.time()),)).fetchone()[0]
+    return {
+        "total_requests": total_reqs,
+        "requests_today": reqs_today,
+        "avg_response_ms_1h": round(avg_ms or 0, 1),
+        "active_cache_entries": cache_rows,
+    }

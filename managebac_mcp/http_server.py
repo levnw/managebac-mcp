@@ -27,6 +27,9 @@ from .enroll_server import enroll_server, set_enroll_public_url
 # Public URL for UI component links (set by build_app)
 _PUBLIC_URL = "http://localhost:8000"
 
+import time as _time
+_SERVER_START_TIME = _time.time()
+
 # ---------------------------------------------------------------------------
 # Token extraction
 # ---------------------------------------------------------------------------
@@ -547,6 +550,120 @@ async def _admin_activity(request):
     return JSONResponse({"activity": cache.admin_activity(limit=100)})
 
 
+async def _admin_logout(request):
+    token = _bearer(request)
+    if token:
+        admin.revoke_session(token)
+    return JSONResponse({"ok": True})
+
+
+async def _admin_health(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    import time, os
+    try:
+        import psutil
+        proc = psutil.Process(os.getpid())
+        mem_mb = proc.memory_info().rss / (1024 * 1024)
+        cpu = proc.cpu_percent(interval=0.1)
+    except ImportError:
+        mem_mb = 0.0
+        cpu = 0.0
+    uptime_s = int(time.time() - _SERVER_START_TIME)
+    stats = cache.admin_health_stats()
+    return JSONResponse({
+        "status": "running",
+        "uptime_s": uptime_s,
+        "memory_mb": round(mem_mb, 1),
+        "cpu_pct": round(cpu, 1),
+        **stats,
+    })
+
+
+async def _admin_user_get(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    user_id = request.path_params["user_id"]
+    u = users.get_user_by_id(user_id)
+    if not u:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    stats = cache.admin_user_stats(user_id)
+    cache_entries = cache.admin_cache_entries(user_id)
+    u_dict = vars(u) if hasattr(u, "__dict__") else dict(u._asdict())
+    return JSONResponse({"user": {**u_dict, **stats}, "cache": cache_entries})
+
+
+async def _admin_user_cache_get(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse({"cache": cache.admin_cache_entries(request.path_params["user_id"])})
+
+
+async def _admin_user_cache_delete(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    user_id = request.path_params["user_id"]
+    key = request.path_params.get("key")
+    cache.admin_expire_cache(user_id, key or None)
+    return JSONResponse({"ok": True})
+
+
+async def _admin_change_password(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    new_pw = body.get("password") or ""
+    if not new_pw:
+        return JSONResponse({"error": "password required"}, status_code=400)
+    username = _require_admin(request)
+    admin.set_admin(username, new_pw)
+    return JSONResponse({"ok": True})
+
+
+async def _admin_messages_get(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse({"messages": admin.list_messages()})
+
+
+async def _admin_broadcast(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    text = (body.get("text") or "").strip()
+    if not text:
+        return JSONResponse({"error": "text required"}, status_code=400)
+    msg = admin.create_message(text=text, target_user_id=None)
+    return JSONResponse(msg)
+
+
+async def _admin_user_message(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    text = (body.get("text") or "").strip()
+    if not text:
+        return JSONResponse({"error": "text required"}, status_code=400)
+    msg = admin.create_message(text=text, target_user_id=request.path_params["user_id"])
+    return JSONResponse(msg)
+
+
+async def _admin_panel(request):
+    """Serve the admin panel SPA."""
+    import pathlib
+    html_path = pathlib.Path(__file__).parent / "admin_panel" / "index.html"
+    return HTMLResponse(html_path.read_text())
+
+
 # ---------------------------------------------------------------------------
 # UI Components (served to ChatGPT iframes)
 # ---------------------------------------------------------------------------
@@ -885,12 +1002,18 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
             Route("/enroll", _handle_enroll_post, methods=["POST"]),
             Route("/set-password", _handle_set_password_get, methods=["GET"]),
             Route("/set-password", _handle_set_password_post, methods=["POST"]),
-            # Admin API (consumed by the admin app)
+            # Admin panel SPA
+            Route("/admin", _admin_panel, methods=["GET"]),
+            # Admin API (consumed by the admin panel)
             Route("/admin/login", _admin_login, methods=["POST"]),
+            Route("/admin/logout", _admin_logout, methods=["POST"]),
+            Route("/admin/health", _admin_health, methods=["GET"]),
+            Route("/admin/change-password", _admin_change_password, methods=["POST"]),
             Route("/admin/codes", _admin_codes_get, methods=["GET"]),
             Route("/admin/codes", _admin_codes_post, methods=["POST"]),
             Route("/admin/codes/{code}", _admin_code_delete, methods=["DELETE"]),
             Route("/admin/users", _admin_users_get, methods=["GET"]),
+            Route("/admin/users/{user_id}", _admin_user_get, methods=["GET"]),
             Route("/admin/users/{user_id}", _admin_user_delete, methods=["DELETE"]),
             Route("/admin/users/{user_id}/pause", _admin_user_pause, methods=["POST"]),
             Route("/admin/users/{user_id}/regenerate", _admin_user_regenerate, methods=["POST"]),
@@ -898,7 +1021,13 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
             Route("/admin/users/{user_id}/note", _admin_user_note, methods=["POST"]),
             Route("/admin/users/{user_id}/credentials", _admin_user_credentials, methods=["POST"]),
             Route("/admin/users/{user_id}/activity", _admin_user_activity, methods=["GET"]),
+            Route("/admin/users/{user_id}/cache", _admin_user_cache_get, methods=["GET"]),
+            Route("/admin/users/{user_id}/cache", _admin_user_cache_delete, methods=["DELETE"]),
+            Route("/admin/users/{user_id}/cache/{key}", _admin_user_cache_delete, methods=["DELETE"]),
+            Route("/admin/users/{user_id}/message", _admin_user_message, methods=["POST"]),
             Route("/admin/activity", _admin_activity, methods=["GET"]),
+            Route("/admin/messages", _admin_messages_get, methods=["GET"]),
+            Route("/admin/broadcast", _admin_broadcast, methods=["POST"]),
             # UI components (served to ChatGPT iframes)
             Route("/ui/test", _ui_test, methods=["GET"]),
             Route("/ui/task-detail", _ui_task_detail, methods=["GET"]),

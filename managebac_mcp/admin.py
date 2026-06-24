@@ -46,10 +46,6 @@ def _connect() -> sqlite3.Connection:
             used_at    INTEGER
         )
     """)
-    # Short-lived handoffs for the in-chat enroll flow. The `enroll` MCP tool
-    # records the school URL + email + invite code here and hands the student a
-    # one-time link; the password is entered on that web page (never in chat),
-    # which looks the pending row up by token to finish enrollment.
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pending_enrollments (
             token      TEXT PRIMARY KEY,
@@ -58,6 +54,15 @@ def _connect() -> sqlite3.Connection:
             invite     TEXT NOT NULL,
             created_at INTEGER NOT NULL,
             expires_at INTEGER NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            text           TEXT NOT NULL,
+            target_user_id TEXT,
+            created_at     INTEGER NOT NULL,
+            read_by        TEXT
         )
     """)
     conn.commit()
@@ -227,5 +232,34 @@ def get_pending(token: str) -> dict | None:
 def delete_pending(token: str) -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM pending_enrollments WHERE token = ?", (token,))
-        # Opportunistic cleanup of anything expired.
         conn.execute("DELETE FROM pending_enrollments WHERE expires_at < ?", (int(time.time()),))
+
+
+# ---------------------------------------------------------------------------
+# Admin messages (broadcast or per-user)
+# ---------------------------------------------------------------------------
+
+def create_message(text: str, target_user_id: str | None = None) -> dict:
+    now = int(time.time())
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO messages (text, target_user_id, created_at) VALUES (?,?,?)",
+            (text, target_user_id, now),
+        )
+        msg_id = cur.lastrowid
+    return {"id": msg_id, "text": text, "target_user_id": target_user_id, "created_at": now}
+
+
+def list_messages(user_id: str | None = None) -> list[dict]:
+    with _connect() as conn:
+        if user_id:
+            rows = conn.execute(
+                "SELECT id, text, target_user_id, created_at FROM messages "
+                "WHERE target_user_id IS NULL OR target_user_id = ? ORDER BY id DESC LIMIT 100",
+                (user_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, text, target_user_id, created_at FROM messages ORDER BY id DESC LIMIT 100"
+            ).fetchall()
+    return [{"id": r[0], "text": r[1], "target_user_id": r[2], "created_at": r[3]} for r in rows]
