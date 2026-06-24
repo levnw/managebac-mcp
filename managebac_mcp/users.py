@@ -144,6 +144,13 @@ def get_user_by_id(user_id: str) -> User | None:
     return _row_to_user(row) if row else None
 
 
+def is_enabled(user_id: str) -> bool:
+    """Return False if the user's account has been paused by an admin."""
+    with _connect() as conn:
+        row = conn.execute("SELECT enabled FROM users WHERE id = ?", (user_id,)).fetchone()
+    return bool(row[0]) if row else False
+
+
 def set_enabled(user_id: str, enabled: bool) -> None:
     with _connect() as conn:
         conn.execute("UPDATE users SET enabled = ? WHERE id = ?", (1 if enabled else 0, user_id))

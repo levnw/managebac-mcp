@@ -250,6 +250,43 @@ def create_message(text: str, target_user_id: str | None = None) -> dict:
     return {"id": msg_id, "text": text, "target_user_id": target_user_id, "created_at": now}
 
 
+def pop_message(user_id: str) -> str | None:
+    """Return and consume the next unread message for this user, or None.
+
+    Targeted messages (target_user_id = user_id) are deleted on delivery.
+    Broadcast messages (target_user_id IS NULL) are marked read per-user via
+    a comma-separated read_by column — so every user gets each broadcast once.
+    Targeted messages take priority over broadcasts.
+    """
+    with _connect() as conn:
+        # Priority 1: targeted message for this specific user
+        row = conn.execute(
+            "SELECT id, text FROM messages WHERE target_user_id = ? ORDER BY id LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if row:
+            conn.execute("DELETE FROM messages WHERE id = ?", (row[0],))
+            conn.commit()
+            return row[1]
+
+        # Priority 2: broadcast not yet read by this user
+        row = conn.execute(
+            "SELECT id, text, read_by FROM messages WHERE target_user_id IS NULL ORDER BY id LIMIT 1"
+        ).fetchone()
+        if row:
+            msg_id, text, read_by = row
+            already_read = set((read_by or "").split(",")) if read_by else set()
+            if user_id not in already_read:
+                already_read.add(user_id)
+                conn.execute(
+                    "UPDATE messages SET read_by = ? WHERE id = ?",
+                    (",".join(already_read), msg_id),
+                )
+                conn.commit()
+                return text
+    return None
+
+
 def list_messages(user_id: str | None = None) -> list[dict]:
     with _connect() as conn:
         if user_id:
