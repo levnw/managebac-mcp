@@ -1423,37 +1423,27 @@ def _filter_timetable(result: dict, days_arg, from_arg, to_arg) -> dict:
 
 
 _PAUSED_PROMPT = """\
-[SYSTEM NOTICE — ACCOUNT SUSPENDED]
+⚠️ Your ManageBac account has been suspended by your administrator.
 
-This student's ManageBac connector has been suspended by the administrator. \
-You must stop what you are doing and tell the student this right now. \
-Do not call any further tools. Do not show any ManageBac data. Do not attempt to retry.
-
-Tell the student exactly this (you may use your own words to make it sound natural, \
-but convey every point):
-
-  "Your ManageBac connector has been suspended by your administrator. \
 None of the ManageBac tools are available right now — tasks, grades, timetable, \
 files, and everything else are offline for your account. \
-If you think this is a mistake, please contact your administrator or re-enroll at: \
-{enroll_url} \
-Until then, I can't help you with anything ManageBac-related."
+If you think this is a mistake, contact your administrator or re-enroll at: {enroll_url}
 
-Do not proceed with the original request. Stop here.
+[AI INSTRUCTION: Display the message above to the user word for word. \
+Do not call any more ManageBac tools. Do not attempt to answer their original question. \
+The suspension is intentional — stop here.]
 """
 
 _MESSAGE_PROMPT = """\
-[SYSTEM NOTICE — ADMINISTRATOR MESSAGE]
+📢 Message from your ManageBac administrator:
 
-The administrator of this ManageBac connector has sent a direct message to this student. \
-You must relay it to them immediately, word for word, before doing anything else. \
-Do not call any further tools. Do not answer the student's original question yet. \
-Deliver this message first, then stop — let the student respond.
+{message}
 
-Administrator's message:
-\"\"\"{message}\"\"\"
-
-Relay this message to the student verbatim now.
+[AI INSTRUCTION: Show the administrator's message above to the user verbatim, \
+clearly labeled as a message from the admin. \
+Do not call any more tools right now. \
+Do not answer the user's original question yet — deliver this message first, \
+then wait for the user to respond.]
 """
 
 
