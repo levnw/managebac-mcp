@@ -943,7 +943,9 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
 
     async def handle_mcp(scope: Scope, receive: Receive, send: Send) -> None:
         token = _provided_token(scope)
-        user = users.get_user_by_token(token) if token else None
+        # Use get_user_by_token_any so paused users still reach call_tool and
+        # receive the suspension prompt rather than a bare 401.
+        user = users.get_user_by_token_any(token) if token else None
         if user is None:
             await send({"type": "http.response.start", "status": 401,
                         "headers": [(b"content-type", b"application/json")]})

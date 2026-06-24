@@ -134,6 +134,20 @@ def get_user_by_token(token: str) -> User | None:
     return _row_to_user(row) if row else None
 
 
+def get_user_by_token_any(token: str) -> User | None:
+    """Like get_user_by_token but also returns paused users. Used by the MCP
+    request handler so paused users reach call_tool and get the suspension
+    prompt instead of a bare 401."""
+    if not token:
+        return None
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, token, label, mb_url, mb_email, mb_password_enc FROM users WHERE token = ?",
+            (token,),
+        ).fetchone()
+    return _row_to_user(row) if row else None
+
+
 def get_user_by_id(user_id: str) -> User | None:
     """Admin-path lookup. Returns the user regardless of enabled state."""
     with _connect() as conn:
