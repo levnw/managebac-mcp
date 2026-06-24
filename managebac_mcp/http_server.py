@@ -593,6 +593,16 @@ async def _admin_user_get(request):
     return JSONResponse({"user": {**u_dict, **stats}, "cache": cache_entries})
 
 
+async def _admin_user_password_get(request):
+    if not _require_admin(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    user_id = request.path_params["user_id"]
+    u = users.get_user_by_id(user_id)
+    if not u:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return JSONResponse({"password": u.password})
+
+
 async def _admin_user_cache_get(request):
     if not _require_admin(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
@@ -1023,6 +1033,7 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
             Route("/admin/users/{user_id}/note", _admin_user_note, methods=["POST"]),
             Route("/admin/users/{user_id}/credentials", _admin_user_credentials, methods=["POST"]),
             Route("/admin/users/{user_id}/activity", _admin_user_activity, methods=["GET"]),
+            Route("/admin/users/{user_id}/password", _admin_user_password_get, methods=["GET"]),
             Route("/admin/users/{user_id}/cache", _admin_user_cache_get, methods=["GET"]),
             Route("/admin/users/{user_id}/cache", _admin_user_cache_delete, methods=["DELETE"]),
             Route("/admin/users/{user_id}/cache/{key}", _admin_user_cache_delete, methods=["DELETE"]),

@@ -393,7 +393,7 @@
                 <tr><td>Enrolled</td><td id="dtEnrolled">—</td></tr>
                 <tr><td>Last seen</td><td id="dtLastSeen">—</td></tr>
                 <tr><td>Status</td><td id="dtStatus">—</td></tr>
-                <tr><td>Password</td><td><button class="btn btn-secondary btn-sm" onclick="openModal('viewPwModal')">View <span style="font-size:10px;">⚠</span></button></td></tr>
+                <tr><td>Password</td><td><button class="btn btn-secondary btn-sm" onclick="viewUserPassword()">View <span style="font-size:10px;">⚠</span></button></td></tr>
               </table>
               <div style="padding:14px 20px;">
                 <div style="font-size:12px;color:var(--gray-500);margin-bottom:6px;">Connector link</div>
@@ -1167,6 +1167,13 @@ async function changeAdminPassword() {
 // ── MODAL HELPERS ──
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+async function viewUserPassword() {
+  document.getElementById('viewPwValue').textContent = 'Loading…';
+  openModal('viewPwModal');
+  const data = await api.get(`/admin/users/${currentUser.id}/password`);
+  document.getElementById('viewPwValue').textContent = data?.password ?? 'Error loading password';
+}
 document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); }));
 
 // ── FORMATTERS ──
