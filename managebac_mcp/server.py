@@ -3,6 +3,7 @@ import hashlib
 import json
 import sys
 from collections import OrderedDict
+from html.parser import HTMLParser
 from pathlib import Path
 import time
 from mcp.server import Server
@@ -554,6 +555,120 @@ _THEME_COLORS = {
 _DEFAULT_THEME_COLOR = _THEME_COLORS["blue"]  # ManageBac's default theme
 
 
+class _HtmlTruncator(HTMLParser):
+    """Streams HTML and stops after `limit` visible characters, closing any tags still
+    open at the cutoff — so truncating never produces broken/unbalanced markup (the
+    naive `text[:limit]` approach can slice mid-tag or mid-entity, which corrupts the
+    innerHTML the widget injects it into). Limited to the small tag vocabulary
+    `_md_to_html` actually produces; not a general HTML sanitizer."""
+
+    _VOID = {"br", "img", "hr"}
+
+    def __init__(self, limit: int):
+        super().__init__(convert_charrefs=False)
+        self.limit = limit
+        self.out: list[str] = []
+        self.count = 0
+        self.stack: list[str] = []
+        self.done = False
+
+    def _attrs_str(self, attrs) -> str:
+        return "".join(f' {k}="{v}"' for k, v in attrs if v is not None)
+
+    def handle_starttag(self, tag, attrs):
+        if self.done:
+            return
+        self.out.append(f"<{tag}{self._attrs_str(attrs)}>")
+        if tag not in self._VOID:
+            self.stack.append(tag)
+
+    def handle_startendtag(self, tag, attrs):
+        if self.done:
+            return
+        self.out.append(f"<{tag}{self._attrs_str(attrs)}/>")
+
+    def handle_endtag(self, tag):
+        if self.done:
+            return
+        self.out.append(f"</{tag}>")
+        if tag in self.stack:
+            self.stack.remove(tag)
+
+    def handle_data(self, data):
+        if self.done:
+            return
+        remaining = self.limit - self.count
+        if len(data) <= remaining:
+            self.out.append(data)
+            self.count += len(data)
+        else:
+            self.out.append(data[:remaining] + "…")
+            self.count = self.limit
+            self.done = True
+
+    def handle_entityref(self, name):
+        if self.done:
+            return
+        self.out.append(f"&{name};")
+        self.count += 1
+
+    def handle_charref(self, name):
+        if self.done:
+            return
+        self.out.append(f"&#{name};")
+        self.count += 1
+
+    def result(self) -> str:
+        for tag in reversed(self.stack):
+            self.out.append(f"</{tag}>")
+        return "".join(self.out)
+
+
+def _truncate_html(html_str: str | None, limit: int) -> tuple[str | None, bool]:
+    """Truncate HTML to ~limit visible characters, tag-safe. Returns (html, was_truncated)."""
+    if not html_str or len(html_str) <= limit:
+        return html_str, False
+    truncator = _HtmlTruncator(limit)
+    truncator.feed(html_str)
+    return truncator.result(), True
+
+
+def _truncate_text(text: str | None, limit: int) -> str | None:
+    if not text or len(text) <= limit:
+        return text
+    return text[:limit] + "…"
+
+
+def _cap_task_widget_sc(sc: dict) -> dict:
+    """Cap every variable-length field on a task-detail-shaped structuredContent dict so
+    it stays well under ChatGPT's undocumented ~4-5KB widget ceiling (measured: an
+    uncapped task with a normal description + a couple of resources was already 7KB+ —
+    over the ceiling on a single task, before batching. See WIDGETS.md §19). Shared by
+    get_task_detail and find_task, which build the same widget shape.
+
+    The widget shows a preview and reveals the rest via "Show More" using this same
+    payload, so these are true content limits, not a display clamp — generous enough to
+    read naturally, capped enough that the whole widget doesn't silently fail to render.
+    """
+    sc = dict(sc)
+    sc["description"], sc["description_truncated"] = _truncate_html(sc.get("description"), 1200)
+    sc["teacher_comment"] = _truncate_text(sc.get("teacher_comment"), 800)
+    if sc.get("images"):
+        sc["images"] = sc["images"][:3]
+    if sc.get("resources"):
+        sc["resources"] = sc["resources"][:6]
+    if sc.get("desc_files"):
+        sc["desc_files"] = sc["desc_files"][:10]
+    if sc.get("submitted_files"):  # preserves None (no dropbox) vs [] (empty dropbox)
+        sc["submitted_files"] = sc["submitted_files"][:10]
+    if sc.get("discussions"):  # preserves None (hidden) vs [] (empty state)
+        sc["discussions"] = [
+            {**d, "body": _truncate_text(d.get("body") or "", 400)}
+            for d in sc["discussions"][:5]
+        ]
+    return sc
+
+
 def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> dict:
     """Combine fetch_task_detail + fetch_tasks metadata into the TASK object the card expects."""
     import re as _re
@@ -852,6 +967,18 @@ async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerR
 server.request_handlers[types.ReadResourceRequest] = _handle_read_resource
 
 
+# Every current tool either just reads ManageBac data (never creates/updates/deletes anything,
+# never reaches outside the student's own account) or, for `refresh`, only clears our own local
+# cache (regenerable, not user data loss). None are destructive or open-world; all are safe to
+# retry. See WIDGETS.md §14/§19 — OpenAI's review explicitly checks these against actual behavior.
+_RO_ANNOTATIONS = types.ToolAnnotations(
+    readOnlyHint=True, destructiveHint=False, openWorldHint=False, idempotentHint=True,
+)
+_LOCAL_MUTATION_ANNOTATIONS = types.ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, openWorldHint=False, idempotentHint=True,
+)
+
+
 @server.list_tools()
 async def list_tools() -> list[types.Tool]:
     _tools = [
@@ -864,6 +991,7 @@ async def list_tools() -> list[types.Tool]:
                 "Call this first to get class IDs."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="get_timetable",
@@ -909,6 +1037,7 @@ async def list_tools() -> list[types.Tool]:
                 "required": [],
             },
             _meta=_TIMETABLE_META_STATIC,
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="refresh",
@@ -921,6 +1050,7 @@ async def list_tools() -> list[types.Tool]:
                 "again (e.g. get_upcoming) to get the fresh result."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
+            annotations=_LOCAL_MUTATION_ANNOTATIONS,
         ),
         types.Tool(
             name="get_upcoming",
@@ -948,6 +1078,7 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": [],
             },
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="get_tasks",
@@ -978,6 +1109,7 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["class_id"],
             },
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="get_task_detail",
@@ -1024,6 +1156,7 @@ async def list_tools() -> list[types.Tool]:
                 },
             },
             _meta=_TASK_META_STATIC,
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="get_files",
@@ -1050,6 +1183,7 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["class_id"],
             },
             _meta=_FILES_META_STATIC,
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="get_journal",
@@ -1072,6 +1206,7 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["class_id"],
             },
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="get_file_content",
@@ -1093,6 +1228,7 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["url"],
             },
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="get_units",
@@ -1119,6 +1255,7 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["class_id"],
             },
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="get_grades",
@@ -1147,6 +1284,7 @@ async def list_tools() -> list[types.Tool]:
                 "required": [],
             },
             _meta=_GRADES_META_STATIC,
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="tag_search",
@@ -1173,6 +1311,7 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["tag"],
             },
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="find_task",
@@ -1192,6 +1331,7 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["query"],
             },
+            annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
             name="test_ui",
@@ -1201,6 +1341,7 @@ async def list_tools() -> list[types.Tool]:
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
             _meta=_TEST_META,
+            annotations=_RO_ANNOTATIONS,
         ),
     ]
 
@@ -1556,19 +1697,9 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                         class_name = cls_match.get("name") or cls_match.get("title") or ""
                 except Exception:
                     pass  # best-effort; card degrades gracefully without meta
-                sc = dict(_build_task_obj(
+                sc = _cap_task_widget_sc(_build_task_obj(
                     detail if isinstance(detail, dict) else {}, task_meta_obj, class_name,
                 ))
-                # Cap long fields so the toolOutput payload stays bounded — the widget
-                # clamps display and reveals the rest via "Show More".
-                if sc.get("description") and len(sc["description"]) > 4000:
-                    sc["description"] = sc["description"][:4000] + "…"
-                if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 2500:
-                    sc["teacher_comment"] = sc["teacher_comment"][:2500] + "…"
-                if sc.get("images"):
-                    sc["images"] = sc["images"][:3]
-                if sc.get("resources"):
-                    sc["resources"] = sc["resources"][:6]
                 return sc
 
             # ── Resolve class_id + task_id ───────────────────────────────────
@@ -1674,7 +1805,19 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 # (graded_tasks) so the toolOutput payload stays small; the full
                 # JSON is still in the text content for the model.
                 def _sc_class(c):
-                    out = {"class_name": c.get("class_name"), "criteria": c.get("criteria")}
+                    # The widget only ever reads criteria[letter].latest (verified against
+                    # widget-preview/grades-card.html) — best/average/out_of/count are real
+                    # data the MODEL can still reason about via the full `content` JSON below,
+                    # but shipping them into structuredContent too was pure dead weight: on
+                    # this project's own 18-class test account, get_grades() with no class_id
+                    # was already 4.6KB — right at ChatGPT's undocumented ~4-5KB widget-drop
+                    # ceiling — from data the widget never displays. See WIDGETS.md §19.
+                    raw_criteria = c.get("criteria") or {}
+                    slim_criteria = {
+                        k: {"latest": v.get("latest")} for k, v in raw_criteria.items()
+                        if isinstance(v, dict) and v.get("latest") is not None
+                    }
+                    out = {"class_name": c.get("class_name"), "criteria": slim_criteria}
                     # For a single-class request, include slimmed per-task grades so
                     # the widget can draw ManageBac's task-by-task progress chart.
                     gts = c.get("graded_tasks")
@@ -1725,15 +1868,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 except Exception:
                     pass
                 task_obj = _build_task_obj(task, ft_meta, ft_class_name)
-                sc = dict(task_obj)
-                if sc.get("description") and len(sc["description"]) > 4000:
-                    sc["description"] = sc["description"][:4000] + "…"
-                if sc.get("teacher_comment") and len(sc["teacher_comment"]) > 2500:
-                    sc["teacher_comment"] = sc["teacher_comment"][:2500] + "…"
-                if sc.get("images"):
-                    sc["images"] = sc["images"][:3]  # cap to keep payload small
-                if sc.get("resources"):
-                    sc["resources"] = sc["resources"][:6]
+                sc = _cap_task_widget_sc(task_obj)
                 # Data reaches the widget via structuredContent → window.openai.toolOutput.
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, task, source="mcp", duration_ms=duration_ms)
