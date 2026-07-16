@@ -39,11 +39,14 @@
 <div class="bar">
   <select id="widget">
     <option value="task-card.html">task-card</option>
-    <option value="grades-card.html">grades-card (old)</option>
-    <option value="timetable-card.html">timetable-card (old)</option>
-    <option value="class-files.html">class-files (old)</option>
+    <option value="task-list.html">task-list</option>
+    <option value="grades-card.html">grades-card</option>
+    <option value="timetable-card.html">timetable-card</option>
+    <option value="class-files.html">class-files</option>
   </select>
   <select id="scenario"></select>
+  <button class="ctl" id="gradestyle" style="display:none">Style: Inline</button>
+  <button class="ctl" id="fsmode">⛶ Fullscreen</button>
   <button class="ctl" id="theme">🌙 Dark</button>
   <button class="ctl" id="w-mobile">360</button>
   <button class="ctl" id="w-mid">480</button>
@@ -151,6 +154,139 @@ const SCENARIOS = {
   },
 };
 
+const TASK_LIST_SCENARIOS = {
+  "mixed tasks": {
+    title: "Tasks",
+    class_name: "All classes",
+    url: "https://es.managebac.com/student/tasks",
+    tasks: [
+      {
+        title: "Summative - Sustainable Urban Management",
+        class_name: "IB MYP Geography (Grade 8) B",
+        url: "#",
+        due_month: "May", due_day: "22", due_past: true, due_time: "Friday at 9:20 AM",
+        labels: [{ text: "Summative" }, { text: "Homework" }],
+        status: "Submitted",
+        grades: [{ label: "A", score: 7, max: 8 }, { label: "B", score: 6, max: 8 }, { label: "C", score: 8, max: 8 }, { label: "D", score: 7, max: 8 }],
+        teacher_comment: "Your work stood out because it explored both successes and limitations.",
+      },
+      {
+        title: "Spanish oral practice - food vocabulary",
+        class_name: "Spanish Phase 1",
+        url: "#",
+        due_month: "Jul", due_day: "18", due_past: false, due_time: "Friday at 2:40 PM",
+        labels: [{ text: "Formative" }],
+        status: "Pending",
+      },
+      {
+        title: "Design portfolio - Criterion C evidence",
+        class_name: "Design (Grade 8) AB",
+        url: "#",
+        due_month: "Jul", due_day: "25", due_past: false, due_time: "Thursday at 10:00 AM",
+        labels: [{ text: "Summative" }, { text: "Portfolio" }],
+        status: "Not Submitted",
+      },
+      {
+        title: "Read chapter 4",
+        class_name: "Georgian B",
+        url: "#",
+        due_month: "Jul", due_day: "20", due_past: false,
+        labels: [{ text: "Homework" }],
+      },
+      {
+        title: "End of unit reflection",
+        class_name: "History (Grade 8) B",
+        url: "#",
+        due_month: "Jun", due_day: "2", due_past: true, due_time: "Tuesday at 2:40 PM",
+        labels: [{ text: "Homework" }],
+        status: "Pending",
+      },
+      {
+        title: "Lab report corrections",
+        class_name: "Science (Grade 8)",
+        url: "#",
+        due_month: "May", due_day: "30", due_past: true,
+        labels: [{ text: "Classwork" }],
+        status: "Complete",
+        grades: [{ label: "B", score: 7, max: 8 }],
+      },
+    ],
+  },
+};
+
+const GRADES_SCENARIOS = {
+  "all classes": {
+    scope: "All classes",
+    url: "https://es.managebac.com/student/classes",
+    classes: [
+      { class_name: "IB MYP Geography (Grade 8) B", criteria: { A: { latest: 7 }, B: { latest: 6 }, C: { latest: 8 }, D: { latest: 7 } } },
+      { class_name: "Design (Grade 8) AB", criteria: { A: { latest: 6 }, C: { latest: 7 } } },
+      { class_name: "Spanish Phase 1", criteria: { B: { latest: 5 }, C: { latest: 6 }, D: { latest: 6 } } },
+    ],
+  },
+  "some classes N/A": {
+    scope: "All classes",
+    url: "https://es.managebac.com/student/classes",
+    classes: [
+      { class_name: "IB MYP Geography (Grade 8) B", criteria: { A: { latest: 7 }, B: { latest: 6 }, C: { latest: 8 }, D: { latest: 7 } } },
+      { class_name: "Design (Grade 8) AB — new term", criteria: {} },
+      { class_name: "Georgian B (Extracurricular)", criteria: {} },
+      { class_name: "Spanish Phase 1", criteria: { B: { latest: 5 }, C: { latest: 6 }, D: { latest: 6 } } },
+    ],
+  },
+  "no data at all": {
+    scope: "All classes",
+    url: "https://es.managebac.com/student/classes",
+    classes: [
+      { class_name: "Design (Grade 8) AB", criteria: {} },
+      { class_name: "Georgian B", criteria: {} },
+    ],
+  },
+  "single class": {
+    scope: "IB MYP Geography (Grade 8) B",
+    url: "https://es.managebac.com/student/classes/12905543/grades",
+    classes: [{
+      class_name: "IB MYP Geography (Grade 8) B",
+      criteria: { A: { latest: 7, best: 7 }, B: { latest: 6, best: 7 }, C: { latest: 8, best: 8 }, D: { latest: 7, best: 7 } },
+      // newest first (as ManageBac returns) — the card reverses for trend order.
+      // Trajectories: A climbing, B slipping (7→6), C climbing to ceiling, D climbing.
+      graded_tasks: [
+        { title: "Sustainable Urban Management", grades: { A: { score: 7, max: 8 }, B: { score: 6, max: 8 }, C: { score: 8, max: 8 }, D: { score: 7, max: 8 } } },
+        { title: "Coastal Fieldwork Report", grades: { A: { score: 6, max: 8 }, B: { score: 7, max: 8 }, C: { score: 7, max: 8 }, D: { score: 6, max: 8 } } },
+        { title: "Population Case Study", grades: { A: { score: 6, max: 8 }, B: { score: 6, max: 8 }, C: { score: 7, max: 8 }, D: { score: 6, max: 8 } } },
+        { title: "Development Data Analysis", grades: { A: { score: 5, max: 8 }, B: { score: 5, max: 8 }, C: { score: 6, max: 8 }, D: { score: 5, max: 8 } } },
+        { title: "Map Skills Quiz", grades: { A: { score: 5, max: 8 }, B: { score: 4, max: 8 }, C: { score: 6, max: 8 }, D: { score: 4, max: 8 } } },
+      ],
+    }],
+  },
+};
+
+const TIMETABLE_SCENARIOS = {
+  "today": {
+    current: { weekday: "Thursday", date: "Jul 16" },
+    url: "https://es.managebac.com/student/timetable",
+    timetable: [
+      { day: "Jul 16, Thu", period: "1", time_start: "8:30", time_end: "9:20", class_name: "IB MYP Geography", teacher: "Ms. Beridze", room: "214", task_count: 1 },
+      { day: "Jul 16, Thu", period: "2", time_start: "9:25", time_end: "10:15", class_name: "Spanish Phase 1", teacher: "Mr. Garcia", room: "108" },
+      { day: "Jul 16, Thu", period: "3", time_start: "10:35", time_end: "11:25", class_name: "Design", teacher: "Ms. Gvazava", room: "Lab 2", task_count: 2 },
+      { day: "Jul 16, Thu", period: "4", time_start: "11:30", time_end: "12:20", class_name: "Science", teacher: "Dr. Chen", room: "301" },
+    ],
+  },
+};
+
+const FILE_SCENARIOS = {
+  "class files": {
+    class_name: "IB MYP Geography (Grade 8) B",
+    url: "https://es.managebac.com/student/classes/12905543/files",
+    files: [
+      { name: "Assessment_Rubric_Criterion_ABCD.pdf", size: "418 KB", uploaded_at: "May 12", uploaded_by: "T. Beridze", folder: "Assessments", url: "#" },
+      { name: "Copenhagen_case_study.pdf", size: "2.1 MB", uploaded_at: "May 12", uploaded_by: "T. Beridze", folder: "Resources", url: "#" },
+      { name: "Singapore_data_sheets.xlsx", size: "340 KB", uploaded_at: "May 13", uploaded_by: "T. Beridze", folder: "Resources", url: "#" },
+      { name: "Urban_sustainability_slides.pptx", size: "6.8 MB", uploaded_at: "May 14", uploaded_by: "T. Beridze", folder: "Slides", url: "#" },
+    ],
+  },
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Harness plumbing
 // ═══════════════════════════════════════════════════════════════════════════
@@ -159,11 +295,26 @@ const logEl = document.getElementById("log");
 const scenarioSel = document.getElementById("scenario");
 const widgetSel = document.getElementById("widget");
 let dark = false;
+let gradeStyle = "inline";
+let displayMode = "inline";
+let widthPreset = 560;
 
-for (const name of Object.keys(SCENARIOS)) {
-  const o = document.createElement("option");
-  o.value = name; o.textContent = name;
-  scenarioSel.appendChild(o);
+function scenariosForWidget() {
+  if (widgetSel.value === "task-list.html") return TASK_LIST_SCENARIOS;
+  if (widgetSel.value === "grades-card.html") return GRADES_SCENARIOS;
+  if (widgetSel.value === "timetable-card.html") return TIMETABLE_SCENARIOS;
+  if (widgetSel.value === "class-files.html") return FILE_SCENARIOS;
+  return SCENARIOS;
+}
+
+function refreshScenarios() {
+  const options = scenariosForWidget();
+  scenarioSel.innerHTML = "";
+  for (const name of Object.keys(options)) {
+    const o = document.createElement("option");
+    o.value = name; o.textContent = name;
+    scenarioSel.appendChild(o);
+  }
 }
 
 window.__harnessLog = (line) => {
@@ -172,18 +323,24 @@ window.__harnessLog = (line) => {
 
 function mockScript(data, theme) {
   return `<script>
+    window.__GRADE_STYLE = ${JSON.stringify(gradeStyle)};
     window.openai = {
       toolOutput: ${JSON.stringify(data)},
       toolInput: {},
       theme: ${JSON.stringify(theme)},
-      displayMode: "inline",
+      displayMode: ${JSON.stringify(displayMode)},
       maxHeight: 900,
       locale: "en-US",
       widgetState: null,
       setWidgetState(s) { this.widgetState = s; parent.__harnessLog("setWidgetState(" + JSON.stringify(s) + ")"); },
       notifyIntrinsicHeight(h) { parent.__harnessLog("notifyIntrinsicHeight(" + h + ")"); },
       openExternal({ href }) { parent.__harnessLog("openExternal(" + href + ")"); },
-      requestDisplayMode({ mode }) { parent.__harnessLog("requestDisplayMode(" + mode + ")"); return Promise.resolve({ mode }); },
+      requestDisplayMode({ mode }) {
+        this.displayMode = mode;
+        parent.__harnessLog("requestDisplayMode(" + mode + ")");
+        window.dispatchEvent(new CustomEvent("openai:set_globals", { detail: { globals: window.openai } }));
+        return Promise.resolve({ mode });
+      },
       callTool(name, args) { parent.__harnessLog("callTool(" + name + ", " + JSON.stringify(args) + ")"); return Promise.resolve({ structuredContent: null }); },
       sendFollowUpMessage({ prompt }) { parent.__harnessLog("sendFollowUpMessage(" + prompt + ")"); },
     };
@@ -192,9 +349,12 @@ function mockScript(data, theme) {
 
 async function load() {
   const widget = widgetSel.value;
-  const data = SCENARIOS[scenarioSel.value];
+  const data = scenariosForWidget()[scenarioSel.value];
   const theme = dark ? "dark" : "light";
-  const res = await fetch("/" + widget + "?t=" + Date.now());
+  document.getElementById("gradestyle").style.display = widget === "grades-card.html" ? "" : "none";
+  frame.style.width = displayMode === "fullscreen" ? "900px" : widthPreset + "px";
+  frame.style.height = displayMode === "fullscreen" ? "1000px" : "600px";
+  const res = await fetch(widget + "?t=" + Date.now());
   let html = await res.text();
   html = html.replace("<head>", "<head>" + mockScript(data, theme));
   frame.srcdoc = html;
@@ -207,15 +367,28 @@ document.getElementById("theme").addEventListener("click", (e) => {
   e.target.textContent = dark ? "☀️ Light" : "🌙 Dark";
   load();
 });
+document.getElementById("gradestyle").addEventListener("click", (e) => {
+  gradeStyle = gradeStyle === "inline" ? "bar" : "inline";
+  e.target.textContent = gradeStyle === "inline" ? "Style: Inline" : "Style: Bar";
+  load();
+});
+document.getElementById("fsmode").addEventListener("click", (e) => {
+  displayMode = displayMode === "inline" ? "fullscreen" : "inline";
+  e.target.textContent = displayMode === "inline" ? "⛶ Fullscreen" : "⛶ Inline";
+  e.target.classList.toggle("active", displayMode === "fullscreen");
+  load();
+});
 for (const [id, w] of [["w-mobile", 360], ["w-mid", 480], ["w-full", 560]]) {
   document.getElementById(id).addEventListener("click", (e) => {
-    frame.style.width = w + "px";
+    widthPreset = w;
+    if (displayMode !== "fullscreen") frame.style.width = w + "px";
     document.querySelectorAll(".bar button.ctl").forEach((b) => b.id.startsWith("w-") && b.classList.remove("active"));
     e.target.classList.add("active");
   });
 }
 scenarioSel.addEventListener("change", load);
-widgetSel.addEventListener("change", load);
+widgetSel.addEventListener("change", () => { refreshScenarios(); load(); });
+refreshScenarios();
 load();
 </script>
 </body>

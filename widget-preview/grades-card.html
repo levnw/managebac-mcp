@@ -1,191 +1,383 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ManageBac Grades</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-      font-size: 13px; color: #101828; background: transparent;
-      display: flex; align-items: flex-start; justify-content: center; padding: 0;
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grades</title>
+<style>
+  :root {
+    --bg:#FFFFFF; --bg-secondary:#F3F3F3; --text:#0D0D0D; --text-2:#5D5D5D; --text-3:#8F8F8F;
+    --border:rgba(13,13,13,.09); --accent:#0285FF; --track:#E8E8E8; --green:#008635;
+  }
+  :root[data-theme="dark"] {
+    --bg:#212121; --bg-secondary:#303030; --text:#FFFFFF; --text-2:#CDCDCD; --text-3:#AFAFAF;
+    --border:rgba(255,255,255,.10); --accent:#0285FF; --track:#414141; --green:#40C977;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#212121; --bg-secondary:#303030; --text:#FFFFFF; --text-2:#CDCDCD; --text-3:#AFAFAF;
+      --border:rgba(255,255,255,.10); --track:#414141; --green:#40C977;
     }
-    .mb-card {
-      --theme: #1570ef;
-      width: 100%; max-width: 880px; background: #fff; border-radius: 12px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06); overflow: hidden;
-    }
-    .mb-header { background: var(--theme); padding: 13px 20px 12px; }
-    .mb-header h1 { font-size: 1.15rem; font-weight: 600; color: #fff; line-height: 1.3; }
-    .mb-header .scope { font-size: 0.74rem; color: rgba(255,255,255,0.8); margin-top: 1px; font-weight: 400; }
-    .content-area { padding: 14px 18px 10px; }
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { background:transparent; }
+  body {
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    color:var(--text); -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.45;
+  }
+  .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; max-width:560px; margin:0 auto; }
+  :root[data-display="fullscreen"] .card { max-width:720px; margin:16px auto calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .title { font-size:16px; font-weight:600; line-height:1.3; }
+  .subtitle { color:var(--text-2); font-size:13px; margin-top:2px; }
+  .head-side { display:flex; align-items:flex-start; gap:8px; flex-shrink:0; }
+  .count { color:var(--text-3); font-size:12px; white-space:nowrap; margin-top:2px; text-align:right; }
+  .icon-btn { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text-2); cursor:pointer; }
+  .icon-btn:hover { background:var(--bg-secondary); color:var(--text); }
+  .icon-btn svg { width:14px; height:14px; stroke:currentColor; }
+  .divider { height:1px; background:var(--border); margin:14px -16px; }
+  .section-label { font-size:11.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px; }
+  .class-row { padding:12px 0; border-bottom:1px solid var(--border); }
+  .class-row:last-child { border-bottom:none; }
+  .class-name { font-size:14px; font-weight:600; line-height:1.3; min-width:0; }
+  .hint { color:var(--text-3); font-size:12px; margin-top:8px; }
+  .actions { display:flex; gap:8px; margin-top:16px; }
+  .btn { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; font-size:13.5px; font-weight:600; padding:9px 14px; border-radius:12px; cursor:pointer; border:1px solid var(--border); background:var(--bg); color:var(--text); text-decoration:none; }
+  .btn:hover { background:var(--bg-secondary); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.primary:hover { background:#0270DB; }
+  .btn svg { width:14px; height:14px; stroke:currentColor; }
+  .empty { color:var(--text-3); font-size:13px; padding:16px 0 2px; }
 
-    /* ── All-classes table ── */
-    .grades-table { width: 100%; border-collapse: collapse; }
-    .grades-table th {
-      font-size: 0.72rem; font-weight: 600; color: #667085; text-transform: none;
-      text-align: center; padding: 6px 6px; border-bottom: 1px solid #eaecf0;
-    }
-    .grades-table th.col-class { text-align: left; }
-    .grades-table td { padding: 8px 6px; border-bottom: 1px solid #f2f4f7; text-align: center; font-size: 0.82rem; color: #344054; }
-    .grades-table td.col-class { text-align: left; font-weight: 500; color: #101828; }
-    .grades-table tr:last-child td { border-bottom: none; }
-    .grades-table tr:hover td { background: #f9fafb; }
-    .crit-val { font-weight: 500; }
-    .crit-val.muted { color: #cdd2da; font-weight: 400; }
-    .myp { display: inline-block; min-width: 22px; padding: 1px 7px; border-radius: 10px; font-size: 0.78rem; font-weight: 600; color: #fff; }
-    .legend-note { font-size: 0.7rem; color: #98a2b3; padding: 9px 2px 2px; }
+  /* Final grade (emphasised) */
+  .final { text-align:right; flex-shrink:0; line-height:1; }
+  .final-num { font-size:24px; font-weight:700; color:var(--text); }
+  .final-num .of { font-size:13px; font-weight:600; color:var(--text-3); }
+  .final-label { font-size:10px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin-top:3px; }
+  .final-num.na { font-size:15px; color:var(--text-3); font-weight:600; }
 
-    /* ── Single-class progress chart ── */
-    .pc-title { font-size: 0.92rem; font-weight: 600; color: #101828; padding: 2px 2px 12px; }
-    .chart { display: flex; gap: 6px; }
-    .y-axis { width: 16px; height: 200px; display: flex; flex-direction: column; justify-content: space-between;
-              font-size: 0.62rem; color: #98a2b3; text-align: right; padding-bottom: 1px; }
-    .plot-wrap { flex: 1; min-width: 0; }
-    .plot { display: flex; height: 200px; position: relative; border-bottom: 1px solid #d0d5dd; }
-    /* horizontal gridlines */
-    .plot::before { content: ''; position: absolute; inset: 0; pointer-events: none;
-      background-image: repeating-linear-gradient(to top, transparent, transparent calc(12.5% - 1px), #f2f4f7 calc(12.5% - 1px), #f2f4f7 12.5%); }
-    .crit-group { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 5px; padding: 0 6px;
-                  border-left: 1px solid #f2f4f7; position: relative; z-index: 1; }
-    .crit-group:first-child { border-left: none; }
-    .bar { width: 15px; max-width: 15px; border-radius: 2px 2px 0 0; position: relative; min-height: 2px; }
-    .bar .bv { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: #667085; font-weight: 600; }
-    .x-axis { display: flex; margin-left: 22px; padding-top: 6px; }
-    .x-lab { flex: 1; text-align: center; font-size: 0.64rem; color: #475467; padding: 0 4px; line-height: 1.2; }
-    .x-lab b { color: #101828; font-weight: 600; }
+  /* Inline criteria */
+  .crit-inline { font-size:12.5px; color:var(--text-2); }
+  .crit-inline b { color:var(--text); font-weight:600; }
+  .crit-inline .sep { color:var(--text-3); margin:0 5px; }
 
-    .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 14px 2px 2px; border-top: 1px solid #eaecf0; margin-top: 12px; }
-    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.68rem; color: #475467; max-width: 260px; }
-    .legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
-    .legend-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-a { display:flex; align-items:center; gap:14px; }
+  .row-a .grow { flex:1; min-width:0; }
+  .row-a .class-name { margin-bottom:3px; }
+  @media (max-width:439px) { .row-a { flex-wrap:wrap; } .row-a .final { order:2; margin-left:auto; } }
 
-    .empty { color: #98a2b3; font-size: 0.82rem; font-style: italic; padding: 22px; text-align: center; }
-    .open-in-mb {
-      display: flex; align-items: center; justify-content: center; padding: 12px 20px; gap: 6px;
-      color: var(--theme); font-size: 0.8rem; font-weight: 600; text-decoration: none; border-top: 1px solid #eaecf0;
-    }
-    .open-in-mb:hover { background: #f9fafb; }
-    svg.icon { width: 13px; height: 13px; flex-shrink: 0; }
-  </style>
+  .row-b .class-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .grade-bar { position:relative; height:8px; border-radius:999px; background:var(--track); overflow:hidden; margin:9px 0 8px; }
+  .grade-bar-fill { position:absolute; left:0; top:0; bottom:0; border-radius:999px; background:var(--accent); }
+
+  /* Criterion bars */
+  .crit-list { margin-top:12px; display:flex; flex-direction:column; gap:9px; }
+  .crit { display:flex; align-items:center; gap:10px; }
+  .crit-key { width:14px; font-size:12px; font-weight:600; color:var(--text-2); flex-shrink:0; }
+  .crit-viz { flex:1; min-width:0; }
+  .crit-score { font-size:12px; color:var(--text-2); white-space:nowrap; flex-shrink:0; min-width:30px; text-align:right; }
+  .crit-score b { color:var(--text); font-weight:600; font-size:13px; }
+  .bar-track { position:relative; height:6px; border-radius:999px; background:var(--track); overflow:hidden; }
+  .bar-fill { position:absolute; left:0; top:0; bottom:0; border-radius:999px; background:var(--accent); }
+  .bar-best { position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--text-3); border-radius:1px; }
+
+  /* Overall summary */
+  .overall { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+  .overall-label { font-size:13px; font-weight:600; }
+  .overall-val { font-size:22px; font-weight:700; }
+  .overall-val.na { font-size:15px; color:var(--text-3); }
+
+  /* ── Edit mode ───────────────────────────────────────────────────────── */
+  .edit-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); }
+  .edit-row:last-of-type { border-bottom:none; }
+  .edit-key { font-size:13.5px; min-width:0; }
+  .edit-key b { font-weight:600; }
+  .edit-key .sub { color:var(--text-3); font-size:12px; }
+  .na-tag { font-size:12px; color:var(--text-3); font-style:italic; }
+  .stepper { display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:10px; overflow:hidden; flex-shrink:0; }
+  .step-btn { width:32px; height:30px; border:none; background:var(--bg); color:var(--text); font-size:17px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .step-btn:hover { background:var(--bg-secondary); }
+  .step-btn:disabled { color:var(--text-3); opacity:.4; cursor:default; }
+  .step-val { min-width:34px; text-align:center; font-size:13px; font-weight:600; }
+  .step-val .of { color:var(--text-3); font-weight:400; font-size:11px; }
+  .edit-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
+  .edit-summary .lbl { font-size:13px; font-weight:600; }
+  .edit-summary .big { font-size:24px; font-weight:700; }
+  .edit-summary .big .of { font-size:13px; font-weight:600; color:var(--text-3); }
+  .edit-summary .big.na { font-size:15px; color:var(--text-3); }
+  .delta { font-size:12px; color:var(--text-3); }
+  .delta.up { color:var(--green); }
+</style>
 </head>
 <body>
-<div class="mb-card" id="card"></div>
-
+<div class="card" id="card"><div class="empty">Loading grades...</div></div>
 <script>
-const CRIT = ['A','B','C','D'];
-const CRIT_NAMES = { A:'Knowing & understanding', B:'Inquiring & designing', C:'Processing & evaluating', D:'Reflecting on impacts' };
-// Per-task palette for the progress chart (distinct, ManageBac-ish)
-const PALETTE = ['#2e90fa','#f97066','#f04438','#fdb022','#9b8afb','#7a5af8','#6172f3',
-                 '#ee46bc','#16b364','#0ba5ec','#d444f1','#e3a008','#854cd4','#dd2590'];
-const MYP_COLORS = { 7:'#099250', 6:'#1570ef', 5:'#2e90fa', 4:'#e3a008', 3:'#f79009', 2:'#f04438', 1:'#d92d20' };
-const ICONS = { external: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/></svg>` };
+"use strict";
+const card = document.getElementById("card");
+const CRIT = ["A", "B", "C", "D"];
+const MAXSCORE = 8, MAXGRADE = 7;
+const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
+const EDIT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+const EXPAND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+const SPARKLE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2"/></svg>';
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 
-function esc(s){ return String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function gradeStyle() { return window.__GRADE_STYLE === "bar" ? "bar" : "inline"; }
+function applyHostContext() {
+  const t = window.openai?.theme;
+  if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+  document.documentElement.dataset.display = window.openai?.displayMode || "inline";
+}
+function reportHeight() { try { window.openai?.notifyIntrinsicHeight?.(document.body.scrollHeight); } catch (_) {} }
+new ResizeObserver(() => reportHeight()).observe(document.body);
+function requestFullscreen() { try { window.openai?.requestDisplayMode?.({ mode: "fullscreen" }); } catch (_) {} }
+function askChatGPT(prompt) { try { window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {} }
 
-function mypLevel(crit) {
+// Final IB MYP grade (1-7) from criterion scores. null = not enough data.
+function finalGrade(scoresByCrit) {
   let total = 0, n = 0;
-  CRIT.forEach(k => { const c = crit[k]; if (c && typeof c.latest === 'number') { total += c.latest; n++; } });
+  for (const k of CRIT) {
+    const v = scoresByCrit?.[k];
+    if (typeof v === "number") { total += v; n++; }
+  }
   if (!n) return null;
   const scaled = total * (4 / n);
-  let lvl = 1;
-  if (scaled >= 28) lvl = 7; else if (scaled >= 24) lvl = 6; else if (scaled >= 19) lvl = 5;
-  else if (scaled >= 15) lvl = 4; else if (scaled >= 10) lvl = 3; else if (scaled >= 6) lvl = 2;
-  return { level: lvl, total, n };
+  let level = 1;
+  if (scaled >= 28) level = 7; else if (scaled >= 24) level = 6; else if (scaled >= 19) level = 5;
+  else if (scaled >= 15) level = 4; else if (scaled >= 10) level = 3; else if (scaled >= 6) level = 2;
+  return level;
+}
+// latest score per criterion → plain {A:7,B:6,...} (missing omitted)
+function latestScores(criteria) {
+  const out = {};
+  for (const k of CRIT) {
+    const c = criteria?.[k];
+    if (c && typeof c.latest === "number") out[k] = c.latest;
+  }
+  return out;
+}
+function overallOf(levels) {
+  const vals = levels.filter((v) => typeof v === "number");
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+function fmtOverall(v) { return v == null ? "N/A" : (Math.round(v * 10) / 10).toFixed(1); }
+
+function finalGradeEl(level) {
+  if (level == null) return `<div class="final"><div class="final-num na">N/A</div><div class="final-label">Final grade</div></div>`;
+  return `<div class="final"><div class="final-num">${level}<span class="of">/7</span></div><div class="final-label">Final grade</div></div>`;
+}
+function critInline(criteria) {
+  return CRIT.map((k) => {
+    const c = criteria?.[k];
+    return c && typeof c.latest === "number" ? `${k} <b>${esc(c.latest)}</b>` : "";
+  }).filter(Boolean).join('<span class="sep">·</span>');
+}
+function barRow(k, latest, best) {
+  const fill = Math.max(0, Math.min(1, latest / MAXSCORE)) * 100;
+  const bestPct = typeof best === "number" ? Math.max(0, Math.min(1, best / MAXSCORE)) * 100 : null;
+  return `<div class="crit"><div class="crit-key">${k}</div>
+    <div class="crit-viz"><div class="bar-track"><div class="bar-fill" style="width:${fill.toFixed(1)}%"></div>
+    ${bestPct !== null && best > latest ? `<div class="bar-best" style="left:${bestPct.toFixed(1)}%"></div>` : ""}</div></div>
+    <div class="crit-score"><b>${esc(latest)}</b>/8</div></div>`;
 }
 
-/* ── All-classes simple table ── */
-function renderTable(data, classes) {
-  let h = `<div class="mb-header"><h1>Grades</h1><div class="scope">All classes · MYP criterion levels (out of 8)</div></div>`;
-  h += '<div class="content-area">';
-  h += '<table class="grades-table"><thead><tr><th class="col-class">Class</th><th>A</th><th>B</th><th>C</th><th>D</th><th>MYP</th></tr></thead><tbody>';
-  classes.forEach(cls => {
-    const crit = cls.criteria || {};
-    const cell = k => { const c = crit[k]; return (c && typeof c.latest === 'number')
-      ? `<td><span class="crit-val">${c.latest}</span></td>` : `<td><span class="crit-val muted">—</span></td>`; };
-    const myp = mypLevel(crit);
-    h += `<tr><td class="col-class">${esc(cls.class_name || 'Class')}</td>${cell('A')}${cell('B')}${cell('C')}${cell('D')}
-      <td>${myp ? `<span class="myp" style="background:${MYP_COLORS[myp.level]}">${myp.level}</span>` : '—'}</td></tr>`;
-  });
-  h += '</tbody></table>';
-  h += '<div class="legend-note">MYP is a rough estimate from your latest A/B/C/D scores — teachers use best-fit. Ask for one class to see its task-by-task chart.</div>';
-  h += '</div>';
-  if (data.url) h += `<a class="open-in-mb" href="${esc(data.url)}" target="_blank" rel="noopener">Open in ManageBac ${ICONS.external}</a>`;
-  document.getElementById('card').innerHTML = h;
+// ── READ MODE ─────────────────────────────────────────────────────────────
+function classRowInline(cls) {
+  const level = finalGrade(latestScores(cls.criteria));
+  const inline = critInline(cls.criteria || {});
+  return `<div class="class-row row-a"><div class="grow"><div class="class-name">${esc(cls.class_name || "Class")}</div>
+    ${inline ? `<div class="crit-inline">${inline}</div>` : `<div class="crit-inline">No grades yet</div>`}</div>${finalGradeEl(level)}</div>`;
+}
+function classRowBar(cls) {
+  const level = finalGrade(latestScores(cls.criteria));
+  const inline = critInline(cls.criteria || {});
+  const fill = level != null ? (level / MAXGRADE) * 100 : 0;
+  return `<div class="class-row row-b"><div class="class-top"><div class="class-name">${esc(cls.class_name || "Class")}</div>${finalGradeEl(level)}</div>
+    <div class="grade-bar"><div class="grade-bar-fill" style="width:${fill.toFixed(1)}%"></div></div>
+    ${inline ? `<div class="crit-inline">${inline}</div>` : `<div class="crit-inline">No grades yet</div>`}</div>`;
+}
+function classRowDetail(cls) {
+  const level = finalGrade(latestScores(cls.criteria));
+  const present = CRIT.filter((k) => cls.criteria?.[k] && typeof cls.criteria[k].latest === "number");
+  const bars = present.map((k) => barRow(k, cls.criteria[k].latest, cls.criteria[k].best)).join("");
+  return `<div class="class-row row-b"><div class="class-top"><div class="class-name">${esc(cls.class_name || "Class")}</div>${finalGradeEl(level)}</div>
+    ${present.length ? `<div class="crit-list">${bars}</div>` : `<div class="crit-inline">Not enough data yet</div>`}</div>`;
 }
 
-/* ── Single-class progress chart (mirrors ManageBac's Tasks & Units chart) ── */
-function renderChart(data, cls) {
-  const tasks = (cls.graded_tasks || []).filter(t => t && t.grades);
-  let h = `<div class="mb-header"><h1>Grades</h1><div class="scope">${esc(cls.class_name || '')} · MYP criterion levels (out of 8)</div></div>`;
-  h += '<div class="content-area">';
-  h += '<div class="pc-title">Progress Chart</div>';
-
-  if (!tasks.length) { h += '<div class="empty">No graded tasks yet for this class.</div></div>'; document.getElementById('card').innerHTML = h; return; }
-
-  // y-axis 8..0
-  let yax = '';
-  for (let v = 8; v >= 0; v--) yax += `<span>${v}</span>`;
-
-  // groups per criterion, bars per task that has that criterion
-  let plot = '';
-  CRIT.forEach(k => {
-    let bars = '';
-    tasks.forEach((t, i) => {
-      const g = t.grades[k];
-      if (!g || typeof g.score !== 'number') return;
-      const max = g.max || 8;
-      const pct = Math.max(2, (g.score / max) * 100);
-      bars += `<div class="bar" style="height:${pct}%;background:${PALETTE[i % PALETTE.length]}" title="${esc(t.title)} — ${k}: ${g.score}/${max}">
-        <span class="bv">${g.score}</span></div>`;
-    });
-    plot += `<div class="crit-group">${bars}</div>`;
-  });
-
-  h += `<div class="chart">
-    <div class="y-axis">${yax}</div>
-    <div class="plot-wrap"><div class="plot">${plot}</div></div>
+function renderRead(data) {
+  const classes = (data.classes || []).filter(Boolean);
+  const single = classes.length === 1;
+  let h = header(data, classes.length);
+  h += `<div class="divider"></div>`;
+  if (!classes.length) {
+    h += `<div class="empty">No grades found.</div>`;
+  } else if (single) {
+    h += `<div class="section-label">Class</div>` + classRowDetail(classes[0]);
+    h += `<div class="hint">Final grade is a rough estimate from your latest scores; teachers use best-fit.</div>`;
+  } else {
+    h += `<div class="section-label">Classes</div>`;
+    h += classes.map(gradeStyle() === "bar" ? classRowBar : classRowInline).join("");
+    const overall = overallOf(classes.map((c) => finalGrade(latestScores(c.criteria))));
+    h += `<div class="overall"><div class="overall-label">Overall</div><div class="overall-val${overall == null ? " na" : ""}">${overall == null ? "N/A" : fmtOverall(overall)}${overall == null ? "" : '<span class="of" style="font-size:13px;font-weight:600;color:var(--text-3)"> /7</span>'}</div></div>`;
+    h += `<div class="hint">Overall is the average of your class final grades. Estimates use latest scores; teachers use best-fit.</div>`;
+  }
+  h += `<div class="actions">
+    <button class="btn" id="edit">${EDIT_ICON} Edit &amp; predict</button>
+    ${data.url ? `<a class="btn primary" href="${esc(data.url)}" target="_blank" rel="noopener">${LINK_ICON} Open in ManageBac</a>` : ""}
   </div>`;
-  h += `<div class="x-axis">` + CRIT.map(k => `<div class="x-lab"><b>${k}</b><br>${esc(CRIT_NAMES[k])}</div>`).join('') + `</div>`;
-
-  // legend: task → colour
-  h += `<div class="legend">` + tasks.map((t, i) =>
-    `<span class="legend-item"><span class="legend-dot" style="background:${PALETTE[i % PALETTE.length]}"></span><span class="legend-name">${esc(t.title)}</span></span>`
-  ).join('') + `</div>`;
-  h += '</div>';
-  if (data.url) h += `<a class="open-in-mb" href="${esc(data.url)}" target="_blank" rel="noopener">Open in ManageBac ${ICONS.external}</a>`;
-  document.getElementById('card').innerHTML = h;
+  card.innerHTML = h;
+  card.querySelector("#expand")?.addEventListener("click", requestFullscreen);
+  card.querySelector("#edit")?.addEventListener("click", () => enterEdit(data));
+  reportHeight();
 }
 
-function renderGrades(data) {
-  const classes = (data.classes || []).filter(c => c && c.criteria);
-  if (!classes.length) { document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px">No graded classes found.</div>'; return; }
-  // Single class with task detail → progress chart; otherwise → table
-  if (classes.length === 1 && (classes[0].graded_tasks || []).length) renderChart(data, classes[0]);
-  else renderTable(data, classes);
+function header(data, count) {
+  return `<div class="head"><div><div class="title">Grades</div>${data.scope ? `<div class="subtitle">${esc(data.scope)}</div>` : ""}</div>
+    <div class="head-side"><div class="count">${count} ${count === 1 ? "class" : "classes"}</div>
+    <button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button></div></div>`;
 }
 
-const _INJECTED = /*INJECT_DATA*/null;
-function _hasGrades(d){ return !!(d && Array.isArray(d.classes)); }
-const _live = window.openai?.toolOutput;
-if (_hasGrades(_live)) renderGrades(_live);
-else if (_hasGrades(_INJECTED)) renderGrades(_INJECTED);
-else {
-  document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px">Loading grades…</div>';
-  window.addEventListener('message', (ev) => {
-    if (ev.source !== window.parent) return;
-    const msg = ev.data;
-    if (msg && msg.method === 'ui/notifications/tool-result') {
-      const d = msg.params?.structuredContent;
-      if (_hasGrades(d)) renderGrades(d);
+// ── EDIT MODE ─────────────────────────────────────────────────────────────
+let editState = null;
+
+function enterEdit(data) {
+  const classes = (data.classes || []).filter(Boolean);
+  const single = classes.length === 1;
+  if (single) {
+    const base = latestScores(classes[0].criteria);
+    editState = { data, mode: "single", className: classes[0].class_name || "this class",
+      keys: CRIT.filter((k) => k in base), values: { ...base }, base: { ...base } };
+  } else {
+    const levels = {}, base = {}, names = {};
+    classes.forEach((c, i) => {
+      const lvl = finalGrade(latestScores(c.criteria));
+      levels[i] = lvl; base[i] = lvl; names[i] = c.class_name || `Class ${i + 1}`;
+    });
+    editState = { data, mode: "overall", classes, names, values: levels, base };
+  }
+  renderEdit();
+}
+
+function stepper(id, value, hasData, suffix) {
+  if (!hasData) return `<span class="na-tag">N/A · no data</span>`;
+  return `<div class="stepper" data-id="${id}">
+    <button class="step-btn" data-act="dec" aria-label="Decrease">−</button>
+    <span class="step-val" id="val-${id}">${value}<span class="of">${suffix}</span></span>
+    <button class="step-btn" data-act="inc" aria-label="Increase">+</button></div>`;
+}
+
+function renderEdit() {
+  const st = editState;
+  let h = header(st.data, (st.data.classes || []).filter(Boolean).length);
+  h += `<div class="divider"></div>`;
+
+  if (st.mode === "single") {
+    h += `<div class="section-label">${esc(st.className)}</div>`;
+    if (!st.keys.length) {
+      h += `<div class="empty">Not enough data to predict a grade for this class yet.</div>`;
+    } else {
+      for (const k of st.keys) {
+        h += `<div class="edit-row"><div class="edit-key">Criterion <b>${k}</b></div>${stepper(k, st.values[k], true, "/8")}</div>`;
+      }
+      const proj = finalGrade(st.values), was = finalGrade(st.base);
+      h += summaryLine("Projected final grade", proj, was, "/7");
     }
+  } else {
+    h += `<div class="section-label">Predict overall grade</div>`;
+    st.classes.forEach((c, i) => {
+      const has = st.base[i] != null;
+      h += `<div class="edit-row"><div class="edit-key"><b>${esc(st.names[i])}</b>${has ? "" : ' <span class="sub">— no data</span>'}</div>${stepper(String(i), st.values[i], has, "/7")}</div>`;
+    });
+    const proj = overallOf(Object.keys(st.values).map((i) => st.base[i] == null ? null : st.values[i]));
+    const was = overallOf(Object.values(st.base));
+    h += summaryLineOverall("Projected overall", proj, was);
+  }
+
+  h += `<div class="actions">
+    <button class="btn primary" id="improve">${SPARKLE_ICON} Ask how to improve</button>
+    <button class="btn" id="done">Done</button>
+  </div>`;
+  h += `<div class="hint">Adjust your target scores, then ask ChatGPT for a concrete plan to reach them using your real tasks and feedback.</div>`;
+
+  card.innerHTML = h;
+  card.querySelector("#expand")?.addEventListener("click", requestFullscreen);
+  card.querySelector("#done")?.addEventListener("click", () => renderRead(st.data));
+  card.querySelector("#improve")?.addEventListener("click", askImprove);
+  card.querySelectorAll(".stepper").forEach((el) => {
+    el.querySelectorAll(".step-btn").forEach((btn) => {
+      btn.addEventListener("click", () => onStep(el.dataset.id, btn.dataset.act));
+    });
   });
-  window.addEventListener('openai:set_globals', () => {
-    const d = window.openai?.toolOutput;
-    if (_hasGrades(d)) renderGrades(d);
-  });
+  reportHeight();
 }
+
+function summaryLine(label, level, was, suffix) {
+  const delta = (level != null && was != null && level > was);
+  const wasTxt = was == null ? "" : (level === was ? " (unchanged)" : ` (was ${was})`);
+  return `<div class="edit-summary"><div class="lbl">${label}</div>
+    <div><span class="big${level == null ? " na" : ""}">${level == null ? "N/A" : level + `<span class="of">${suffix}</span>`}</span>
+    <span class="delta${delta ? " up" : ""}">${wasTxt}</span></div></div>`;
+}
+function summaryLineOverall(label, val, was) {
+  const delta = (val != null && was != null && val > was);
+  const wasTxt = was == null ? "" : (Math.abs(val - was) < 0.05 ? " (unchanged)" : ` (was ${fmtOverall(was)})`);
+  return `<div class="edit-summary"><div class="lbl">${label}</div>
+    <div><span class="big${val == null ? " na" : ""}">${val == null ? "N/A" : fmtOverall(val) + '<span class="of">/7</span>'}</span>
+    <span class="delta${delta ? " up" : ""}">${wasTxt}</span></div></div>`;
+}
+
+function onStep(id, act) {
+  const st = editState;
+  const max = st.mode === "single" ? MAXSCORE : MAXGRADE;
+  const min = st.mode === "single" ? 0 : 1;
+  let v = st.values[id];
+  if (typeof v !== "number") return;
+  v = act === "inc" ? Math.min(max, v + 1) : Math.max(min, v - 1);
+  st.values[id] = v;
+  renderEdit(); // simple + reliable; steppers don't need focus retention
+}
+
+function askImprove() {
+  const st = editState;
+  let prompt;
+  if (st.mode === "single") {
+    const cur = st.keys.map((k) => `${k} ${st.base[k]}/8`).join(", ");
+    const tgt = st.keys.map((k) => `${k} ${st.values[k]}/8`).join(", ");
+    const projG = finalGrade(st.values), wasG = finalGrade(st.base);
+    prompt = `In ${st.className}, my latest criterion scores are ${cur} (estimated final grade ${wasG ?? "N/A"}). ` +
+      `I'm aiming for ${tgt} (final grade ${projG ?? "N/A"}). Look over my tasks, teacher feedback, and the rubric ` +
+      `in this class and give me specific, concrete steps to raise each criterion to my target.`;
+  } else {
+    const cur = st.classes.map((c, i) => st.base[i] == null ? null : `${st.names[i]} ${st.base[i]}/7`).filter(Boolean).join(", ");
+    const tgt = st.classes.map((c, i) => st.base[i] == null ? null : `${st.names[i]} ${st.values[i]}/7`).filter(Boolean).join(", ");
+    const projO = overallOf(Object.keys(st.values).map((i) => st.base[i] == null ? null : st.values[i]));
+    const wasO = overallOf(Object.values(st.base));
+    prompt = `My current class grades are ${cur} (overall ${fmtOverall(wasO)}/7). I'm targeting ${tgt} (overall ${fmtOverall(projO)}/7). ` +
+      `Look across all my classes, tasks, and feedback and tell me where I can most realistically improve to reach these targets, ` +
+      `and what to prioritise first.`;
+  }
+  askChatGPT(prompt);
+}
+
+// ── Entry ─────────────────────────────────────────────────────────────────
+let lastData = null;
+function render(data) { lastData = data; editState = null; renderRead(data); }
+window.__rerenderGrades = () => { if (lastData) render(lastData); };
+
+applyHostContext();
+const live = window.openai?.toolOutput;
+if (live && Array.isArray(live.classes)) render(live);
+window.addEventListener("message", (ev) => {
+  if (ev.source !== window.parent) return;
+  const d = ev.data?.params?.structuredContent;
+  if (d && Array.isArray(d.classes)) render(d);
+}, { passive:true });
+window.addEventListener("openai:set_globals", (ev) => {
+  applyHostContext();
+  const d = ev.detail?.globals?.toolOutput ?? window.openai?.toolOutput;
+  if (d && Array.isArray(d.classes)) render(d);
+}, { passive:true });
 </script>
 </body>
 </html>
