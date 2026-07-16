@@ -88,18 +88,35 @@
   .overall-val.na { font-size:15px; color:var(--text-3); }
 
   /* ── Edit mode ───────────────────────────────────────────────────────── */
-  .edit-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); }
-  .edit-row:last-of-type { border-bottom:none; }
-  .edit-key { font-size:13.5px; min-width:0; }
-  .edit-key b { font-weight:600; }
-  .edit-key .sub { color:var(--text-3); font-size:12px; }
+  .slider-row { padding:10px 0; border-bottom:1px solid var(--border); }
+  .slider-row:last-of-type { border-bottom:none; }
+  .slider-label { display:flex; align-items:baseline; justify-content:space-between; gap:10px; font-size:13.5px; margin-bottom:9px; }
+  .slider-label b { font-weight:600; }
+  .slider-label .val { flex-shrink:0; font-size:12.5px; color:var(--text-3); }
+  .slider-label .val b { color:var(--text); font-weight:600; font-size:14px; }
   .na-tag { font-size:12px; color:var(--text-3); font-style:italic; }
-  .stepper { display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:10px; overflow:hidden; flex-shrink:0; }
-  .step-btn { width:32px; height:30px; border:none; background:var(--bg); color:var(--text); font-size:17px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-  .step-btn:hover { background:var(--bg-secondary); }
-  .step-btn:disabled { color:var(--text-3); opacity:.4; cursor:default; }
-  .step-val { min-width:34px; text-align:center; font-size:13px; font-weight:600; }
-  .step-val .of { color:var(--text-3); font-weight:400; font-size:11px; }
+
+  /* Slider styled to read like the bar chart: filled track + draggable thumb */
+  input[type=range].slider { -webkit-appearance:none; appearance:none; width:100%; height:16px; background:transparent; cursor:grab; margin:0; display:block; }
+  input[type=range].slider:active { cursor:grabbing; }
+  input[type=range].slider::-webkit-slider-runnable-track {
+    height:6px; border-radius:999px; background-color:var(--track);
+    background-image:linear-gradient(var(--accent),var(--accent)); background-repeat:no-repeat;
+    background-size:var(--fill,50%) 100%;
+  }
+  input[type=range].slider::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none; margin-top:-5px;
+    width:16px; height:16px; border-radius:50%; background:var(--bg); border:2px solid var(--accent);
+    box-shadow:0 1px 3px rgba(0,0,0,.18); transition:transform .1s ease;
+  }
+  input[type=range].slider:hover::-webkit-slider-thumb { transform:scale(1.2); box-shadow:0 0 0 6px rgba(2,133,255,.12); }
+  input[type=range].slider:active::-webkit-slider-thumb { transform:scale(1.2); }
+  input[type=range].slider:focus-visible::-webkit-slider-thumb { outline:2px solid var(--accent); outline-offset:3px; }
+  input[type=range].slider::-moz-range-track { height:6px; border-radius:999px; background:var(--track); }
+  input[type=range].slider::-moz-range-progress { height:6px; border-radius:999px; background:var(--accent); }
+  input[type=range].slider::-moz-range-thumb { width:16px; height:16px; border-radius:50%; background:var(--bg); border:2px solid var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.18); }
+  input[type=range].slider:hover::-moz-range-thumb { box-shadow:0 0 0 6px rgba(2,133,255,.12); }
+
   .edit-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
   .edit-summary .lbl { font-size:13px; font-weight:600; }
   .edit-summary .big { font-size:24px; font-weight:700; }
@@ -259,12 +276,30 @@ function enterEdit(data) {
   renderEdit();
 }
 
-function stepper(id, value, hasData, suffix) {
-  if (!hasData) return `<span class="na-tag">N/A · no data</span>`;
-  return `<div class="stepper" data-id="${id}">
-    <button class="step-btn" data-act="dec" aria-label="Decrease">−</button>
-    <span class="step-val" id="val-${id}">${value}<span class="of">${suffix}</span></span>
-    <button class="step-btn" data-act="inc" aria-label="Increase">+</button></div>`;
+function editSliderRow(id, labelHtml, value, min, max, suffix) {
+  const fill = ((value - min) / (max - min)) * 100;
+  return `<div class="slider-row">
+    <div class="slider-label"><span>${labelHtml}</span><span class="val" id="val-${id}"><b>${value}</b>${suffix}</span></div>
+    <input type="range" class="slider" data-id="${id}" min="${min}" max="${max}" step="1" value="${value}"
+      style="--fill:${fill.toFixed(1)}%" aria-label="${labelHtml.replace(/<[^>]+>/g, "")}">
+  </div>`;
+}
+function editNARow(labelHtml) {
+  return `<div class="slider-row"><div class="slider-label"><span>${labelHtml}</span><span class="na-tag">N/A · no data</span></div></div>`;
+}
+
+function summaryInner(value, was, isOverall) {
+  const fmt = isOverall ? fmtOverall : (v) => String(v);
+  const na = value == null;
+  const up = value != null && was != null && value > was;
+  let wasTxt = "";
+  if (was != null) {
+    const same = isOverall ? Math.abs(value - was) < 0.05 : value === was;
+    wasTxt = same ? " (unchanged)" : ` (was ${fmt(was)})`;
+  }
+  const big = na ? "N/A" : `${fmt(value)}<span class="of">/7</span>`;
+  return `<div class="lbl">${isOverall ? "Projected overall" : "Projected final grade"}</div>
+    <div><span class="big${na ? " na" : ""}">${big}</span> <span class="delta${up ? " up" : ""}">${wasTxt}</span></div>`;
 }
 
 function renderEdit() {
@@ -277,65 +312,56 @@ function renderEdit() {
     if (!st.keys.length) {
       h += `<div class="empty">Not enough data to predict a grade for this class yet.</div>`;
     } else {
-      for (const k of st.keys) {
-        h += `<div class="edit-row"><div class="edit-key">Criterion <b>${k}</b></div>${stepper(k, st.values[k], true, "/8")}</div>`;
-      }
+      for (const k of st.keys) h += editSliderRow(k, `Criterion <b>${k}</b>`, st.values[k], 0, MAXSCORE, "/8");
       const proj = finalGrade(st.values), was = finalGrade(st.base);
-      h += summaryLine("Projected final grade", proj, was, "/7");
+      h += `<div class="edit-summary" id="summary-slot">${summaryInner(proj, was, false)}</div>`;
     }
   } else {
     h += `<div class="section-label">Predict overall grade</div>`;
     st.classes.forEach((c, i) => {
-      const has = st.base[i] != null;
-      h += `<div class="edit-row"><div class="edit-key"><b>${esc(st.names[i])}</b>${has ? "" : ' <span class="sub">— no data</span>'}</div>${stepper(String(i), st.values[i], has, "/7")}</div>`;
+      if (st.base[i] == null) h += editNARow(`<b>${esc(st.names[i])}</b>`);
+      else h += editSliderRow(String(i), `<b>${esc(st.names[i])}</b>`, st.values[i], 1, MAXGRADE, "/7");
     });
     const proj = overallOf(Object.keys(st.values).map((i) => st.base[i] == null ? null : st.values[i]));
     const was = overallOf(Object.values(st.base));
-    h += summaryLineOverall("Projected overall", proj, was);
+    h += `<div class="edit-summary" id="summary-slot">${summaryInner(proj, was, true)}</div>`;
   }
 
   h += `<div class="actions">
     <button class="btn primary" id="improve">${SPARKLE_ICON} Ask how to improve</button>
     <button class="btn" id="done">Done</button>
   </div>`;
-  h += `<div class="hint">Adjust your target scores, then ask ChatGPT for a concrete plan to reach them using your real tasks and feedback.</div>`;
+  h += `<div class="hint">Drag a slider to set a target score, then ask ChatGPT for a concrete plan to reach it using your real tasks and feedback.</div>`;
 
   card.innerHTML = h;
   card.querySelector("#expand")?.addEventListener("click", requestFullscreen);
   card.querySelector("#done")?.addEventListener("click", () => renderRead(st.data));
   card.querySelector("#improve")?.addEventListener("click", askImprove);
-  card.querySelectorAll(".stepper").forEach((el) => {
-    el.querySelectorAll(".step-btn").forEach((btn) => {
-      btn.addEventListener("click", () => onStep(el.dataset.id, btn.dataset.act));
-    });
-  });
+  // Live, in-place updates on drag — no re-render, so the drag stays smooth.
+  card.querySelectorAll("input.slider").forEach((inp) => inp.addEventListener("input", () => onSlide(inp)));
   reportHeight();
 }
 
-function summaryLine(label, level, was, suffix) {
-  const delta = (level != null && was != null && level > was);
-  const wasTxt = was == null ? "" : (level === was ? " (unchanged)" : ` (was ${was})`);
-  return `<div class="edit-summary"><div class="lbl">${label}</div>
-    <div><span class="big${level == null ? " na" : ""}">${level == null ? "N/A" : level + `<span class="of">${suffix}</span>`}</span>
-    <span class="delta${delta ? " up" : ""}">${wasTxt}</span></div></div>`;
-}
-function summaryLineOverall(label, val, was) {
-  const delta = (val != null && was != null && val > was);
-  const wasTxt = was == null ? "" : (Math.abs(val - was) < 0.05 ? " (unchanged)" : ` (was ${fmtOverall(was)})`);
-  return `<div class="edit-summary"><div class="lbl">${label}</div>
-    <div><span class="big${val == null ? " na" : ""}">${val == null ? "N/A" : fmtOverall(val) + '<span class="of">/7</span>'}</span>
-    <span class="delta${delta ? " up" : ""}">${wasTxt}</span></div></div>`;
-}
-
-function onStep(id, act) {
+function onSlide(inp) {
   const st = editState;
-  const max = st.mode === "single" ? MAXSCORE : MAXGRADE;
+  const id = inp.dataset.id;
   const min = st.mode === "single" ? 0 : 1;
-  let v = st.values[id];
-  if (typeof v !== "number") return;
-  v = act === "inc" ? Math.min(max, v + 1) : Math.max(min, v - 1);
+  const max = st.mode === "single" ? MAXSCORE : MAXGRADE;
+  const suffix = st.mode === "single" ? "/8" : "/7";
+  const v = parseInt(inp.value, 10);
   st.values[id] = v;
-  renderEdit(); // simple + reliable; steppers don't need focus retention
+  inp.style.setProperty("--fill", (((v - min) / (max - min)) * 100).toFixed(1) + "%");
+  const valEl = document.getElementById("val-" + id);
+  if (valEl) valEl.innerHTML = `<b>${v}</b>${suffix}`;
+  const slot = document.getElementById("summary-slot");
+  if (slot) {
+    if (st.mode === "single") {
+      slot.innerHTML = summaryInner(finalGrade(st.values), finalGrade(st.base), false);
+    } else {
+      const proj = overallOf(Object.keys(st.values).map((i) => st.base[i] == null ? null : st.values[i]));
+      slot.innerHTML = summaryInner(proj, overallOf(Object.values(st.base)), true);
+    }
+  }
 }
 
 function askImprove() {
