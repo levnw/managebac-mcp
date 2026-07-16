@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ManageBac Grades</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-size: 13px; color: #101828; background: transparent;
+      display: flex; align-items: flex-start; justify-content: center; padding: 0;
+    }
+    .mb-card {
+      --theme: #1570ef;
+      width: 100%; max-width: 880px; background: #fff; border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06); overflow: hidden;
+    }
+    .mb-header { background: var(--theme); padding: 13px 20px 12px; }
+    .mb-header h1 { font-size: 1.15rem; font-weight: 600; color: #fff; line-height: 1.3; }
+    .mb-header .scope { font-size: 0.74rem; color: rgba(255,255,255,0.8); margin-top: 1px; font-weight: 400; }
+    .content-area { padding: 14px 18px 10px; }
+
+    /* ── All-classes table ── */
+    .grades-table { width: 100%; border-collapse: collapse; }
+    .grades-table th {
+      font-size: 0.72rem; font-weight: 600; color: #667085; text-transform: none;
+      text-align: center; padding: 6px 6px; border-bottom: 1px solid #eaecf0;
+    }
+    .grades-table th.col-class { text-align: left; }
+    .grades-table td { padding: 8px 6px; border-bottom: 1px solid #f2f4f7; text-align: center; font-size: 0.82rem; color: #344054; }
+    .grades-table td.col-class { text-align: left; font-weight: 500; color: #101828; }
+    .grades-table tr:last-child td { border-bottom: none; }
+    .grades-table tr:hover td { background: #f9fafb; }
+    .crit-val { font-weight: 500; }
+    .crit-val.muted { color: #cdd2da; font-weight: 400; }
+    .myp { display: inline-block; min-width: 22px; padding: 1px 7px; border-radius: 10px; font-size: 0.78rem; font-weight: 600; color: #fff; }
+    .legend-note { font-size: 0.7rem; color: #98a2b3; padding: 9px 2px 2px; }
+
+    /* ── Single-class progress chart ── */
+    .pc-title { font-size: 0.92rem; font-weight: 600; color: #101828; padding: 2px 2px 12px; }
+    .chart { display: flex; gap: 6px; }
+    .y-axis { width: 16px; height: 200px; display: flex; flex-direction: column; justify-content: space-between;
+              font-size: 0.62rem; color: #98a2b3; text-align: right; padding-bottom: 1px; }
+    .plot-wrap { flex: 1; min-width: 0; }
+    .plot { display: flex; height: 200px; position: relative; border-bottom: 1px solid #d0d5dd; }
+    /* horizontal gridlines */
+    .plot::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+      background-image: repeating-linear-gradient(to top, transparent, transparent calc(12.5% - 1px), #f2f4f7 calc(12.5% - 1px), #f2f4f7 12.5%); }
+    .crit-group { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 5px; padding: 0 6px;
+                  border-left: 1px solid #f2f4f7; position: relative; z-index: 1; }
+    .crit-group:first-child { border-left: none; }
+    .bar { width: 15px; max-width: 15px; border-radius: 2px 2px 0 0; position: relative; min-height: 2px; }
+    .bar .bv { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: #667085; font-weight: 600; }
+    .x-axis { display: flex; margin-left: 22px; padding-top: 6px; }
+    .x-lab { flex: 1; text-align: center; font-size: 0.64rem; color: #475467; padding: 0 4px; line-height: 1.2; }
+    .x-lab b { color: #101828; font-weight: 600; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 14px 2px 2px; border-top: 1px solid #eaecf0; margin-top: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.68rem; color: #475467; max-width: 260px; }
+    .legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+    .legend-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .empty { color: #98a2b3; font-size: 0.82rem; font-style: italic; padding: 22px; text-align: center; }
+    .open-in-mb {
+      display: flex; align-items: center; justify-content: center; padding: 12px 20px; gap: 6px;
+      color: var(--theme); font-size: 0.8rem; font-weight: 600; text-decoration: none; border-top: 1px solid #eaecf0;
+    }
+    .open-in-mb:hover { background: #f9fafb; }
+    svg.icon { width: 13px; height: 13px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+<div class="mb-card" id="card"></div>
+
+<script>
+const CRIT = ['A','B','C','D'];
+const CRIT_NAMES = { A:'Knowing & understanding', B:'Inquiring & designing', C:'Processing & evaluating', D:'Reflecting on impacts' };
+// Per-task palette for the progress chart (distinct, ManageBac-ish)
+const PALETTE = ['#2e90fa','#f97066','#f04438','#fdb022','#9b8afb','#7a5af8','#6172f3',
+                 '#ee46bc','#16b364','#0ba5ec','#d444f1','#e3a008','#854cd4','#dd2590'];
+const MYP_COLORS = { 7:'#099250', 6:'#1570ef', 5:'#2e90fa', 4:'#e3a008', 3:'#f79009', 2:'#f04438', 1:'#d92d20' };
+const ICONS = { external: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/></svg>` };
+
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function mypLevel(crit) {
+  let total = 0, n = 0;
+  CRIT.forEach(k => { const c = crit[k]; if (c && typeof c.latest === 'number') { total += c.latest; n++; } });
+  if (!n) return null;
+  const scaled = total * (4 / n);
+  let lvl = 1;
+  if (scaled >= 28) lvl = 7; else if (scaled >= 24) lvl = 6; else if (scaled >= 19) lvl = 5;
+  else if (scaled >= 15) lvl = 4; else if (scaled >= 10) lvl = 3; else if (scaled >= 6) lvl = 2;
+  return { level: lvl, total, n };
+}
+
+/* ── All-classes simple table ── */
+function renderTable(data, classes) {
+  let h = `<div class="mb-header"><h1>Grades</h1><div class="scope">All classes · MYP criterion levels (out of 8)</div></div>`;
+  h += '<div class="content-area">';
+  h += '<table class="grades-table"><thead><tr><th class="col-class">Class</th><th>A</th><th>B</th><th>C</th><th>D</th><th>MYP</th></tr></thead><tbody>';
+  classes.forEach(cls => {
+    const crit = cls.criteria || {};
+    const cell = k => { const c = crit[k]; return (c && typeof c.latest === 'number')
+      ? `<td><span class="crit-val">${c.latest}</span></td>` : `<td><span class="crit-val muted">—</span></td>`; };
+    const myp = mypLevel(crit);
+    h += `<tr><td class="col-class">${esc(cls.class_name || 'Class')}</td>${cell('A')}${cell('B')}${cell('C')}${cell('D')}
+      <td>${myp ? `<span class="myp" style="background:${MYP_COLORS[myp.level]}">${myp.level}</span>` : '—'}</td></tr>`;
+  });
+  h += '</tbody></table>';
+  h += '<div class="legend-note">MYP is a rough estimate from your latest A/B/C/D scores — teachers use best-fit. Ask for one class to see its task-by-task chart.</div>';
+  h += '</div>';
+  if (data.url) h += `<a class="open-in-mb" href="${esc(data.url)}" target="_blank" rel="noopener">Open in ManageBac ${ICONS.external}</a>`;
+  document.getElementById('card').innerHTML = h;
+}
+
+/* ── Single-class progress chart (mirrors ManageBac's Tasks & Units chart) ── */
+function renderChart(data, cls) {
+  const tasks = (cls.graded_tasks || []).filter(t => t && t.grades);
+  let h = `<div class="mb-header"><h1>Grades</h1><div class="scope">${esc(cls.class_name || '')} · MYP criterion levels (out of 8)</div></div>`;
+  h += '<div class="content-area">';
+  h += '<div class="pc-title">Progress Chart</div>';
+
+  if (!tasks.length) { h += '<div class="empty">No graded tasks yet for this class.</div></div>'; document.getElementById('card').innerHTML = h; return; }
+
+  // y-axis 8..0
+  let yax = '';
+  for (let v = 8; v >= 0; v--) yax += `<span>${v}</span>`;
+
+  // groups per criterion, bars per task that has that criterion
+  let plot = '';
+  CRIT.forEach(k => {
+    let bars = '';
+    tasks.forEach((t, i) => {
+      const g = t.grades[k];
+      if (!g || typeof g.score !== 'number') return;
+      const max = g.max || 8;
+      const pct = Math.max(2, (g.score / max) * 100);
+      bars += `<div class="bar" style="height:${pct}%;background:${PALETTE[i % PALETTE.length]}" title="${esc(t.title)} — ${k}: ${g.score}/${max}">
+        <span class="bv">${g.score}</span></div>`;
+    });
+    plot += `<div class="crit-group">${bars}</div>`;
+  });
+
+  h += `<div class="chart">
+    <div class="y-axis">${yax}</div>
+    <div class="plot-wrap"><div class="plot">${plot}</div></div>
+  </div>`;
+  h += `<div class="x-axis">` + CRIT.map(k => `<div class="x-lab"><b>${k}</b><br>${esc(CRIT_NAMES[k])}</div>`).join('') + `</div>`;
+
+  // legend: task → colour
+  h += `<div class="legend">` + tasks.map((t, i) =>
+    `<span class="legend-item"><span class="legend-dot" style="background:${PALETTE[i % PALETTE.length]}"></span><span class="legend-name">${esc(t.title)}</span></span>`
+  ).join('') + `</div>`;
+  h += '</div>';
+  if (data.url) h += `<a class="open-in-mb" href="${esc(data.url)}" target="_blank" rel="noopener">Open in ManageBac ${ICONS.external}</a>`;
+  document.getElementById('card').innerHTML = h;
+}
+
+function renderGrades(data) {
+  const classes = (data.classes || []).filter(c => c && c.criteria);
+  if (!classes.length) { document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px">No graded classes found.</div>'; return; }
+  // Single class with task detail → progress chart; otherwise → table
+  if (classes.length === 1 && (classes[0].graded_tasks || []).length) renderChart(data, classes[0]);
+  else renderTable(data, classes);
+}
+
+const _INJECTED = /*INJECT_DATA*/null;
+function _hasGrades(d){ return !!(d && Array.isArray(d.classes)); }
+const _live = window.openai?.toolOutput;
+if (_hasGrades(_live)) renderGrades(_live);
+else if (_hasGrades(_INJECTED)) renderGrades(_INJECTED);
+else {
+  document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px">Loading grades…</div>';
+  window.addEventListener('message', (ev) => {
+    if (ev.source !== window.parent) return;
+    const msg = ev.data;
+    if (msg && msg.method === 'ui/notifications/tool-result') {
+      const d = msg.params?.structuredContent;
+      if (_hasGrades(d)) renderGrades(d);
+    }
+  });
+  window.addEventListener('openai:set_globals', () => {
+    const d = window.openai?.toolOutput;
+    if (_hasGrades(d)) renderGrades(d);
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Widget preview harness</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #F3F3F3; min-height: 100vh; padding: 20px; color: #0D0D0D;
+  }
+  body.dark { background: #171717; color: #fff; }
+  .bar {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    max-width: 860px; margin: 0 auto 16px;
+  }
+  select, button.ctl {
+    font-family: inherit; font-size: 13px; padding: 6px 10px;
+    border-radius: 10px; border: 1px solid rgba(13,13,13,.15); background: #fff; cursor: pointer;
+  }
+  body.dark select, body.dark button.ctl { background: #303030; color: #fff; border-color: rgba(255,255,255,.15); }
+  button.ctl.active { background: #0285FF; color: #fff; border-color: #0285FF; }
+  .stage { display: flex; justify-content: center; }
+  iframe {
+    border: 1px dashed rgba(13,13,13,.2); border-radius: 8px; background: transparent;
+    width: 560px; height: 600px; transition: width .15s ease;
+  }
+  body.dark iframe { border-color: rgba(255,255,255,.2); }
+  .log {
+    max-width: 860px; margin: 16px auto 0; font-size: 12px; font-family: ui-monospace, monospace;
+    color: #5D5D5D; white-space: pre-wrap; max-height: 140px; overflow-y: auto;
+  }
+  body.dark .log { color: #AFAFAF; }
+  .log b { color: #0285FF; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <select id="widget">
+    <option value="task-card.html">task-card</option>
+    <option value="grades-card.html">grades-card (old)</option>
+    <option value="timetable-card.html">timetable-card (old)</option>
+    <option value="class-files.html">class-files (old)</option>
+  </select>
+  <select id="scenario"></select>
+  <button class="ctl" id="theme">🌙 Dark</button>
+  <button class="ctl" id="w-mobile">360</button>
+  <button class="ctl" id="w-mid">480</button>
+  <button class="ctl active" id="w-full">560</button>
+</div>
+<div class="stage"><iframe id="frame"></iframe></div>
+<div class="log" id="log">— window.openai calls appear here —</div>
+
+<script>
+"use strict";
+// ═══════════════════════════════════════════════════════════════════════════
+// Sample scenarios — task-card structuredContent shapes (see archive/README.md)
+// ═══════════════════════════════════════════════════════════════════════════
+const LONG_DESC = `<p><strong><u>Instruction:</u></strong></p><ol><li><p><strong><u>Introduction:</u></strong></p></li></ol><p>Introduce the topic of <strong><em><u>sustainable urban management</u></em></strong> and the central question: "Can urban areas ever be managed sustainably?" Briefly mention examples of cities known for their sustainable initiatives. Explain the criteria you will use to evaluate the effectiveness of each strategy, and preview your line of argument across the three case-study cities you selected. Remember to reference at least four sources and include your annotated bibliography as an appendix.</p><p>Your investigation should evaluate both successes and limitations, and recognise that sustainable urban management often involves difficult social, economic, and environmental trade-offs between competing priorities.</p>`;
+
+const SCENARIOS = {
+  "graded + submitted": {
+    title: "Summative — Sustainable Urban Management",
+    class_name: "IB MYP Geography (Grade 8) B",
+    url: "https://es.managebac.com/student/classes/12905543/core_tasks/48166538",
+    due_month: "May", due_day: "22", due_past: true, due_time: "Friday at 9:20 AM",
+    labels: [{ text: "Summative", style: "label-summative" }, { text: "Homework", style: "label-homework" }],
+    status: "Submitted",
+    grades: [{ label: "A", score: 7, max: 8 }, { label: "B", score: 6, max: 8 }, { label: "C", score: 8, max: 8 }, { label: "D", score: 7, max: 8 }],
+    teacher_comment: "Your work stood out because it explored both the successes and limitations of Copenhagen's sustainability strategies and recognized that sustainable urban management often involves difficult trade-offs. To further strengthen your investigation, focus on developing and evaluating your research methodology in greater detail.",
+    unit: { name: "City Limits", duration: "11 Weeks" },
+    description: LONG_DESC,
+    desc_files: [{ name: "Assessment_Rubric_Criterion_ABCD.pdf", size: "418 KB", url: "#" }],
+    resources: [{ author: "T. Beridze", posted: "May 12", label: "Case study pack", files: [
+      { name: "Copenhagen_case_study.pdf", size: "2.1 MB", url: "#" },
+      { name: "Singapore_data_sheets.xlsx", size: "340 KB", url: "#" },
+    ]}],
+    submitted_files: [{ name: "Levan_Japaridze_Final.pdf", uploaded: "May 29, 5:44 AM", url: "#" }],
+    discussions: null, due_passed_late: false, images: [],
+  },
+  "pending, due soon": {
+    title: "Spanish oral practice — food vocabulary",
+    class_name: "Language Acquisition: Spanish Phase 1 (Grade 8)",
+    url: "https://es.managebac.com/student/classes/1/core_tasks/2",
+    due_month: "Jul", due_day: "18", due_past: false, due_time: "Friday at 2:40 PM",
+    labels: [{ text: "Formative", style: "label-formative" }],
+    status: "Pending", grades: null, teacher_comment: null, unit: null,
+    description: "<p>Record a 2-minute audio describing your favourite meal using this unit's vocabulary. Upload the recording to the dropbox before Friday's lesson.</p>",
+    desc_files: [], resources: [], submitted_files: [], discussions: null, due_passed_late: false, images: [],
+  },
+  "overdue, not submitted": {
+    title: "End of unit reflection",
+    class_name: "History (Grade 8) B",
+    url: "https://es.managebac.com/student/classes/3/core_tasks/4",
+    due_month: "Jun", due_day: "2", due_past: true, due_time: "Tuesday at 2:40 PM",
+    labels: [{ text: "Homework", style: "label-homework" }],
+    status: "Pending", grades: null, teacher_comment: null, unit: null,
+    description: "<p>Write a one-page reflection on what you learned in the Industrial Revolution unit.</p>",
+    desc_files: [], resources: [], submitted_files: [], discussions: null, due_passed_late: true, images: [],
+  },
+  "many files + discussion": {
+    title: "Design portfolio — Criterion C evidence",
+    class_name: "Design (Grade 8) AB",
+    url: "https://es.managebac.com/student/classes/5/core_tasks/6",
+    due_month: "Jul", due_day: "25", due_past: false, due_time: "Thursday at 10:00 AM",
+    labels: [{ text: "Summative", style: "label-summative" }, { text: "Criterion C", style: "label-classwork" }, { text: "Portfolio", style: "label-classwork" }],
+    status: "Not Submitted", grades: null,
+    teacher_comment: null, unit: { name: "Make It Work", duration: "8 Weeks" },
+    description: "<p>Compile your Criterion C evidence: annotated screenshots, iteration log, and testing results.</p>",
+    desc_files: [
+      { name: "Criterion_C_checklist.pdf", size: "120 KB", url: "#" },
+      { name: "Iteration_log_template.docx", size: "38 KB", url: "#" },
+      { name: "Example_portfolio_2025.pdf", size: "4.2 MB", url: "#" },
+    ],
+    resources: [{ author: "N. Gvazava", posted: "Jul 1", label: "", files: [
+      { name: "Testing_methods_slides.pptx", size: "6.8 MB", url: "#" },
+      { name: "Peer_review_form.pdf", size: "89 KB", url: "#" },
+      { name: "Rubric_breakdown.pdf", size: "210 KB", url: "#" },
+    ]}],
+    submitted_files: [
+      { name: "portfolio_draft_v1.pdf", uploaded: "Jul 10, 9:12 PM", url: "#" },
+      { name: "iteration_log.docx", uploaded: "Jul 12, 8:03 AM", url: "#" },
+    ],
+    discussions: [
+      { author: "N. Gvazava", body: "Remember the iteration log needs at least three documented cycles — two is not enough for the top band.", posted: "Jul 11" },
+      { author: "Levan J.", body: "Does the peer review form count as testing evidence?", posted: "Jul 12" },
+    ],
+    due_passed_late: false, images: [],
+  },
+  "long title + long text (mobile stress)": {
+    title: "Interdisciplinary summative assessment — comparing statistical representations of climate data across geographic regions using spreadsheet modelling techniques",
+    class_name: "Language and Literature: English (Grade 8) BCD / Extended cohort with a very long class name",
+    url: "https://es.managebac.com/student/classes/7/core_tasks/8",
+    due_month: "Aug", due_day: "14", due_past: false, due_time: "Wednesday at 11:55 PM",
+    labels: [{ text: "Summative", style: "label-summative" }, { text: "Interdisciplinary", style: "label-classwork" }],
+    status: "Pending", grades: null,
+    teacher_comment: "This is a long teacher comment intended to stress the two-line clamp. ".repeat(6),
+    unit: null, description: LONG_DESC,
+    desc_files: [{ name: "a_file_with_an_extremely_long_name_that_should_ellipsize_gracefully_instead_of_wrapping.pdf", size: "1.9 MB", url: "#" }],
+    resources: [], submitted_files: null, discussions: null, due_passed_late: false, images: [],
+  },
+  "minimal (no dropbox, ungraded)": {
+    title: "Read chapter 4",
+    class_name: "Georgian B (Grade 8)",
+    url: "https://es.managebac.com/student/classes/9/core_tasks/10",
+    due_month: "Jul", due_day: "20", due_past: false, due_time: null,
+    labels: [], status: "", grades: null, teacher_comment: null, unit: null,
+    description: null, desc_files: [], resources: [],
+    submitted_files: null, discussions: null, due_passed_late: false, images: [],
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Harness plumbing
+// ═══════════════════════════════════════════════════════════════════════════
+const frame = document.getElementById("frame");
+const logEl = document.getElementById("log");
+const scenarioSel = document.getElementById("scenario");
+const widgetSel = document.getElementById("widget");
+let dark = false;
+
+for (const name of Object.keys(SCENARIOS)) {
+  const o = document.createElement("option");
+  o.value = name; o.textContent = name;
+  scenarioSel.appendChild(o);
+}
+
+window.__harnessLog = (line) => {
+  logEl.innerHTML = `<b>${line}</b>\n` + logEl.innerHTML;
+};
+
+function mockScript(data, theme) {
+  return `<script>
+    window.openai = {
+      toolOutput: ${JSON.stringify(data)},
+      toolInput: {},
+      theme: ${JSON.stringify(theme)},
+      displayMode: "inline",
+      maxHeight: 900,
+      locale: "en-US",
+      widgetState: null,
+      setWidgetState(s) { this.widgetState = s; parent.__harnessLog("setWidgetState(" + JSON.stringify(s) + ")"); },
+      notifyIntrinsicHeight(h) { parent.__harnessLog("notifyIntrinsicHeight(" + h + ")"); },
+      openExternal({ href }) { parent.__harnessLog("openExternal(" + href + ")"); },
+      requestDisplayMode({ mode }) { parent.__harnessLog("requestDisplayMode(" + mode + ")"); return Promise.resolve({ mode }); },
+      callTool(name, args) { parent.__harnessLog("callTool(" + name + ", " + JSON.stringify(args) + ")"); return Promise.resolve({ structuredContent: null }); },
+      sendFollowUpMessage({ prompt }) { parent.__harnessLog("sendFollowUpMessage(" + prompt + ")"); },
+    };
+  <\/script>`;
+}
+
+async function load() {
+  const widget = widgetSel.value;
+  const data = SCENARIOS[scenarioSel.value];
+  const theme = dark ? "dark" : "light";
+  const res = await fetch("/" + widget + "?t=" + Date.now());
+  let html = await res.text();
+  html = html.replace("<head>", "<head>" + mockScript(data, theme));
+  frame.srcdoc = html;
+  logEl.innerHTML = "— window.openai calls appear here —";
+}
+
+document.getElementById("theme").addEventListener("click", (e) => {
+  dark = !dark;
+  document.body.classList.toggle("dark", dark);
+  e.target.textContent = dark ? "☀️ Light" : "🌙 Dark";
+  load();
+});
+for (const [id, w] of [["w-mobile", 360], ["w-mid", 480], ["w-full", 560]]) {
+  document.getElementById(id).addEventListener("click", (e) => {
+    frame.style.width = w + "px";
+    document.querySelectorAll(".bar button.ctl").forEach((b) => b.id.startsWith("w-") && b.classList.remove("active"));
+    e.target.classList.add("active");
+  });
+}
+scenarioSel.addEventListener("change", load);
+widgetSel.addEventListener("change", load);
+load();
+</script>
+</body>
+</html>

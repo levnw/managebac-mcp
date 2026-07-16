@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ManageBac Task List Preview</title>
+  <style>
+    /* ── Reset & base (matches task-card.html) ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-size: 14px;
+      color: #101828;
+      background: transparent;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 0;
+    }
+
+    .mb-card {
+      --theme: #1570ef;
+      width: 100%;
+      max-width: 860px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+
+    .mb-header { background: var(--theme); padding: 14px 20px 13px; }
+    .mb-header h1 { font-size: 1.3rem; font-weight: 700; color: #fff; line-height: 1.3; }
+    .mb-header .class-name { font-size: 0.78rem; color: rgba(255,255,255,0.75); margin-top: 2px; font-weight: 400; }
+
+    .content-area { padding: 0 20px; }
+
+    /* Section heading: "Upcoming" / "Completed" */
+    .group-heading {
+      font-size: 1.05rem; font-weight: 700; color: #101828;
+      padding: 14px 0 12px; border-bottom: 1px solid #eaecf0; margin: 0 -20px;
+      padding-left: 20px;
+    }
+
+    /* ── Task row ── */
+    .task-row-item { padding: 14px 0; border-bottom: 1px solid #f2f4f7; }
+    .task-row-item:last-child { border-bottom: none; }
+    .tr-top { display: flex; align-items: flex-start; gap: 12px; }
+
+    /* Date badge (same as task-card) */
+    .date-badge {
+      min-width: 44px; width: 44px; border: 1px solid #d0d5dd; border-radius: 6px;
+      overflow: hidden; text-align: center; flex-shrink: 0; background: #fff;
+    }
+    .date-badge .month {
+      background: #475467; color: #fff; font-size: 0.62rem; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase; padding: 2px 0;
+    }
+    .date-badge .day { font-size: 1.05rem; font-weight: 600; color: #101828; padding: 2px 0 3px; }
+
+    .tr-main { flex: 1; min-width: 0; }
+    .tr-title-row { display: flex; align-items: center; gap: 6px; }
+    .tr-title {
+      font-size: 1rem; font-weight: 700; color: var(--theme);
+      text-decoration: none; line-height: 1.3;
+    }
+    .tr-title:hover { text-decoration: underline; }
+    .info-ico { width: 14px; height: 14px; color: #98a2b3; flex-shrink: 0; }
+
+    .labels-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
+    .label {
+      padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 400;
+      border: 1px solid transparent; white-space: nowrap;
+    }
+    .label-formative { background: #ecfdf3; color: #027a48; border-color: #a6f4c5; }
+    .label-summative { background: #eff8ff; color: #175cd3; border-color: #b2ddff; }
+    .label-classwork { background: #fffaeb; color: #b54708; border-color: #fedf89; }
+    .label-homework  { background: #f8f9fc; color: #363f72; border-color: #d5d9eb; }
+    .label-criterion { background: #fdf2fa; color: #c11574; border-color: #fcceee; }
+
+    .status-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; color: #344054; font-weight: 600; }
+    .status-chip svg { width: 12px; height: 12px; }
+    .status-chip.submitted { color: #b54708; }
+    .due-time { display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; color: #344054; }
+    .due-time svg { width: 12px; height: 12px; }
+
+    /* Right side */
+    .tr-right { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+
+    .btn-submit {
+      display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px;
+      border-radius: 6px; background: var(--theme); color: #fff;
+      font-size: 0.8rem; font-weight: 600; text-decoration: none; white-space: nowrap;
+    }
+    .btn-submit:hover { filter: brightness(0.93); }
+    .btn-submit svg { width: 13px; height: 13px; }
+
+    .status-stack { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 86px; text-align: center; }
+    .status-stack svg { width: 15px; height: 15px; }
+    .status-stack .ss-label { font-size: 0.72rem; font-weight: 500; line-height: 1.15; }
+    .ss-notsub  { color: #b54708; }
+    .ss-incomplete { color: #d92d20; }
+    .ss-complete { color: #027a48; }
+    .ss-notassessed { color: #b54708; }
+
+    /* Grades */
+    .grades-row { display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+    .grade-pair { display: flex; align-items: center; gap: 4px; }
+    .grade-letter { font-size: 0.76rem; color: #475467; font-weight: 600; }
+    .gchip {
+      font-size: 0.74rem; font-weight: 600; padding: 1px 6px; border-radius: 4px;
+      border: 1px solid transparent;
+    }
+    .gchip-score { background: #eff8ff; color: #175cd3; border-color: #b2ddff; }
+    .gchip-max   { background: #ecfdf3; color: #027a48; border-color: #a6f4c5; }
+
+    /* Teacher comment */
+    .tr-comment {
+      margin: 10px 0 0; color: #344054; font-size: 0.86rem; line-height: 1.5;
+    }
+    .tr-comment .show-more-text.collapsed {
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .show-toggle {
+      margin-top: 4px; color: var(--theme); font-size: 0.8rem; font-weight: 600;
+      background: none; border: none; cursor: pointer; font-family: inherit;
+      display: inline-flex; align-items: center; gap: 4px; padding: 0;
+    }
+    .show-toggle:hover { text-decoration: underline; }
+    .show-toggle svg { width: 12px; height: 12px; }
+
+    .note-row { padding: 12px 0 16px; color: #98a2b3; font-size: 0.78rem; font-style: italic; }
+
+    .open-in-mb {
+      display: flex; align-items: center; justify-content: center; padding: 14px 20px;
+      gap: 6px; color: var(--theme); font-size: 0.82rem; font-weight: 600;
+      text-decoration: none; border-top: 1px solid #eaecf0;
+    }
+    .open-in-mb:hover { background: #f9fafb; }
+    svg.icon { width: 14px; height: 14px; flex-shrink: 0; }
+
+    .empty { color: #98a2b3; font-size: 0.85rem; font-style: italic; padding: 14px 0; }
+
+    @media (max-width: 640px) {
+      .tr-top { flex-wrap: wrap; }
+      .tr-right { margin-left: 56px; }
+      .tr-comment { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+<div class="mb-card" id="card"></div>
+
+<script>
+const ICONS = {
+  info: `<svg class="info-ico" viewBox="0 0 16 16" fill="currentColor"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/></svg>`,
+  clock: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>`,
+  clockDark: `<svg viewBox="0 0 16 16" fill="#1d2939"><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16M8 3.5a.5.5 0 0 1 .5.5v4.21l2.75 1.57a.5.5 0 0 1-.5.87l-3-1.72A.5.5 0 0 1 7.5 8.5V4a.5.5 0 0 1 .5-.5"/></svg>`,
+  checkBadge: `<svg viewBox="0 0 16 16" fill="#b54708"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg>`,
+  dotOrange: `<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="#f79009" stroke-width="1.6"/><circle cx="8" cy="8" r="3.2" fill="#f79009"/></svg>`,
+  xRed: `<svg viewBox="0 0 16 16" fill="#d92d20"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293z"/></svg>`,
+  checkGreen: `<svg viewBox="0 0 16 16" fill="#12b76a"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/></svg>`,
+  submit: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.5A1.5 1.5 0 0 1 3.5 1h9A1.5 1.5 0 0 1 14 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5zM5.854 6.646a.5.5 0 1 0-.708.708L7.293 9.5H4.5a.5.5 0 0 0 0 1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 0-1 0v2.793z"/></svg>`,
+  chevDown: `<svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>`,
+  chevUp: `<svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708z"/></svg>`,
+  external: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/></svg>`,
+};
+
+const MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function labelClass(text) {
+  const t = (text || '').toLowerCase();
+  if (t === 'formative') return 'label-formative';
+  if (t === 'summative') return 'label-summative';
+  if (t === 'classwork') return 'label-classwork';
+  if (t === 'homework')  return 'label-homework';
+  if (t.startsWith('criterion')) return 'label-criterion';
+  return 'label-homework';
+}
+
+// Is the task's date in the future relative to today? ("Jun 5" style dates)
+function isUpcoming(dateStr) {
+  const m = /^([A-Za-z]{3,})\s+(\d{1,2})$/.exec((dateStr || '').trim());
+  if (!m) return false;
+  const mon = MONTHS[m[1].slice(0,3).toLowerCase()];
+  if (!mon) return false;
+  const today = new Date();
+  let year = today.getFullYear();
+  let due = new Date(year, mon - 1, parseInt(m[2], 10));
+  const diff = (due - today) / 86400000;
+  if (diff > 180) due = new Date(year - 1, mon - 1, parseInt(m[2], 10));
+  else if (diff < -180) due = new Date(year + 1, mon - 1, parseInt(m[2], 10));
+  return due >= new Date(today.getFullYear(), today.getMonth(), today.getDate());
+}
+
+function statusStack(kind) {
+  if (kind === 'not_submitted') return `<div class="status-stack">${ICONS.dotOrange}<span class="ss-label ss-notsub">Not Submitted</span></div>`;
+  if (kind === 'incomplete')    return `<div class="status-stack">${ICONS.xRed}<span class="ss-label ss-incomplete">Incomplete</span></div>`;
+  if (kind === 'complete')      return `<div class="status-stack">${ICONS.checkGreen}<span class="ss-label ss-complete">Complete</span></div>`;
+  if (kind === 'not_assessed')  return `<div class="status-stack">${ICONS.dotOrange}<span class="ss-label ss-notassessed">Not Assessed Yet</span></div>`;
+  return '';
+}
+
+// Decide the right-column state from scraped fields (mirrors ManageBac's column)
+function rightState(t) {
+  if (t.right_status) return t.right_status;            // explicit override
+  if (t.grades && Object.keys(t.grades).length) return 'grades';
+  const s = (t.status || '').toLowerCase();
+  if (s === 'complete') return 'complete';
+  if (s === 'incomplete') return 'incomplete';
+  if (s === 'submitted') return 'not_assessed';
+  if (t.has_submission_box) return 'not_submitted';
+  return '';
+}
+
+function gradesRow(grades) {
+  const order = ['A','B','C','D'];
+  let h = '<div class="grades-row">';
+  order.forEach(k => {
+    const g = grades[k];
+    if (!g) return;
+    const score = (g.score === null || g.score === undefined) ? 'N/A' : g.score;
+    h += `<span class="grade-pair"><span class="grade-letter">${k}:</span>
+      <span class="gchip gchip-score">${esc(score)}</span>${score !== 'N/A' ? `<span class="gchip gchip-max">${esc(g.max)}</span>` : ''}</span>`;
+  });
+  return h + '</div>';
+}
+
+let _cid = 0;
+function taskRow(t) {
+  const m = /^([A-Za-z]{3,})\s+(\d{1,2})$/.exec((t.date || '').trim());
+  const mon = m ? m[1].slice(0,3) : '';
+  const day = m ? m[2] : '';
+  const state = rightState(t);
+  const showSubmit = !!t.has_submission_box && (t.status || '').toLowerCase() !== 'submitted';
+  const isSubmitted = (t.status || '').toLowerCase() === 'submitted';
+
+  let h = '<div class="task-row-item"><div class="tr-top">';
+  h += `<div class="date-badge"><div class="month">${esc(mon)}</div><div class="day">${esc(day)}</div></div>`;
+  h += '<div class="tr-main">';
+  h += `<div class="tr-title-row"><a class="tr-title" href="${esc(t.url || '#')}" target="_blank" rel="noopener">${esc(t.title)}</a> ${ICONS.info}</div>`;
+  h += '<div class="labels-row">';
+  if (t.type) h += `<span class="label ${labelClass(t.type)}">${esc(t.type)}</span>`;
+  (t.tags || []).forEach(tag => { h += `<span class="label ${labelClass(tag)}">${esc(tag)}</span>`; });
+  if (isSubmitted) {
+    h += `<span class="status-chip submitted">${ICONS.checkBadge} Submitted</span>`;
+  } else if (t.status === 'Pending') {
+    h += `<span class="status-chip">${ICONS.clockDark} Pending</span>`;
+  }
+  if (t.due_day_time) h += `<span class="due-time">${ICONS.clock} ${esc(t.due_day_time.replace(/\s+/g,' '))}</span>`;
+  h += '</div></div>'; // labels-row, tr-main
+
+  h += '<div class="tr-right">';
+  if (showSubmit) h += `<a class="btn-submit" href="${esc(t.url || '#')}" target="_blank" rel="noopener">${ICONS.submit} Submit Coursework</a>`;
+  if (state === 'grades') h += gradesRow(t.grades);
+  else if (state) h += statusStack(state);
+  h += '</div>'; // tr-right
+  h += '</div>'; // tr-top
+
+  if (t.teacher_comment) {
+    const id = 'tc' + (++_cid);
+    h += `<div class="tr-comment">
+      <div class="show-more-text collapsed" id="${id}">${esc(t.teacher_comment)}</div>
+      <button class="show-toggle" onclick="toggleShowMore('${id}', this)">Show More ${ICONS.chevDown}</button>
+    </div>`;
+  }
+  h += '</div>'; // task-row-item
+  return h;
+}
+
+function toggleShowMore(id, btn) {
+  const el = document.getElementById(id);
+  const collapsed = el.classList.toggle('collapsed');
+  btn.innerHTML = collapsed ? `Show More ${ICONS.chevDown}` : `Show Less ${ICONS.chevUp}`;
+}
+
+function initShowMore() {
+  document.querySelectorAll('.show-more-text').forEach(el => {
+    const btn = el.nextElementSibling;
+    if (!btn || !btn.classList.contains('show-toggle')) return;
+    el.classList.remove('collapsed');
+    const fullHeight = el.scrollHeight;
+    el.classList.add('collapsed');
+    if (fullHeight <= el.clientHeight + 4) {
+      el.classList.remove('collapsed');
+      btn.style.display = 'none';
+    }
+  });
+}
+
+function renderTaskList(data) {
+  const tasks = (data.tasks || []).filter(t => t && t.title);
+  let h = '';
+
+  h += `<div class="mb-header">
+    <h1>All Tasks</h1>
+    ${data.class_name ? `<div class="class-name">${esc(data.class_name)}</div>` : ''}
+  </div>`;
+
+  h += '<div class="content-area">';
+
+  const upcoming = tasks.filter(t => isUpcoming(t.date));
+  const completed = tasks.filter(t => !isUpcoming(t.date));
+
+  if (!tasks.length) h += '<div class="empty">No tasks in this class yet.</div>';
+  if (upcoming.length) {
+    h += '<div class="group-heading">Upcoming</div>';
+    h += upcoming.map(taskRow).join('');
+  }
+  if (completed.length) {
+    h += '<div class="group-heading">Completed</div>';
+    h += completed.map(taskRow).join('');
+  }
+  if (data.note) h += `<div class="note-row">${esc(data.note)}</div>`;
+
+  h += '</div>'; // content-area
+
+  if (data.url) {
+    h += `<a class="open-in-mb" href="${esc(data.url)}" target="_blank" rel="noopener">Open in ManageBac ${ICONS.external}</a>`;
+  }
+
+  document.getElementById('card').innerHTML = h;
+  requestAnimationFrame(initShowMore);
+}
+
+// Server injection point
+const _INJECTED = /*INJECT_DATA*/null;
+
+const _live = window.openai?.toolOutput;
+if (_live && _live.tasks) {
+  renderTaskList(_live);
+} else if (_INJECTED) {
+  renderTaskList(_INJECTED);
+} else {
+  document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px;text-align:center">Loading tasks…</div>';
+  window.addEventListener('openai:set_globals', () => {
+    const d = window.openai?.toolOutput;
+    if (d && d.tasks) renderTaskList(d);
+  });
+}
+</script>
+</body>
+</html>
