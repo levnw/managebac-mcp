@@ -1007,6 +1007,47 @@ respectively, both safely under the ~4-5KB ceiling).
   against the `ui/*` bridge with real `callTool` wiring, `setWidgetState`, and
   `notifyIntrinsicHeight`; bundle the data/render tool split into this same effort per the
   reasoning above.
+- **Clickable task navigation** — task rows/cards should have a clear hover/focus affordance and
+  should open the specific task when clicked. In the preview harness this can point at the
+  task's `url`, but in the real ChatGPT app this should be wired during the widget interactivity
+  pass so a task-list click can open/render the task detail view directly instead of only acting
+  like static text. Decide then whether the click should call `get_task_detail`, a future
+  render-only task-detail tool, or `openExternal` to ManageBac depending on the final Apps SDK
+  bridge shape.
+- **Attachment-to-ChatGPT handoff** — desired UX: a student can click a task-card attachment and
+  ask ChatGPT to use that file without manually downloading/re-uploading it. Current research
+  direction from the Apps SDK docs:
+  - Accepted direction: treat this as "select ManageBac attachments, then ask ChatGPT about the
+    selected files and current task", not as "force the attachment into the normal ChatGPT
+    composer upload UI". The task-card preview has the first-pass UI for this: selectable file
+    rows, a separate open-file affordance, selected count, clear action, and "Ask ChatGPT".
+  - Preferred UX is multi-select: attachment rows can be selected inside the task-card/grade
+    widget, then the student can send a normal prompt such as "look at these attachments with this
+    task" or click an "Ask ChatGPT about selected" action. ChatGPT should receive the task context
+    plus the selected attachments' readable content without the user manually downloading or
+    re-uploading files.
+  - Widgets have file helpers (`window.openai.uploadFile`, `selectFiles`, `getFileDownloadUrl`),
+    but those are for user-selected/uploaded ChatGPT files or file refs already authorized to the
+    app. They are not, by themselves, a reliable way to turn a ManageBac signed/authenticated
+    attachment URL into a composer attachment.
+  - Tools can accept ChatGPT file inputs via `_meta["openai/fileParams"]`, but that solves the
+    inverse case: ChatGPT/user passes a file to a tool.
+  - For ManageBac attachments, the likely implementation is still widget -> `callTool` ->
+    server-side authenticated download/extraction (`get_file_content`, batched, or a new
+    `prepare_attachments_for_chatgpt`) -> `sendFollowUpMessage` asking ChatGPT to analyze the
+    selected files with the current task context. If we later need true file handles instead of
+    extracted text/image content, research whether MCP tool file references can be returned by this
+    Python SDK/server stack and then consumed with `getFileDownloadUrl`.
+  - UX should separate "open/download attachment" from "ask ChatGPT about this attachment", and
+    the tool should stay read-only, avoid leaking raw signed URLs where possible, enforce file size
+    limits, and clearly report unsupported file types.
+- **Selection context handoff** — selected classes/files/attachments should not be visual-only.
+  In the real widget pass, selection changes need to update model-visible context via the standard
+  `ui/update-model-context` path (or whatever final ChatGPT bridge equivalent is current), so a
+  later typed user prompt like "make a study plan for the selected classes" can resolve the
+  selected items without requiring the user to click the widget's "Ask ChatGPT" button. Keep the
+  button anyway as a fast explicit action, but do not make it the only way selection reaches the
+  model.
 - **`get_tasks` all-class-batch guardrail** — decide whether to add a hard cap or leave it as a
   documented, description-level-only guardrail.
 - **Git branching for the visual redesign** — done; work is happening on `design-refresh`,

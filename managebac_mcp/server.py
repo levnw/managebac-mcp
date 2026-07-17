@@ -437,6 +437,16 @@ _TIMETABLE_URI = "ui://widget/timetable-v3.html"
 _TIMETABLE_PATH = Path(__file__).parent.parent / "widget-preview" / "timetable-card.html"
 _TIMETABLE_HTML: str = _TIMETABLE_PATH.read_text(encoding="utf-8")
 
+# Task list widget (get_upcoming) — grouped Upcoming/Completed rows
+_TASK_LIST_URI = "ui://widget/task-list-v1.html"
+_TASK_LIST_PATH = Path(__file__).parent.parent / "widget-preview" / "task-list.html"
+_TASK_LIST_HTML: str = _TASK_LIST_PATH.read_text(encoding="utf-8")
+
+# Class list widget (get_classes) — selectable class rows
+_CLASS_LIST_URI = "ui://widget/class-list-v1.html"
+_CLASS_LIST_PATH = Path(__file__).parent.parent / "widget-preview" / "class-list.html"
+_CLASS_LIST_HTML: str = _CLASS_LIST_PATH.read_text(encoding="utf-8")
+
 # Static widgets (test widget + task card stub registered so ChatGPT
 # sees a widget for get_task_detail in list_resources).
 _STATIC_WIDGETS = {
@@ -445,6 +455,8 @@ _STATIC_WIDGETS = {
     _CLASS_FILES_URI: {"html": _CLASS_FILES_HTML, "title": "Class Files"},
     _GRADES_URI: {"html": _GRADES_HTML, "title": "Grades"},
     _TIMETABLE_URI: {"html": _TIMETABLE_HTML, "title": "Timetable"},
+    _TASK_LIST_URI: {"html": _TASK_LIST_HTML, "title": "Tasks"},
+    _CLASS_LIST_URI: {"html": _CLASS_LIST_HTML, "title": "Classes"},
 }
 
 # Per-task dynamic widgets: hash → {html, title}  (LRU capped at 60)
@@ -893,6 +905,8 @@ _TASK_META_STATIC = _widget_meta(_TASK_DETAIL_URI, "Loading task...", "Task load
 _FILES_META_STATIC = _widget_meta(_CLASS_FILES_URI, "Loading files...", "Files loaded")
 _GRADES_META_STATIC = _widget_meta(_GRADES_URI, "Loading grades...", "Grades loaded")
 _TIMETABLE_META_STATIC = _widget_meta(_TIMETABLE_URI, "Loading timetable...", "Timetable loaded")
+_TASK_LIST_META_STATIC = _widget_meta(_TASK_LIST_URI, "Loading tasks...", "Tasks loaded")
+_CLASS_LIST_META_STATIC = _widget_meta(_CLASS_LIST_URI, "Loading classes...", "Classes loaded")
 
 
 def _resource_meta(uri: str) -> dict:
@@ -901,6 +915,14 @@ def _resource_meta(uri: str) -> dict:
         invoking, invoked = "Loading test widget...", "Test widget loaded"
     elif uri == _CLASS_FILES_URI:
         invoking, invoked = "Loading files...", "Files loaded"
+    elif uri == _GRADES_URI:
+        invoking, invoked = "Loading grades...", "Grades loaded"
+    elif uri == _TIMETABLE_URI:
+        invoking, invoked = "Loading timetable...", "Timetable loaded"
+    elif uri == _TASK_LIST_URI:
+        invoking, invoked = "Loading tasks...", "Tasks loaded"
+    elif uri == _CLASS_LIST_URI:
+        invoking, invoked = "Loading classes...", "Classes loaded"
     else:
         invoking, invoked = "Loading task...", "Task loaded"
     return {
@@ -992,6 +1014,7 @@ async def list_tools() -> list[types.Tool]:
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
             annotations=_RO_ANNOTATIONS,
+            _meta=_CLASS_LIST_META_STATIC,
         ),
         types.Tool(
             name="get_timetable",
@@ -1079,6 +1102,7 @@ async def list_tools() -> list[types.Tool]:
                 "required": [],
             },
             annotations=_RO_ANNOTATIONS,
+            _meta=_TASK_LIST_META_STATIC,
         ),
         types.Tool(
             name="get_tasks",
@@ -1361,7 +1385,7 @@ async def list_tools() -> list[types.Tool]:
     }
     _passthrough_schema = {"type": "object", "additionalProperties": True}
     _own_sc_tools = {"get_task_detail", "get_files", "get_file_content", "test_ui",
-                     "get_grades", "get_timetable"}
+                     "get_grades", "get_timetable", "get_upcoming", "get_classes"}
     for _t in _tools:
         _t.outputSchema = _passthrough_schema if _t.name in _own_sc_tools else _result_schema
 
@@ -1616,6 +1640,23 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
     try:
         if name == "get_classes":
             result = await fetch_classes()
+            if isinstance(result, list) and result:
+                # Slim structuredContent for the class-list widget (selectable rows).
+                # id + name are all it renders/needs for selection prompts; the full
+                # class objects (urls, level_tags, has_journal) stay in content.
+                sc = {
+                    "scope": "All classes",
+                    "url": require_user().mb_url.rstrip("/") + "/student",
+                    "classes": [{"id": c.get("id"), "name": c.get("name")} for c in result],
+                }
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
+                return types.CallToolResult(
+                    content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
+                    structuredContent=sc,
+                    _meta=_CLASS_LIST_META_STATIC,
+                )
+            # else (empty/error) → common return below
 
         elif name == "get_timetable":
             result = await fetch_timetable()
@@ -1667,7 +1708,52 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                       "message": "Cleared cached data. Re-call the data tool now to get live results from ManageBac."}
 
         elif name == "get_upcoming":
-            result = await fetch_upcoming(arguments.get("view", "upcoming"))
+            view = arguments.get("view", "upcoming")
+            view = view if view in ("upcoming", "overdue", "past") else "upcoming"
+            result = await fetch_upcoming(view)
+            if isinstance(result, dict) and result.get("tasks"):
+                # Slim structuredContent for the task-list widget. It groups rows by
+                # due_past (false → "Upcoming", true → "Completed") and parses
+                # date/due_time itself; the model still gets the full JSON in content.
+                due_past = view in ("overdue", "past")
+
+                def _slim_upcoming(t):
+                    due = (t.get("due") or "").strip()
+                    date_part, _, time_part = due.partition(",")
+                    out = {
+                        "title": t.get("title"),
+                        "class_name": t.get("class_name"),
+                        "url": t.get("url"),
+                        "due_past": due_past,
+                    }
+                    if date_part.strip():
+                        out["date"] = date_part.strip()
+                    if time_part.strip():
+                        out["due_time"] = time_part.strip()
+                    if t.get("type"):
+                        out["type"] = t["type"]
+                    status = t.get("status") or ""
+                    if not status and t.get("needs_submission"):
+                        status = "Not Submitted"
+                    if status:
+                        out["status"] = status
+                    return out
+
+                sc_tasks = [_slim_upcoming(t) for t in result["tasks"][:25]]
+                sc = {
+                    "title": {"upcoming": "Upcoming tasks", "overdue": "Overdue tasks",
+                              "past": "Past tasks"}[view],
+                    "tasks": sc_tasks,
+                    "url": require_user().mb_url.rstrip("/") + "/student",
+                }
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
+                return types.CallToolResult(
+                    content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
+                    structuredContent=sc,
+                    _meta=_TASK_LIST_META_STATIC,
+                )
+            # else (empty/error) → common return below
 
         elif name == "get_tasks":
             cid = arguments["class_id"]

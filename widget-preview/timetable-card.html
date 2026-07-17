@@ -1,193 +1,396 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ManageBac Timetable</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-      font-size: 14px; color: #101828; background: transparent;
-      display: flex; align-items: flex-start; justify-content: center; padding: 0;
-    }
-    .mb-card {
-      --theme: #1570ef;
-      width: 100%; max-width: 1000px; background: #fff; border-radius: 12px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06); overflow: hidden;
-    }
-    .mb-header { background: var(--theme); padding: 13px 20px 12px; }
-    .mb-header h1 { font-size: 1.15rem; font-weight: 600; color: #fff; line-height: 1.3; }
-    .mb-header .sub { font-size: 0.74rem; color: rgba(255,255,255,0.8); margin-top: 1px; font-weight: 400; }
-
-    .tt-scroll { overflow-x: auto; padding: 11px; }
-    .tt-grid { display: grid; gap: 5px; min-width: 640px; }
-
-    .tt-head, .tt-period-label, .tt-cell, .tt-empty { border-radius: 7px; }
-    .tt-head {
-      font-size: 0.72rem; font-weight: 600; color: #475467; text-align: center;
-      padding: 6px 4px; background: #f9fafb;
-    }
-    .tt-head .date { display: block; font-size: 0.64rem; font-weight: 400; color: #98a2b3; margin-top: 1px; }
-    .tt-head.today { background: #eff6ff; color: var(--theme); }
-    .tt-head.today .date { color: #84caff; }
-
-    .tt-period-label {
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.72rem; font-weight: 600; color: #b4bcc8; background: #fbfbfc;
-    }
-    .tt-corner { background: transparent; }
-
-    .tt-cell {
-      position: relative; padding: 6px 9px 7px; min-height: 56px;
-      background: #fff; border: 1px solid #f2f4f7; border-left: 3px solid var(--c, #cdd2da);
-      overflow: hidden;
-    }
-    .tt-time { font-size: 0.62rem; color: #98a2b3; font-weight: 400; padding-right: 15px; }
-    .tt-class { font-size: 0.72rem; font-weight: 600; color: #344054; line-height: 1.25; margin: 1px 0; word-break: break-word; }
-    .tt-teacher { font-size: 0.64rem; color: #667085; font-weight: 400; line-height: 1.25; }
-    .tt-room { font-size: 0.6rem; color: #b4bcc8; }
-    .tt-empty { background: #fcfcfd; border: 1px solid #f7f8fa; }
-
-    .tt-badge {
-      position: absolute; top: 5px; right: 5px; min-width: 14px; height: 14px; padding: 0 4px;
-      border-radius: 7px; background: #fef3f2; color: #d92d20; font-size: 0.6rem; font-weight: 600;
-      display: flex; align-items: center; justify-content: center;
-    }
-
-    .legend { padding: 4px 20px 4px; font-size: 0.72rem; color: #98a2b3; }
-    .open-in-mb {
-      display: flex; align-items: center; justify-content: center; padding: 12px 20px; gap: 6px;
-      color: var(--theme); font-size: 0.82rem; font-weight: 600; text-decoration: none; border-top: 1px solid #eaecf0;
-    }
-    .open-in-mb:hover { background: #f9fafb; }
-    svg.icon { width: 14px; height: 14px; flex-shrink: 0; }
-    .empty { color: #98a2b3; font-size: 0.85rem; font-style: italic; padding: 30px; text-align: center; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Timetable</title>
+<style>
+  :root { --bg:#FFFFFF; --bg-secondary:#F3F3F3; --text:#0D0D0D; --text-2:#5D5D5D; --text-3:#8F8F8F; --border:rgba(13,13,13,.09); --accent:#0285FF; }
+  :root[data-theme="dark"] { --bg:#212121; --bg-secondary:#303030; --text:#FFFFFF; --text-2:#CDCDCD; --text-3:#AFAFAF; --border:rgba(255,255,255,.10); --accent:#0285FF; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#212121; --bg-secondary:#303030; --text:#FFFFFF; --text-2:#CDCDCD; --text-3:#AFAFAF; --border:rgba(255,255,255,.10); } }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { background:transparent; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--text); -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.45; }
+  .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; max-width:560px; margin:0 auto; }
+  :root[data-display="fullscreen"] .card { max-width:960px; margin:16px auto calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .title { font-size:16px; font-weight:600; line-height:1.3; }
+  .subtitle { color:var(--text-2); font-size:13px; margin-top:2px; }
+  .head-side { display:flex; align-items:flex-start; gap:8px; flex-shrink:0; }
+  .count { color:var(--text-3); font-size:12px; white-space:nowrap; margin-top:2px; text-align:right; }
+  .icon-btn { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text-2); cursor:pointer; }
+  .icon-btn:hover { background:var(--bg-secondary); color:var(--text); }
+  .icon-btn svg { width:14px; height:14px; stroke:currentColor; }
+  .divider { height:1px; background:var(--border); margin:14px -16px; }
+  .section-label { font-size:11.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px; }
+  .meta { display:flex; flex-wrap:wrap; gap:5px; color:var(--text-2); font-size:12.5px; margin-top:2px; }
+  .sep { color:var(--text-3); margin:0 2px; }
+  .week-wrap { overflow-x:auto; margin:0 -4px; padding:0 4px 2px; }
+  .week-board {
+    display:grid;
+    grid-template-columns:repeat(var(--day-count, 5), minmax(124px, 1fr));
+    gap:0;
+    min-width:0;
+    border-top:1px solid var(--border);
+    border-bottom:1px solid var(--border);
+  }
+  :root:not([data-display="fullscreen"]) .week-board {
+    display:block;
+    border-top:none;
+    border-bottom:none;
+  }
+  :root:not([data-display="fullscreen"]) .week-wrap {
+    overflow:visible;
+    margin:0;
+    padding:0;
+  }
+  :root:not([data-display="fullscreen"]) .day-col {
+    border-right:none;
+    overflow:visible;
+  }
+  :root:not([data-display="fullscreen"]) .day-col + .day-col {
+    margin-top:16px;
+    padding-top:14px;
+    border-top:1px solid var(--border);
+  }
+  :root:not([data-display="fullscreen"]) .day-head {
+    padding:0 0 8px;
+  }
+  :root:not([data-display="fullscreen"]) .day-body {
+    border-top:1px solid var(--border);
+  }
+  :root:not([data-display="fullscreen"]) .lesson {
+    display:grid;
+    grid-template-columns:82px minmax(0, 1fr);
+    column-gap:12px;
+    min-height:0;
+    padding:10px 0;
+  }
+  :root:not([data-display="fullscreen"]) .lesson-time {
+    margin:1px 0 0;
+  }
+  :root:not([data-display="fullscreen"]) .lesson-title,
+  :root:not([data-display="fullscreen"]) .lesson-meta,
+  :root:not([data-display="fullscreen"]) .lesson-task {
+    grid-column:2;
+  }
+  .day-col {
+    min-width:0;
+    overflow:hidden;
+    background:var(--bg);
+    border-right:1px solid var(--border);
+  }
+  .day-col:last-child { border-right:none; }
+  .day-head {
+    padding:9px 10px 7px;
+    border-bottom:1px solid var(--border);
+    background:transparent;
+  }
+  .day-name {
+    color:var(--text);
+    font-size:13px;
+    font-weight:600;
+    line-height:1.2;
+  }
+  .day-date {
+    display:block;
+    color:var(--text-3);
+    font-size:11px;
+    font-weight:500;
+    margin-top:2px;
+  }
+  .day-body {
+    display:flex;
+    flex-direction:column;
+  }
+  .lesson {
+    min-height:58px;
+    padding:9px 10px;
+    border-bottom:1px solid var(--border);
+    border-radius:0;
+    cursor:pointer;
+    transition:background .12s ease, color .12s ease;
+  }
+  .lesson:last-child { border-bottom:none; }
+  .lesson:hover, .lesson:focus-visible {
+    background:rgba(2,133,255,.06);
+    outline:none;
+  }
+  .lesson:hover .lesson-title, .lesson:focus-visible .lesson-title {
+    color:var(--accent);
+  }
+  .lesson.selected {
+    background:color-mix(in srgb, var(--accent) 8%, var(--bg));
+  }
+  .lesson.selected .lesson-title { color:var(--accent); }
+  .lesson.current {
+    background:transparent;
+  }
+  .lesson-time {
+    color:var(--text-3);
+    font-size:11px;
+    line-height:1.2;
+    margin-bottom:3px;
+  }
+  .lesson-title {
+    color:var(--text);
+    font-size:12.5px;
+    font-weight:600;
+    line-height:1.24;
+    overflow-wrap:break-word;
+  }
+  .lesson.current .lesson-title {
+    color:var(--text);
+  }
+  .lesson-meta {
+    color:var(--text-2);
+    font-size:11px;
+    line-height:1.2;
+    margin-top:3px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .actions { display:flex; gap:8px; margin-top:16px; }
+  .btn { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; font-size:13.5px; font-weight:600; padding:9px 14px; border-radius:12px; border:1px solid var(--border); background:var(--bg); color:var(--text); text-decoration:none; }
+  .btn:hover { background:var(--bg-secondary); }
+  .btn svg { width:14px; height:14px; stroke:currentColor; }
+  .selection-bar {
+    display:none; align-items:center; justify-content:space-between; gap:10px;
+    margin-top:12px; padding:9px 10px; border:1px solid var(--border);
+    border-radius:12px; background:var(--bg-secondary);
+  }
+  .selection-bar.active { display:flex; }
+  .selection-count { font-size:12.5px; color:var(--text-2); }
+  .selection-actions { display:flex; align-items:center; gap:8px; }
+  .mini-btn {
+    font-family:inherit; font-size:12.5px; font-weight:600;
+    border:none; background:transparent; color:var(--text-2); cursor:pointer; padding:4px 0;
+  }
+  .mini-btn:hover { color:var(--text); }
+  .mini-btn.primary { color:var(--accent); }
+  .empty, .empty-state { color:var(--text-3); font-size:13px; padding:16px 0 2px; }
+  .empty-title { color:var(--text-2); font-weight:600; font-size:13.5px; }
+  .empty-copy { margin-top:2px; color:var(--text-3); }
+</style>
 </head>
 <body>
-<div class="mb-card" id="card"></div>
-
+<div class="card" id="card"><div class="empty">Loading timetable...</div></div>
 <script>
-const ICONS = {
-  external: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/></svg>`,
-};
-// Soft subject palette: [border, background]
-const PALETTE = [
-  ['#1570ef','#eff6ff'], ['#6938ef','#f4f0ff'], ['#099250','#ecfdf3'], ['#e3a008','#fffaeb'],
-  ['#e5484d','#fef3f2'], ['#0ba5ec','#f0f9ff'], ['#ee46bc','#fdf2fa'], ['#4e5ba6','#f0f1f9'],
-  ['#dd2590','#fdf2fa'], ['#7839ee','#f4f3ff'], ['#15b79e','#f0fdf9'], ['#ca8504','#fefbe8'],
-];
-function esc(s){ return String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function colorFor(name){
-  let h=0; const s=String(name||''); for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
-  return PALETTE[h % PALETTE.length];
+"use strict";
+const card = document.getElementById("card");
+const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
+const EXPAND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+let selectedLessons = new Set();
+
+function applyHostContext() {
+  const t = window.openai?.theme;
+  if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+  document.documentElement.dataset.display = window.openai?.displayMode || "inline";
 }
-function cleanName(n){ return String(n||'').replace(/\s+/g,' ').trim(); }
-// "Jun 8, Mon" → {label:"Mon", date:"Jun 8", dayNum:8}
-function parseDay(d){
-  const parts = String(d||'').split(',').map(x=>x.trim());
-  const datePart = parts[0]||''; const label = parts[1]||datePart;
-  const m = datePart.match(/(\d+)/); const dayNum = m ? parseInt(m[1],10) : null;
-  return { label, date: datePart, dayNum, raw: d };
+function reportHeight() {
+  try { window.openai?.notifyIntrinsicHeight?.(document.body.scrollHeight); } catch (_) {}
+}
+new ResizeObserver(() => reportHeight()).observe(document.body);
+function requestFullscreen() {
+  try { window.openai?.requestDisplayMode?.({ mode: "fullscreen" }); } catch (_) {}
+}
+function emptyState(title, copy) {
+  return `<div class="empty-state"><div class="empty-title">${esc(title)}</div>${copy ? `<div class="empty-copy">${esc(copy)}</div>` : ""}</div>`;
 }
 
-function renderTimetable(data){
-  // Normalise short-key slots (p,d,t,c,tr,r,n) from the server to full names so
-  // the rest of the renderer reads one shape. Also accepts legacy full keys.
-  const slots = (data.timetable || []).map(s => ({
-    period: s.period ?? s.p,
-    day: s.day ?? s.d,
-    time_start: s.time_start ?? s.t ?? '',
-    time_end: s.time_end ?? '',
-    class_name: s.class_name ?? s.c ?? '',
-    teacher: s.teacher ?? s.tr ?? '',
-    room: s.room ?? s.r ?? '',
+function normalSlot(s) {
+  return {
+    id: s.id ?? s.class_id ?? "",
+    period: s.period ?? s.p ?? "",
+    day: s.day ?? s.d ?? "",
+    time: s.time_start ?? s.t ?? "",
+    time_end: s.time_end ?? "",
+    class_name: s.class_name ?? s.c ?? "",
+    teacher: s.teacher ?? s.tr ?? "",
+    room: s.room ?? s.r ?? "",
     task_count: s.task_count ?? s.n ?? 0,
-  }));
-  const cur = data.current || {};
-  // distinct days (first-appearance order) and periods (numeric sort)
-  const dayOrder = [], daySeen = {};
-  slots.forEach(s => { if(!daySeen[s.day]){ daySeen[s.day]=1; dayOrder.push(s.day); } });
-  const periods = [...new Set(slots.map(s => s.period))].sort((a,b)=>{
-    const na=parseInt(a,10), nb=parseInt(b,10);
-    if(!isNaN(na)&&!isNaN(nb)) return na-nb;
-    return String(a).localeCompare(String(b));
-  });
-  // index slots by period|day
-  const grid = {};
-  slots.forEach(s => { grid[s.period+'|'+s.day] = s; });
+    current: !!s.current,
+  };
+}
+function slotKey(s, i) {
+  return [s.id, s.day, s.period, s.time, s.class_name, i].filter((v) => v !== "").join(":");
+}
 
-  // today highlight: match current.date day-number to a column
-  const curDayNum = (() => { const m=String(cur.date||'').match(/(\d+)/); return m?parseInt(m[1],10):null; })();
+function dayLabel(day) {
+  const parts = String(day || "").split(",").map((p) => p.trim()).filter(Boolean);
+  return parts.length > 1 ? `${parts[1]}, ${parts[0]}` : String(day || "");
+}
+function compactDayLabel(day) {
+  const parts = String(day || "").split(",").map((p) => p.trim()).filter(Boolean);
+  return {
+    label: parts.length > 1 ? parts[1] : (parts[0] || "Day"),
+    date: parts.length > 1 ? parts[0] : "",
+  };
+}
+function slotSort(a, b) {
+  const pa = Number(String(a.period).match(/\d+/)?.[0]);
+  const pb = Number(String(b.period).match(/\d+/)?.[0]);
+  if (Number.isFinite(pa) && Number.isFinite(pb) && pa !== pb) return pa - pb;
+  return String(a.time || a.period).localeCompare(String(b.time || b.period));
+}
 
-  let h = '';
-  let weekLabel = '';
-  if (dayOrder.length === 1) {
-    const pd = parseDay(dayOrder[0]);
-    weekLabel = (pd.label ? pd.label + ', ' : '') + pd.date;
-  } else if (dayOrder.length) {
-    weekLabel = parseDay(dayOrder[0]).date + ' – ' + parseDay(dayOrder[dayOrder.length-1]).date;
+function slotRow(s, currentDay) {
+  const meta = [];
+  if (s.teacher) meta.push(esc(s.teacher));
+  if (s.room) meta.push(esc(s.room));
+  const isCurrent = s.current || (currentDay && s.day === currentDay);
+  const time = [s.time, s.time_end].filter(Boolean).join(" - ");
+  return `<div class="slot${isCurrent ? " current" : ""}">
+    <div class="time">${esc(time || s.period || "")}</div>
+    <div class="main">
+      <div class="class">${esc(s.class_name || "Class")}</div>
+      ${meta.length ? `<div class="meta">${meta.join('<span class="sep">|</span>')}</div>` : ""}
+      ${s.task_count ? `<div class="tasks">${esc(s.task_count)} ManageBac ${s.task_count === 1 ? "task" : "tasks"} linked to this class</div>` : ""}
+    </div>
+  </div>`;
+}
+
+function weekGrid(slots, currentDay, options = {}) {
+  const hideSingleDayHeader = !!options.hideSingleDayHeader;
+  const dayOrder = [];
+  const days = new Set();
+  const byDay = new Map();
+  for (const s of slots) {
+    const day = s.day || "Today";
+    if (!days.has(day)) {
+      days.add(day);
+      dayOrder.push(day);
+      byDay.set(day, []);
+    }
+    byDay.get(day).push(s);
   }
-  h += `<div class="mb-header"><h1>Timetable</h1>
-    <div class="sub">${esc(weekLabel)}${cur.date ? ' · checked '+esc(cur.weekday||'')+' '+esc(cur.date)+(cur.time?' '+esc(cur.time):'') : ''}</div></div>`;
-
-  if(!slots.length){ h += '<div class="empty">No timetable available.</div>'; document.getElementById('card').innerHTML=h; return; }
-
-  const cols = dayOrder.length;
-  h += '<div class="tt-scroll"><div class="tt-grid" style="grid-template-columns: 42px repeat('+cols+', minmax(110px, 1fr));">';
-  // header row
-  h += '<div class="tt-corner"></div>';
-  dayOrder.forEach(d => {
-    const pd = parseDay(d);
-    const today = curDayNum!=null && pd.dayNum===curDayNum ? ' today' : '';
-    h += `<div class="tt-head${today}">${esc(pd.label)}<span class="date">${esc(pd.date)}</span></div>`;
-  });
-  // period rows
-  periods.forEach(p => {
-    h += `<div class="tt-period-label">${esc(p)}</div>`;
-    dayOrder.forEach(d => {
-      const s = grid[p+'|'+d];
-      if(!s){ h += '<div class="tt-empty"></div>'; return; }
-      const [bc,bg] = colorFor(s.class_name);
-      const time = (s.time_start||'') + (s.time_end ? '–'+s.time_end : '');
-      h += `<div class="tt-cell" style="--c:${bc};--c-bg:${bg}">
-        ${s.task_count ? `<span class="tt-badge" title="${s.task_count} task(s) on ManageBac">${s.task_count}</span>` : ''}
-        ${time ? `<div class="tt-time">${esc(time)}</div>` : ''}
-        <div class="tt-class">${esc(cleanName(s.class_name))}</div>
-        ${s.teacher ? `<div class="tt-teacher">${esc(s.teacher)}</div>` : ''}
-        ${s.room ? `<div class="tt-room">${esc(s.room)}</div>` : ''}
+  let h = `<div class="week-wrap"><div class="week-board" style="--day-count:${Math.max(1, dayOrder.length)}">`;
+  for (const day of dayOrder) {
+    const d = compactDayLabel(day);
+    const today = currentDay && day === currentDay ? " today" : "";
+    const showHeader = !(hideSingleDayHeader && dayOrder.length === 1);
+    const rows = (byDay.get(day) || []).sort(slotSort);
+    h += `<div class="day-col${today}">
+      ${showHeader ? `<div class="day-head"><div class="day-name">${esc(d.label)}</div>${d.date ? `<span class="day-date">${esc(d.date)}</span>` : ""}</div>` : ""}
+      <div class="day-body">`;
+    for (const s of rows) {
+      const meta = [s.teacher, s.room].filter(Boolean).join(" | ");
+      const time = [s.time, s.time_end].filter(Boolean).join(" - ");
+      const isCurrent = s.current || (currentDay && s.day === currentDay);
+      const selected = selectedLessons.has(s.key);
+      h += `<div class="lesson${isCurrent ? " current" : ""}${selected ? " selected" : ""}" role="button" tabindex="0" aria-pressed="${selected ? "true" : "false"}"
+        data-slot-key="${esc(s.key)}" data-class="${esc(s.class_name || "Class")}" data-day="${esc(s.day)}" data-time="${esc(time)}" data-teacher="${esc(s.teacher)}" data-room="${esc(s.room)}">
+        ${time ? `<div class="lesson-time">${esc(time)}</div>` : ""}
+        <div class="lesson-title">${esc(s.class_name || "Class")}</div>
+        ${meta ? `<div class="lesson-meta">${esc(meta)}</div>` : ""}
       </div>`;
+    }
+    h += `</div></div>`;
+  }
+  h += `</div></div>`;
+  return h;
+}
+
+function renderTimetable(data) {
+  const slots = (data.timetable || []).map(normalSlot).filter((s) => s.class_name || s.time).map((s, i) => ({ ...s, key: slotKey(s, i) }));
+  selectedLessons = new Set([...selectedLessons].filter((key) => slots.some((s) => s.key === key)));
+  const current = data.current || {};
+  const currentDay = current.day || current.raw_day || "";
+  const uniqueDays = [...new Set(slots.map((s) => s.day || "Today"))];
+  const headerSubtitle = [current.weekday, current.date].filter(Boolean).join(", ");
+  let h = `<div class="head"><div><div class="title">Timetable</div>${headerSubtitle ? `<div class="subtitle">${esc(headerSubtitle)}</div>` : ""}</div><div class="head-side"><div class="count">${slots.length} ${slots.length === 1 ? "class" : "classes"}</div><button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button></div></div>`;
+  h += `<div class="divider"></div>`;
+  if (!slots.length) {
+    h += emptyState("No classes scheduled", "There is no timetable data for this view.");
+  } else {
+    h += weekGrid(slots, currentDay, { hideSingleDayHeader: uniqueDays.length === 1 });
+    h += `<div class="selection-bar" id="selection-bar">
+            <div class="selection-count" id="selection-count">No classes selected</div>
+            <div class="selection-actions">
+              <button class="mini-btn" id="clear-lessons" type="button">Clear</button>
+              <button class="mini-btn primary" id="ask-lessons" type="button">Ask ChatGPT</button>
+            </div>
+          </div>`;
+  }
+  if (data.url) h += `<div class="actions"><a class="btn" href="${esc(data.url)}" target="_blank" rel="noopener">${LINK_ICON} Open in ManageBac</a></div>`;
+  card.innerHTML = h;
+  card.querySelector("#expand")?.addEventListener("click", requestFullscreen);
+  function selectedSlotObjects() {
+    return slots.filter((s) => selectedLessons.has(s.key));
+  }
+  function saveSelection() {
+    const selected = selectedSlotObjects().map((s) => ({
+      class_name: s.class_name,
+      day: s.day,
+      time: [s.time, s.time_end].filter(Boolean).join(" - "),
+      teacher: s.teacher,
+      room: s.room,
+    }));
+    try { window.openai?.setWidgetState?.({ selected_timetable_classes: selected }); } catch (_) {}
+  }
+  function updateSelectionBar() {
+    const bar = document.getElementById("selection-bar");
+    const count = document.getElementById("selection-count");
+    if (!bar || !count) return;
+    const n = selectedLessons.size;
+    bar.classList.toggle("active", n > 0);
+    count.textContent = n === 1 ? "1 class selected" : `${n} classes selected`;
+    card.querySelectorAll("[data-slot-key]").forEach((row) => {
+      const active = selectedLessons.has(row.dataset.slotKey);
+      row.classList.toggle("selected", active);
+      row.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    saveSelection();
+    reportHeight();
+  }
+  card.querySelectorAll(".lesson").forEach((lesson) => {
+    const toggleLesson = () => {
+      const key = lesson.dataset.slotKey;
+      if (selectedLessons.has(key)) selectedLessons.delete(key);
+      else selectedLessons.add(key);
+      updateSelectionBar();
+    };
+    lesson.addEventListener("click", toggleLesson);
+    lesson.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      toggleLesson();
     });
   });
-  h += '</div></div>';
-  h += `<div class="legend">Red badges show ManageBac's per-day task count for that class (not necessarily work due).</div>`;
-  if(data.url){
-    h += `<a class="open-in-mb" href="${esc(data.url)}" target="_blank" rel="noopener">Open in ManageBac ${ICONS.external}</a>`;
-  }
-  document.getElementById('card').innerHTML = h;
+  document.getElementById("clear-lessons")?.addEventListener("click", () => {
+    selectedLessons.clear();
+    updateSelectionBar();
+  });
+  document.getElementById("ask-lessons")?.addEventListener("click", () => {
+    const selected = selectedSlotObjects();
+    if (!selected.length) return;
+    const list = selected.map((s, i) => {
+      const time = [s.time, s.time_end].filter(Boolean).join(" - ");
+      const meta = [s.day, time, s.teacher && `teacher ${s.teacher}`, s.room && `room ${s.room}`].filter(Boolean).join(", ");
+      return `${i + 1}. ${s.class_name || "Class"}${meta ? ` (${meta})` : ""}`;
+    }).join("\n");
+    const prompt = `Use these selected ManageBac timetable classes to help me plan or answer my question.\n\nSelected classes:\n${list}\n\nYou can suggest a study plan, identify likely tasks to check, or help me prepare for these classes.`;
+    try { window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {}
+  });
+  updateSelectionBar();
+  reportHeight();
 }
 
-const _INJECTED = /*INJECT_DATA*/null;
-function _hasTT(d){ return !!(d && Array.isArray(d.timetable)); }
-const _live = window.openai?.toolOutput;
-if(_hasTT(_live)) renderTimetable(_live);
-else if(_hasTT(_INJECTED)) renderTimetable(_INJECTED);
-else {
-  document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px">Loading timetable…</div>';
-  window.addEventListener('message', (ev) => {
-    if (ev.source !== window.parent) return;
-    const msg = ev.data;
-    if (msg && msg.method === 'ui/notifications/tool-result') {
-      const d = msg.params?.structuredContent;
-      if (_hasTT(d)) renderTimetable(d);
-    }
-  });
-  window.addEventListener('openai:set_globals', () => {
-    const d = window.openai?.toolOutput;
-    if (_hasTT(d)) renderTimetable(d);
-  });
-}
+applyHostContext();
+const live = window.openai?.toolOutput;
+if (live && Array.isArray(live.timetable)) renderTimetable(live);
+window.addEventListener("message", (ev) => {
+  if (ev.source !== window.parent) return;
+  const d = ev.data?.params?.structuredContent;
+  if (d && Array.isArray(d.timetable)) renderTimetable(d);
+}, { passive:true });
+window.addEventListener("openai:set_globals", (ev) => {
+  applyHostContext();
+  const d = ev.detail?.globals?.toolOutput ?? window.openai?.toolOutput;
+  if (d && Array.isArray(d.timetable)) renderTimetable(d);
+}, { passive:true });
 </script>
 </body>
 </html>

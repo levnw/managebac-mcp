@@ -1,237 +1,244 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ManageBac Files Preview</title>
-  <style>
-    /* ── Reset & base (matches task-card.html) ── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-      font-size: 14px;
-      color: #101828;
-      background: transparent;
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
-      padding: 0;
-    }
-
-    .mb-card {
-      --theme: #1570ef;
-      width: 100%;
-      max-width: 860px;
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
-      overflow: hidden;
-    }
-
-    /* ── Banner (matches ManageBac's blue "Files" bar) ── */
-    .mb-header { background: var(--theme); padding: 14px 20px 13px; }
-    .mb-header h1 { font-size: 1.3rem; font-weight: 700; color: #fff; line-height: 1.3; }
-    .mb-header .class-name { font-size: 0.78rem; color: rgba(255,255,255,0.75); margin-top: 2px; font-weight: 400; }
-
-    .content-area { padding: 16px 20px 10px; }
-
-    /* "File Information" heading */
-    .fi-heading { font-size: 1.05rem; font-weight: 700; color: #101828; padding-bottom: 12px; border-bottom: 1px solid #eaecf0; margin: 0 -20px 14px; padding-left: 20px; padding-right: 20px; display: flex; align-items: baseline; justify-content: space-between; }
-    .fi-count { font-size: 0.74rem; font-weight: 500; color: #98a2b3; }
-
-    /* Folder section header row */
-    .folder-row td { padding: 9px 8px 6px; border-bottom: 1px solid #eaecf0; }
-    .folder-cell { display: flex; align-items: center; gap: 7px; }
-    .folder-ic { width: 15px; height: 15px; flex-shrink: 0; }
-    .folder-name { font-size: 0.82rem; font-weight: 600; color: #344054; }
-    .folder-count { font-size: 0.7rem; font-weight: 600; color: #667085; background: #f2f4f7; border-radius: 9px; padding: 1px 7px; }
-    td.indented .file-cell { padding-left: 16px; }
-
-    /* ── Search ── */
-    .file-search {
-      position: relative; margin-bottom: 14px;
-    }
-    .file-search input {
-      width: 100%; padding: 8px 12px 8px 32px;
-      border: 1px solid #d0d5dd; border-radius: 6px;
-      font-size: 0.85rem; color: #101828; outline: none;
-      font-family: inherit;
-    }
-    .file-search input::placeholder { color: #98a2b3; }
-    .file-search input:focus { border-color: var(--theme); }
-    .file-search svg {
-      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
-      width: 14px; height: 14px; color: #98a2b3;
-    }
-
-    /* ── Table ── */
-    .files-table { width: 100%; border-collapse: collapse; }
-    .files-table th {
-      font-size: 0.82rem; font-weight: 600; color: var(--theme);
-      text-align: left; padding: 8px 8px; border-bottom: 1px solid #eaecf0;
-      white-space: nowrap;
-    }
-    .files-table th:first-child { padding-left: 8px; }
-    .files-table th.col-size { text-align: right; }
-    .files-table th.col-mod { text-align: right; }
-    .files-table td { padding: 9px 8px; vertical-align: middle; border-bottom: 1px solid #f2f4f7; }
-    .files-table tr:last-child td { border-bottom: none; }
-    .files-table tr:hover td { background: #f9fafb; }
-    .col-size, .col-mod { white-space: nowrap; }
-    td.col-size { text-align: right; color: #344054; font-size: 0.85rem; width: 90px; }
-    td.col-mod  { text-align: right; color: #344054; font-size: 0.85rem; width: 175px; }
-
-    .file-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .ft-icon { width: 20px; height: 24px; flex-shrink: 0; }
-    .ft-icon svg { width: 100%; height: 100%; display: block; }
-    .fc-info { min-width: 0; }
-    .fc-name {
-      font-size: 0.88rem; font-weight: 500; color: var(--theme);
-      text-decoration: none; word-break: break-word; display: block; line-height: 1.3;
-    }
-    .fc-name:hover { text-decoration: underline; }
-    .fc-author { font-size: 0.76rem; color: #667085; margin-top: 1px; }
-
-    .sort-arrow { font-size: 0.8rem; }
-
-    .empty { color: #98a2b3; font-size: 0.85rem; font-style: italic; padding: 14px 8px; }
-
-    /* ── Open in ManageBac ── */
-    .open-in-mb {
-      display: flex; align-items: center; justify-content: center; padding: 14px 20px;
-      gap: 6px; color: var(--theme); font-size: 0.82rem; font-weight: 600;
-      text-decoration: none; border-top: 1px solid #eaecf0;
-    }
-    .open-in-mb:hover { background: #f9fafb; }
-    svg.icon { width: 14px; height: 14px; flex-shrink: 0; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Files</title>
+<style>
+  :root { --bg:#FFFFFF; --bg-secondary:#F3F3F3; --text:#0D0D0D; --text-2:#5D5D5D; --text-3:#8F8F8F; --border:rgba(13,13,13,.09); --accent:#0285FF; }
+  :root[data-theme="dark"] { --bg:#212121; --bg-secondary:#303030; --text:#FFFFFF; --text-2:#CDCDCD; --text-3:#AFAFAF; --border:rgba(255,255,255,.10); --accent:#0285FF; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#212121; --bg-secondary:#303030; --text:#FFFFFF; --text-2:#CDCDCD; --text-3:#AFAFAF; --border:rgba(255,255,255,.10); } }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { background:transparent; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--text); -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.45; }
+  .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; max-width:560px; margin:0 auto; }
+  :root[data-display="fullscreen"] .card { max-width:720px; margin:16px auto calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .title { font-size:16px; font-weight:600; line-height:1.3; }
+  .subtitle { color:var(--text-2); font-size:13px; margin-top:2px; }
+  .head-side { display:flex; align-items:flex-start; gap:8px; flex-shrink:0; }
+  .count { color:var(--text-3); font-size:12px; white-space:nowrap; margin-top:2px; text-align:right; }
+  .icon-btn { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text-2); cursor:pointer; }
+  .icon-btn:hover { background:var(--bg-secondary); color:var(--text); }
+  .icon-btn svg { width:14px; height:14px; stroke:currentColor; }
+  .divider { height:1px; background:var(--border); margin:14px -16px; }
+  .search { width:100%; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text); border-radius:12px; padding:9px 11px; font:inherit; font-size:13px; outline:none; margin-bottom:8px; }
+  .section-label { font-size:11.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin:12px 0 2px; }
+  .section-label:first-of-type { margin-top:0; }
+  .file {
+    width:100%; display:flex; align-items:center; gap:10px; color:inherit; text-decoration:none;
+    padding:9px 8px; border:0; border-bottom:1px solid var(--border); border-radius:10px; background:transparent;
+    font:inherit; text-align:left; cursor:pointer;
+  }
+  .file:last-child { border-bottom:none; }
+  .file:hover .name, .file:focus-visible .name { color:var(--accent); }
+  .file:focus-visible { outline:none; background:rgba(2,133,255,.06); }
+  .file.selected {
+    background:color-mix(in srgb, var(--accent) 8%, var(--bg)); border-bottom-color:transparent;
+  }
+  .file.selected + .file.selected { border-top-left-radius:0; border-top-right-radius:0; }
+  .file.selected:has(+ .file.selected) { border-bottom-left-radius:0; border-bottom-right-radius:0; }
+  .file.selected .name { color:var(--accent); }
+  .icon { width:18px; height:18px; color:var(--text-3); flex-shrink:0; }
+  .main { display:block; flex:1 1 auto; min-width:0; overflow:hidden; }
+  .name { display:block; max-width:100%; font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:color .12s ease; }
+  .meta { display:flex; flex-wrap:wrap; gap:5px; color:var(--text-2); font-size:12px; margin-top:1px; }
+  .sep { color:var(--text-3); margin:0 2px; }
+  .file-open {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:8px; border:none; background:transparent;
+    color:var(--text-3); cursor:pointer; flex-shrink:0;
+  }
+  .file-open:hover { color:var(--text); background:var(--bg-secondary); }
+  .file-open svg { width:14px; height:14px; stroke:currentColor; }
+  .selection-bar {
+    display:none; align-items:center; justify-content:space-between; gap:10px;
+    margin-top:12px; padding:9px 10px; border:1px solid var(--border);
+    border-radius:12px; background:var(--bg-secondary);
+  }
+  .selection-bar.active { display:flex; }
+  .selection-count { font-size:12.5px; color:var(--text-2); }
+  .selection-actions { display:flex; align-items:center; gap:8px; }
+  .mini-btn {
+    font-family:inherit; font-size:12.5px; font-weight:600;
+    border:none; background:transparent; color:var(--text-2); cursor:pointer; padding:4px 0;
+  }
+  .mini-btn:hover { color:var(--text); }
+  .mini-btn.primary { color:var(--accent); }
+  .actions { display:flex; gap:8px; margin-top:16px; }
+  .btn { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; font-size:13.5px; font-weight:600; padding:9px 14px; border-radius:12px; border:1px solid var(--accent); background:var(--accent); color:#fff; text-decoration:none; }
+  .btn svg { width:14px; height:14px; stroke:currentColor; }
+  .empty, .empty-state { color:var(--text-3); font-size:13px; padding:16px 0 2px; }
+  .empty-title { color:var(--text-2); font-weight:600; font-size:13.5px; }
+  .empty-copy { margin-top:2px; color:var(--text-3); }
+  @media (max-width:419px) {
+    .file { gap:7px; padding-left:6px; padding-right:6px; }
+    .icon { width:16px; height:16px; }
+    .file-open { width:24px; height:24px; }
+  }
+</style>
 </head>
 <body>
-<div class="mb-card" id="card"></div>
-
+<div class="card" id="card"><div class="empty">Loading files...</div></div>
 <script>
-const ICONS = {
-  search: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/></svg>`,
-  folder: `<svg class="folder-ic" viewBox="0 0 16 16" fill="#475467"><path d="M1.75 3A1.75 1.75 0 0 0 0 4.75v6.5C0 12.216.784 13 1.75 13h12.5A1.75 1.75 0 0 0 16 11.25V5.75A1.75 1.75 0 0 0 14.25 4H7.5L6.2 2.7A1.75 1.75 0 0 0 4.96 2.19H1.75A1.75 1.75 0 0 0 0 3.94z"/></svg>`,
-  external: `<svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0z"/></svg>`,
-  // File-type icons approximating ManageBac's (Adobe-red PDF, Word-blue doc, PowerPoint-orange)
-  pdf: `<svg viewBox="0 0 20 24"><path fill="#fff" stroke="#e5484d" stroke-width="1" d="M2 .5h11L18.5 6v15.5a2 2 0 0 1-2 2H2a1.5 1.5 0 0 1-1.5-1.5V2A1.5 1.5 0 0 1 2 .5z"/><path fill="#e5484d" d="M5.2 16.9c-.6-.6-.1-1.5.8-2.2.7-.5 1.7-1 2.8-1.4.5-1 1-2.1 1.3-3.1-.3-.8-.5-1.6-.5-2.2 0-.9.4-1.5 1.1-1.5.6 0 1 .5 1 1.3 0 .7-.3 1.7-.7 2.7.4.9 1 1.8 1.6 2.4 1 .1 1.9.2 2.5.5.9.4 1.1 1 .8 1.5-.3.6-1.2.7-2.1.3-.6-.3-1.3-.8-1.9-1.4-1 .1-2 .4-2.9.7-.6 1-1.2 1.9-1.8 2.4-.7.6-1.5.7-2 0zm2.3-1.6c-.7.3-1.2.7-1.5 1 .4-.1.9-.5 1.5-1zm3.2-3.4c-.2.6-.5 1.2-.8 1.8.5-.2 1.1-.3 1.6-.4-.3-.4-.6-.9-.8-1.4zm2.9 2.2c.5.4 1 .6 1.3.6-.3-.2-.7-.4-1.3-.6zM10.6 7.7c.1-.5.2-.9.2-1.2 0-.2 0-.4-.1-.4-.1.1-.2.3-.2.6 0 .3 0 .6.1 1z"/></svg>`,
-  docx: `<svg viewBox="0 0 20 24"><path fill="#fff" stroke="#2b7cd3" stroke-width="1" d="M2 .5h11L18.5 6v15.5a2 2 0 0 1-2 2H2a1.5 1.5 0 0 1-1.5-1.5V2A1.5 1.5 0 0 1 2 .5z"/><path fill="#2b7cd3" d="M4.5 9h11v1.4h-11zM4.5 12h11v1.4h-11zM4.5 15h11v1.4h-11zM4.5 18h7v1.4h-7z"/></svg>`,
-  pptx: `<svg viewBox="0 0 20 24"><path fill="#fff" stroke="#d35230" stroke-width="1" d="M2 .5h11L18.5 6v15.5a2 2 0 0 1-2 2H2a1.5 1.5 0 0 1-1.5-1.5V2A1.5 1.5 0 0 1 2 .5z"/><path fill="#d35230" d="M9.5 9a4.8 4.8 0 1 0 4.8 4.8H9.5z"/><path fill="#e8835f" d="M10.7 7.8v4.8h4.8a4.8 4.8 0 0 0-4.8-4.8z"/></svg>`,
-  generic: `<svg viewBox="0 0 20 24"><path fill="#fff" stroke="#98a2b3" stroke-width="1" d="M2 .5h11L18.5 6v15.5a2 2 0 0 1-2 2H2a1.5 1.5 0 0 1-1.5-1.5V2A1.5 1.5 0 0 1 2 .5z"/><path fill="#98a2b3" d="M4.5 10h11v1.4h-11zM4.5 13h11v1.4h-11zM4.5 16h8v1.4h-8z"/></svg>`,
-};
+"use strict";
+const card = document.getElementById("card");
+const FILE_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
+const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
+const EXPAND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+let currentData = null;
+let selectedFiles = new Set();
 
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function applyHostContext() {
+  const t = window.openai?.theme;
+  if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+  document.documentElement.dataset.display = window.openai?.displayMode || "inline";
+}
+function reportHeight() {
+  try { window.openai?.notifyIntrinsicHeight?.(document.body.scrollHeight); } catch (_) {}
+}
+new ResizeObserver(() => reportHeight()).observe(document.body);
+function requestFullscreen() {
+  try { window.openai?.requestDisplayMode?.({ mode: "fullscreen" }); } catch (_) {}
+}
+function emptyState(title, copy) {
+  return `<div class="empty-state"><div class="empty-title">${esc(title)}</div>${copy ? `<div class="empty-copy">${esc(copy)}</div>` : ""}</div>`;
 }
 
-function fileIcon(name) {
-  const ext = (name || '').split('.').pop().toLowerCase();
-  if (ext === 'pdf') return ICONS.pdf;
-  if (ext === 'doc' || ext === 'docx') return ICONS.docx;
-  if (ext === 'ppt' || ext === 'pptx') return ICONS.pptx;
-  return ICONS.generic;
+function fileKey(file, i) {
+  return String(file.id || `${file.folder || "files"}:${file.name || "file"}:${file.url || ""}:${i}`);
+}
+function fileRow(file) {
+  const meta = [];
+  if (file.size) meta.push(esc(file.size));
+  if (file.uploaded_at) meta.push(esc(file.uploaded_at));
+  if (file.uploaded_by) meta.push(`by ${esc(file.uploaded_by)}`);
+  const search = [file.name, file.folder, file.uploaded_by].filter(Boolean).join(" ").toLowerCase();
+  const selected = selectedFiles.has(file.key);
+  return `<button class="file${selected ? " selected" : ""}" type="button" data-file-key="${esc(file.key)}" data-search="${esc(search)}" aria-pressed="${selected ? "true" : "false"}">
+    ${FILE_ICON}
+    <span class="main">
+      <span class="name">${esc(file.name || "File")}</span>
+      ${meta.length ? `<span class="meta">${meta.join('<span class="sep">|</span>')}</span>` : ""}
+    </span>
+    ${file.url ? `<span class="file-open" data-open-url="${esc(file.url)}" title="Open file">${LINK_ICON}</span>` : ""}
+  </button>`;
 }
 
-function renderFiles(data) {
-  const files = data.files || [];
-
-  // Group by folder ("" = class root). Root first, then folders in first-seen order.
+function renderFiles(data, query = "") {
+  currentData = data;
+  const q = query.trim().toLowerCase();
+  const files = (data.files || []).filter((f) => f && f.name).map((f, i) => ({ ...f, key: fileKey(f, i) }));
+  selectedFiles = new Set([...selectedFiles].filter((key) => files.some((f) => f.key === key)));
+  const visible = q ? files.filter((f) => [f.name, f.folder, f.uploaded_by].filter(Boolean).join(" ").toLowerCase().includes(q)) : files;
   const groups = new Map();
-  groups.set('', []);
-  files.forEach(f => {
-    const k = f.folder || '';
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(f);
-  });
-  const folderCount = [...groups.keys()].filter(k => k).length;
-
-  let h = '';
-  h += `<div class="mb-header">
-    <h1>Files</h1>
-    ${data.class_name ? `<div class="class-name">${esc(data.class_name)}</div>` : ''}
-  </div>`;
-
-  h += '<div class="content-area">';
-  h += `<div class="fi-heading">File Information<span class="fi-count">${files.length} file${files.length===1?'':'s'}${folderCount?` · ${folderCount} folder${folderCount===1?'':'s'}`:''}</span></div>`;
-
-  h += `<div class="file-search">${ICONS.search}
-    <input type="text" id="file-filter" placeholder="Search by file or author name" oninput="filterFiles(this.value)">
-  </div>`;
-
-  h += '<table class="files-table"><thead><tr>';
-  h += '<th>Name</th><th class="col-size">Size</th><th class="col-mod">Modified <span class="sort-arrow">&darr;</span></th>';
-  h += '</tr></thead><tbody id="files-body">';
-  for (const [folder, items] of groups) {
-    if (!items.length) continue;
-    if (folder) h += folderHeaderRow(folder, items.length);
-    h += items.map(f => fileRow(f, !!folder)).join('');
+  for (const f of visible) {
+    const key = f.folder || "Class files";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
   }
-  h += '</tbody></table>';
-  if (!files.length) h += '<div class="empty">No files in this class yet.</div>';
-  h += '</div>'; // content-area
-
-  if (data.url) {
-    h += `<a class="open-in-mb" href="${esc(data.url)}" target="_blank" rel="noopener">Open in ManageBac ${ICONS.external}</a>`;
-  }
-
-  document.getElementById('card').innerHTML = h;
-}
-
-function folderHeaderRow(name, count) {
-  return `<tr class="folder-row" data-search="${esc(String(name).toLowerCase())}">
-    <td colspan="3"><span class="folder-cell">${ICONS.folder}<span class="folder-name">${esc(name)}</span><span class="folder-count">${count}</span></span></td>
-  </tr>`;
-}
-
-function fileRow(f, indented) {
-  const search = ((f.name||'') + ' ' + (f.uploaded_by||'') + ' ' + (f.folder||'')).toLowerCase();
-  return `<tr data-search="${esc(search)}">
-    <td${indented ? ' class="indented"' : ''}>
-      <div class="file-cell">
-        <span class="ft-icon">${fileIcon(f.name)}</span>
-        <span class="fc-info">
-          <a class="fc-name" href="${esc(f.url || '#')}" target="_blank" rel="noopener">${esc(f.name)}</a>
-          ${f.uploaded_by ? `<span class="fc-author">by ${esc(f.uploaded_by)}</span>` : ''}
-        </span>
-      </div>
-    </td>
-    <td class="col-size">${esc(f.size || '')}</td>
-    <td class="col-mod">${esc(f.uploaded_at || '')}</td>
-  </tr>`;
-}
-
-function filterFiles(q) {
-  q = q.trim().toLowerCase();
-  document.querySelectorAll('#files-body tr').forEach(tr => {
-    if (tr.classList.contains('folder-row')) { tr.style.display = q ? 'none' : ''; return; }
-    tr.style.display = !q || (tr.dataset.search || '').includes(q) ? '' : 'none';
-  });
-}
-
-// Server injection point
-const _INJECTED = /*INJECT_DATA*/null;
-
-const _live = window.openai?.toolOutput;
-if (_live && _live.files) {
-  renderFiles(_live);
-} else if (_INJECTED) {
-  renderFiles(_INJECTED);
-} else {
-  document.getElementById('card').innerHTML = '<div class="empty" style="padding:40px;text-align:center">Loading files…</div>';
-  window.addEventListener('message', (ev) => {
-    if (ev.source !== window.parent) return;
-    const msg = ev.data;
-    if (msg.method === 'ui/notifications/tool-result') {
-      const d = msg.params?.structuredContent;
-      if (d && d.files) renderFiles(d);
+  let h = `<div class="head"><div><div class="title">Files</div>${data.class_name ? `<div class="subtitle">${esc(data.class_name)}</div>` : ""}</div><div class="head-side"><div class="count">${files.length} ${files.length === 1 ? "file" : "files"}</div><button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button></div></div>`;
+  h += `<div class="divider"></div>`;
+  h += `<input class="search" id="file-search" placeholder="Search files" value="${esc(query)}">`;
+  if (!visible.length) {
+    h += files.length
+      ? emptyState("No matching files", "Try a different file name, folder, or teacher.")
+      : emptyState("No files uploaded", "This class does not have resource files yet.");
+  } else {
+    for (const [folder, items] of groups) {
+      h += `<div class="section-label">${esc(folder)}</div>`;
+      h += items.map(fileRow).join("");
     }
+    h += `<div class="selection-bar" id="selection-bar">
+            <div class="selection-count" id="selection-count">No files selected</div>
+            <div class="selection-actions">
+              <button class="mini-btn" id="clear-files" type="button">Clear</button>
+              <button class="mini-btn primary" id="ask-files" type="button">Ask ChatGPT</button>
+            </div>
+          </div>`;
+  }
+  if (data.url) h += `<div class="actions"><a class="btn" href="${esc(data.url)}" target="_blank" rel="noopener">${LINK_ICON} Open in ManageBac</a></div>`;
+  card.innerHTML = h;
+  const input = document.getElementById("file-search");
+  input?.addEventListener("input", () => renderFiles(currentData, input.value));
+  card.querySelector("#expand")?.addEventListener("click", requestFullscreen);
+  function selectedFileObjects() {
+    return files.filter((f) => selectedFiles.has(f.key));
+  }
+  function saveSelection() {
+    const selected = selectedFileObjects().map((f) => ({
+      name: f.name,
+      url: f.url,
+      folder: f.folder,
+      size: f.size,
+      uploaded_at: f.uploaded_at,
+      uploaded_by: f.uploaded_by,
+    }));
+    try { window.openai?.setWidgetState?.({ selected_class_files: selected }); } catch (_) {}
+  }
+  function updateSelectionBar() {
+    const bar = document.getElementById("selection-bar");
+    const count = document.getElementById("selection-count");
+    if (!bar || !count) return;
+    const n = selectedFiles.size;
+    bar.classList.toggle("active", n > 0);
+    count.textContent = n === 1 ? "1 file selected" : `${n} files selected`;
+    card.querySelectorAll("[data-file-key]").forEach((row) => {
+      const active = selectedFiles.has(row.dataset.fileKey);
+      row.classList.toggle("selected", active);
+      row.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    saveSelection();
+    reportHeight();
+  }
+  card.querySelectorAll("[data-file-key]").forEach((row) => {
+    row.addEventListener("click", (ev) => {
+      const openTarget = ev.target.closest("[data-open-url]");
+      if (openTarget) {
+        ev.stopPropagation();
+        const href = openTarget.dataset.openUrl;
+        if (window.openai?.openExternal) window.openai.openExternal({ href });
+        else window.open(href, "_blank", "noopener");
+        return;
+      }
+      const key = row.dataset.fileKey;
+      if (selectedFiles.has(key)) selectedFiles.delete(key);
+      else selectedFiles.add(key);
+      updateSelectionBar();
+    });
   });
-  window.addEventListener('openai:set_globals', () => {
-    const d = window.openai?.toolOutput;
-    if (d && d.files) renderFiles(d);
+  document.getElementById("clear-files")?.addEventListener("click", () => {
+    selectedFiles.clear();
+    updateSelectionBar();
   });
+  document.getElementById("ask-files")?.addEventListener("click", () => {
+    const selected = selectedFileObjects();
+    if (!selected.length) return;
+    const list = selected.map((f, i) => {
+      const meta = [f.folder, f.size, f.uploaded_by && `by ${f.uploaded_by}`].filter(Boolean).join(", ");
+      return `${i + 1}. ${f.name}${meta ? ` (${meta})` : ""}`;
+    }).join("\n");
+    const prompt = `Use these selected ManageBac class files to help me answer my question or prepare for class.\n\nClass: ${data.class_name || "Unknown class"}\nSelected files:\n${list}`;
+    try { window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {}
+  });
+  updateSelectionBar();
+  reportHeight();
 }
+
+applyHostContext();
+const live = window.openai?.toolOutput;
+if (live && Array.isArray(live.files)) renderFiles(live);
+window.addEventListener("message", (ev) => {
+  if (ev.source !== window.parent) return;
+  const d = ev.data?.params?.structuredContent;
+  if (d && Array.isArray(d.files)) renderFiles(d);
+}, { passive:true });
+window.addEventListener("openai:set_globals", (ev) => {
+  applyHostContext();
+  const d = ev.detail?.globals?.toolOutput ?? window.openai?.toolOutput;
+  if (d && Array.isArray(d.files)) renderFiles(d);
+}, { passive:true });
 </script>
 </body>
 </html>

@@ -42,6 +42,7 @@
     <option value="task-list.html">task-list</option>
     <option value="grades-card.html">grades-card</option>
     <option value="timetable-card.html">timetable-card</option>
+    <option value="class-list.html">class-list</option>
     <option value="class-files.html">class-files</option>
   </select>
   <select id="scenario"></select>
@@ -212,6 +213,12 @@ const TASK_LIST_SCENARIOS = {
       },
     ],
   },
+  "empty": {
+    title: "Tasks",
+    class_name: "All classes",
+    url: "https://es.managebac.com/student/tasks",
+    tasks: [],
+  },
 };
 
 const GRADES_SCENARIOS = {
@@ -242,6 +249,11 @@ const GRADES_SCENARIOS = {
       { class_name: "Georgian B", criteria: {} },
     ],
   },
+  "empty": {
+    scope: "All classes",
+    url: "https://es.managebac.com/student/classes",
+    classes: [],
+  },
   "single class": {
     scope: "IB MYP Geography (Grade 8) B",
     url: "https://es.managebac.com/student/classes/12905543/grades",
@@ -263,7 +275,7 @@ const GRADES_SCENARIOS = {
 
 const TIMETABLE_SCENARIOS = {
   "today": {
-    current: { weekday: "Thursday", date: "Jul 16" },
+    current: { weekday: "Thursday", date: "Jul 16", day: "Jul 16, Thu" },
     url: "https://es.managebac.com/student/timetable",
     timetable: [
       { day: "Jul 16, Thu", period: "1", time_start: "8:30", time_end: "9:20", class_name: "IB MYP Geography", teacher: "Ms. Beridze", room: "214", task_count: 1 },
@@ -271,6 +283,37 @@ const TIMETABLE_SCENARIOS = {
       { day: "Jul 16, Thu", period: "3", time_start: "10:35", time_end: "11:25", class_name: "Design", teacher: "Ms. Gvazava", room: "Lab 2", task_count: 2 },
       { day: "Jul 16, Thu", period: "4", time_start: "11:30", time_end: "12:20", class_name: "Science", teacher: "Dr. Chen", room: "301" },
     ],
+  },
+  "full week": {
+    current: { weekday: "Thursday", date: "Jul 16", day: "Jul 16, Thu" },
+    url: "https://es.managebac.com/student/timetable",
+    timetable: [
+      { day: "Jul 13, Mon", period: "1", time_start: "8:30", time_end: "9:20", class_name: "Mathematics", teacher: "Mr. Khatiashvili", room: "207" },
+      { day: "Jul 13, Mon", period: "2", time_start: "9:25", time_end: "10:15", class_name: "Spanish Phase 1", teacher: "Mr. Garcia", room: "108" },
+      { day: "Jul 13, Mon", period: "3", time_start: "10:35", time_end: "11:25", class_name: "Science", teacher: "Dr. Chen", room: "301", task_count: 1 },
+      { day: "Jul 13, Mon", period: "5", time_start: "13:10", time_end: "14:00", class_name: "Physical Education", teacher: "Coach M.", room: "Gym" },
+      { day: "Jul 14, Tue", period: "1", time_start: "8:30", time_end: "9:20", class_name: "Language & Literature", teacher: "Ms. Allen", room: "112" },
+      { day: "Jul 14, Tue", period: "2", time_start: "9:25", time_end: "10:15", class_name: "Design", teacher: "Ms. Gvazava", room: "Lab 2", task_count: 2 },
+      { day: "Jul 14, Tue", period: "4", time_start: "11:30", time_end: "12:20", class_name: "Visual Arts", teacher: "Mr. K.", room: "Art" },
+      { day: "Jul 14, Tue", period: "6", time_start: "14:05", time_end: "14:55", class_name: "Georgian B", teacher: "Ms. Nino", room: "118" },
+      { day: "Jul 15, Wed", period: "1", time_start: "8:30", time_end: "9:20", class_name: "Science", teacher: "Dr. Chen", room: "301" },
+      { day: "Jul 15, Wed", period: "3", time_start: "10:35", time_end: "11:25", class_name: "IB MYP Geography", teacher: "Ms. Beridze", room: "214", task_count: 1 },
+      { day: "Jul 15, Wed", period: "4", time_start: "11:30", time_end: "12:20", class_name: "Mathematics", teacher: "Mr. Khatiashvili", room: "207" },
+      { day: "Jul 15, Wed", period: "5", time_start: "13:10", time_end: "14:00", class_name: "Spanish Phase 1", teacher: "Mr. Garcia", room: "108" },
+      { day: "Jul 16, Thu", period: "1", time_start: "8:30", time_end: "9:20", class_name: "IB MYP Geography", teacher: "Ms. Beridze", room: "214", task_count: 1, current: true },
+      { day: "Jul 16, Thu", period: "2", time_start: "9:25", time_end: "10:15", class_name: "Spanish Phase 1", teacher: "Mr. Garcia", room: "108" },
+      { day: "Jul 16, Thu", period: "3", time_start: "10:35", time_end: "11:25", class_name: "Design", teacher: "Ms. Gvazava", room: "Lab 2", task_count: 2 },
+      { day: "Jul 16, Thu", period: "4", time_start: "11:30", time_end: "12:20", class_name: "Science", teacher: "Dr. Chen", room: "301" },
+      { day: "Jul 17, Fri", period: "1", time_start: "8:30", time_end: "9:20", class_name: "Language & Literature", teacher: "Ms. Allen", room: "112" },
+      { day: "Jul 17, Fri", period: "2", time_start: "9:25", time_end: "10:15", class_name: "Mathematics", teacher: "Mr. Khatiashvili", room: "207" },
+      { day: "Jul 17, Fri", period: "4", time_start: "11:30", time_end: "12:20", class_name: "Individuals & Societies", teacher: "Ms. Beridze", room: "214" },
+      { day: "Jul 17, Fri", period: "6", time_start: "14:05", time_end: "14:55", class_name: "Advisory", teacher: "Mr. Dato", room: "Homeroom" },
+    ],
+  },
+  "empty": {
+    current: { weekday: "Thursday", date: "Jul 16" },
+    url: "https://es.managebac.com/student/timetable",
+    timetable: [],
   },
 };
 
@@ -284,6 +327,33 @@ const FILE_SCENARIOS = {
       { name: "Singapore_data_sheets.xlsx", size: "340 KB", uploaded_at: "May 13", uploaded_by: "T. Beridze", folder: "Resources", url: "#" },
       { name: "Urban_sustainability_slides.pptx", size: "6.8 MB", uploaded_at: "May 14", uploaded_by: "T. Beridze", folder: "Slides", url: "#" },
     ],
+  },
+  "empty": {
+    class_name: "IB MYP Geography (Grade 8) B",
+    url: "https://es.managebac.com/student/classes/12905543/files",
+    files: [],
+  },
+};
+
+const CLASS_LIST_SCENARIOS = {
+  "all classes": {
+    title: "Classes",
+    scope: "All classes",
+    url: "https://es.managebac.com/student/classes",
+    classes: [
+      { id: "12905543", name: "IB MYP Geography (Grade 8) B", teacher: "Ms. Beridze", room: "214", grade: "Grade 8", group: "B", has_tasks: true, has_grades: true, has_files: true, url: "#" },
+      { id: "12905544", name: "Design (Grade 8) AB", teacher: "Ms. Gvazava", room: "Lab 2", grade: "Grade 8", group: "AB", has_tasks: true, has_grades: true, has_files: true, url: "#" },
+      { id: "12905545", name: "Spanish Phase 1", teacher: "Mr. Garcia", room: "108", grade: "Grade 8", has_tasks: true, has_grades: true, has_files: false, url: "#" },
+      { id: "12905546", name: "Science", teacher: "Dr. Chen", room: "301", grade: "Grade 8", has_tasks: true, has_grades: false, has_files: true, url: "#" },
+      { id: "12905547", name: "Mathematics", teacher: "Mr. Khatiashvili", room: "207", grade: "Grade 8", has_tasks: false, has_grades: true, has_files: false, url: "#" },
+      { id: "12905548", name: "Georgian B", teacher: "Ms. Nino", room: "118", grade: "Grade 8", has_tasks: false, has_grades: false, has_files: false, url: "#" },
+    ],
+  },
+  "empty": {
+    title: "Classes",
+    scope: "All classes",
+    url: "https://es.managebac.com/student/classes",
+    classes: [],
   },
 };
 
@@ -303,6 +373,7 @@ function scenariosForWidget() {
   if (widgetSel.value === "task-list.html") return TASK_LIST_SCENARIOS;
   if (widgetSel.value === "grades-card.html") return GRADES_SCENARIOS;
   if (widgetSel.value === "timetable-card.html") return TIMETABLE_SCENARIOS;
+  if (widgetSel.value === "class-list.html") return CLASS_LIST_SCENARIOS;
   if (widgetSel.value === "class-files.html") return FILE_SCENARIOS;
   return SCENARIOS;
 }

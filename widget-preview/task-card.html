@@ -18,10 +18,6 @@
     --red:           #E02E2A;
     --orange:        #E25507;
     --green:         #008635;
-    --tint-red:      rgba(224,46,42,.08);
-    --tint-orange:   rgba(226,85,7,.08);
-    --tint-green:    rgba(0,134,53,.08);
-    --tint-blue:     rgba(2,133,255,.08);
   }
   :root[data-theme="dark"] {
     --bg:            #212121;
@@ -35,10 +31,6 @@
     --red:           #FF8583;
     --orange:        #FF9E6C;
     --green:         #40C977;
-    --tint-red:      rgba(255,133,131,.12);
-    --tint-orange:   rgba(255,158,108,.12);
-    --tint-green:    rgba(64,201,119,.12);
-    --tint-blue:     rgba(2,133,255,.14);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -52,10 +44,6 @@
       --red:           #FF8583;
       --orange:        #FF9E6C;
       --green:         #40C977;
-      --tint-red:      rgba(255,133,131,.12);
-      --tint-orange:   rgba(255,158,108,.12);
-      --tint-green:    rgba(64,201,119,.12);
-      --tint-blue:     rgba(2,133,255,.14);
     }
   }
 
@@ -77,82 +65,153 @@
     max-width: 560px;
     margin: 0 auto;
   }
+  :root[data-display="fullscreen"] .card {
+    max-width: 720px;
+    margin: 16px auto calc(96px + env(safe-area-inset-bottom, 0px));
+  }
 
-  /* ── Header row: title/class left, due right ─────────────────────────── */
+  /* ── Section dividers — the "three boxes" feel, native style ─────────── */
+  .divider { height: 1px; background: var(--border); margin: 14px -16px; }
+
+  /* ── Header section: title/class left, due right ─────────────────────── */
   .head { display: flex; gap: 12px; align-items: flex-start; }
   .head-main { flex: 1; min-width: 0; }
   .title { font-size: 16px; font-weight: 600; line-height: 1.3; overflow-wrap: break-word; }
-  .klass { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+  .meta-line {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+    font-size: 13px; color: var(--text-2); margin-top: 2px;
+  }
+  .meta-sep { color: var(--text-3); margin: 0 2px; }
   .due { text-align: right; flex-shrink: 0; }
   .due-date { font-size: 13px; font-weight: 600; white-space: nowrap; }
   .due-date.overdue { color: var(--red); }
   .due-time { font-size: 11.5px; color: var(--text-3); white-space: nowrap; margin-top: 1px; }
-
-  /* ── Badges ───────────────────────────────────────────────────────────── */
-  .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .badge {
-    font-size: 11.5px; font-weight: 500; padding: 2px 8px; border-radius: 999px;
-    background: var(--bg-secondary); color: var(--text-2);
-  }
-  .badge.b-summative { background: var(--tint-orange); color: var(--orange); }
-  .badge.b-formative { background: var(--tint-blue);   color: var(--accent); }
-  .badge.b-status-done    { background: var(--tint-green);  color: var(--green); }
-  .badge.b-status-pending { background: var(--tint-orange); color: var(--orange); }
-  .badge.b-status-late    { background: var(--tint-red);    color: var(--red); }
-  .badge .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-right: 4px; vertical-align: 1px; }
+  .due-status { color: var(--text-2); }
 
   /* ── Grades ───────────────────────────────────────────────────────────── */
-  .grades { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .grades { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
   .grade {
-    display: flex; align-items: baseline; gap: 4px;
-    background: var(--bg-secondary); border-radius: 10px; padding: 4px 9px;
-    font-size: 12px; color: var(--text-2);
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) 34px;
+    align-items: center;
+    gap: 8px;
   }
-  .grade b { font-size: 13px; font-weight: 600; color: var(--text); }
-  .grade span { color: var(--text-3); font-size: 11px; }
+  .grade-key { font-size: 12px; font-weight: 600; color: var(--text-2); }
+  .grade-track {
+    position: relative;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    overflow: hidden;
+  }
+  .grade-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--grade-fill, 0%);
+    border-radius: inherit;
+    background: var(--accent);
+  }
+  .grade-score { font-size: 12px; color: var(--text-2); text-align: right; white-space: nowrap; }
+  .grade-score b { color: var(--text); font-weight: 600; font-size: 13px; }
 
   /* ── Sections ─────────────────────────────────────────────────────────── */
-  .section { margin-top: 14px; }
   .section-label {
     font-size: 11.5px; font-weight: 600; color: var(--text-3);
     text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px;
   }
-  .desc { font-size: 13.5px; color: var(--text-2); overflow-wrap: break-word; }
-  .desc.clamped {
-    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  .sub-label { margin-top: 12px; }
+  .prose { font-size: 13.5px; color: var(--text-2); overflow-wrap: break-word; }
+  .prose.clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .prose.clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .prose p + p, .prose p + ol, .prose ol + p, .prose p + ul { margin-top: 6px; }
+  .prose ol, .prose ul { padding-left: 20px; }
+  .prose a { color: var(--accent); text-decoration: none; }
+  .prose strong { color: var(--text); }
+
+  /* ── Per-section show more ────────────────────────────────────────────── */
+  .more-btn {
+    display: inline-block; margin-top: 4px;
+    font-family: inherit; font-size: 12.5px; font-weight: 500;
+    color: var(--accent); background: none; border: none; padding: 2px 0; cursor: pointer;
   }
-  .desc p + p, .desc p + ol, .desc ol + p, .desc p + ul { margin-top: 6px; }
-  .desc ol, .desc ul { padding-left: 20px; }
-  .desc a { color: var(--accent); text-decoration: none; }
-  .desc strong { color: var(--text); }
-  .comment { font-size: 13.5px; color: var(--text-2); }
-  .comment.clamped {
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  .more-btn:hover { text-decoration: underline; }
+  .section-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+  .section-actions .more-btn + .more-btn::before {
+    content: "";
+    display: inline-block;
+    width: 1px;
+    height: 12px;
+    margin: 0 8px 0 0;
+    background: var(--border);
+    vertical-align: -2px;
+  }
+  .section-action { display: none; }
+
+  /* ── Description images ──────────────────────────────────────────────── */
+  .images {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 8px; margin-top: 10px;
+  }
+  .image-link {
+    display: block; overflow: hidden; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg-secondary); aspect-ratio: 4 / 3;
+  }
+  .image-link img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
   }
 
   /* ── Files ────────────────────────────────────────────────────────────── */
   .files { display: flex; flex-direction: column; gap: 6px; }
   .file {
-    display: flex; align-items: center; gap: 8px;
-    padding: 7px 10px; border: 1px solid var(--border); border-radius: 12px;
-    text-decoration: none; color: var(--text);
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    min-height: 34px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 10px;
+    text-decoration: none; color: var(--text); background: var(--bg); font-family: inherit;
+    text-align: left; cursor: pointer;
   }
   .file:hover { background: var(--bg-secondary); }
-  .file svg { width: 15px; height: 15px; stroke: var(--text-3); flex-shrink: 0; }
+  .file.selected {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+  }
+  .file-icon { width: 15px; height: 15px; stroke: var(--text-3); flex-shrink: 0; }
   .file-name { font-size: 13px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file-meta { font-size: 11.5px; color: var(--text-3); flex-shrink: 0; }
-  .more-row { font-size: 12.5px; color: var(--text-3); padding: 2px 2px 0; }
+  .file-open {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 8px; border: none; background: transparent;
+    color: var(--text-3); cursor: pointer; flex-shrink: 0;
+  }
+  .file-open:hover { color: var(--text); background: var(--bg-tertiary); }
+  .file-open svg { width: 14px; height: 14px; stroke: currentColor; }
+  .selection-bar {
+    display: none; align-items: center; justify-content: space-between; gap: 10px;
+    margin-top: 10px; padding: 9px 10px; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--bg-secondary);
+  }
+  .selection-bar.active { display: flex; }
+  .selection-count { font-size: 12.5px; color: var(--text-2); }
+  .selection-actions { display: flex; align-items: center; gap: 8px; }
+  .mini-btn {
+    font-family: inherit; font-size: 12.5px; font-weight: 600;
+    border: none; background: transparent; color: var(--text-2); cursor: pointer;
+    padding: 4px 0;
+  }
+  .mini-btn:hover { color: var(--text); }
+  .mini-btn.primary { color: var(--accent); }
+  .quiet-row { font-size: 12.5px; color: var(--text-3); padding: 2px 2px 0; }
+  .empty-state { padding: 2px 2px 0; color: var(--text-3); font-size: 12.5px; }
+  .empty-title { color: var(--text-2); font-weight: 600; font-size: 13px; }
+  .empty-copy { margin-top: 2px; color: var(--text-3); }
 
-  /* ── Expanded-only detail ─────────────────────────────────────────────── */
-  #detail { display: none; }
-  .card.expanded #detail { display: block; }
-  .unit-row { font-size: 12.5px; color: var(--text-3); margin-top: 12px; }
-  .unit-row b { color: var(--text-2); font-weight: 500; }
+  /* ── Discussions (inside the files box, revealed on expand) ──────────── */
   .disc { padding: 8px 0; border-top: 1px solid var(--border); }
   .disc:first-of-type { border-top: none; padding-top: 2px; }
   .disc-author { font-size: 12.5px; font-weight: 600; }
   .disc-body { font-size: 13px; color: var(--text-2); margin-top: 2px; }
   .disc-date { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+  .unit-row { font-size: 12px; color: var(--text-3); margin-top: 10px; }
+  .unit-row b { color: var(--text-2); font-weight: 500; }
 
   /* ── Actions ──────────────────────────────────────────────────────────── */
   .actions { display: flex; gap: 8px; margin-top: 16px; }
@@ -165,12 +224,11 @@
     transition: background .12s ease;
   }
   .btn:hover { background: var(--bg-secondary); }
-  .btn:active { background: var(--bg-tertiary); }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn.primary:hover { background: #0270DB; }
   .btn svg { width: 14px; height: 14px; stroke: currentColor; }
 
-  /* ── Loading / empty ──────────────────────────────────────────────────── */
+  /* ── Loading ──────────────────────────────────────────────────────────── */
   .loading { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 0; }
   .ring {
     width: 22px; height: 22px; border-radius: 50%;
@@ -189,59 +247,88 @@
 <script>
 "use strict";
 // ═══════════════════════════════════════════════════════════════════════════
-// ChatGPT-native task card. Reads the same structuredContent shape the old
-// (archived) card did — built by _build_task_obj + _cap_task_widget_sc in
-// server.py. See widget-preview/archive/README.md for the full data contract.
+// ChatGPT-native task card, sectioned like ManageBac's three boxes (header /
+// feedback + description / files) but with native hairline dividers instead of
+// separate panels. Each section expands independently. Reads the same
+// structuredContent shape as the archived card — see archive/README.md.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const card = document.getElementById("card");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const FILE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
+const FILE_ICON = '<svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
 const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
 
-// ── Theme ────────────────────────────────────────────────────────────────
-function applyTheme() {
+// ── Theme / height plumbing ──────────────────────────────────────────────
+function applyHostContext() {
   const t = window.openai?.theme;
   if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+  document.documentElement.dataset.display = window.openai?.displayMode || "inline";
 }
-
-// ── Height reporting ─────────────────────────────────────────────────────
 function reportHeight() {
   try { window.openai?.notifyIntrinsicHeight?.(document.body.scrollHeight); } catch (_) {}
 }
 new ResizeObserver(() => reportHeight()).observe(document.body);
 
+// ── Per-section expanded state, persisted via setWidgetState ─────────────
+let sectionState = { feedback: false, desc: false, attachments: false, submissions: false, discussions: false };
+let selectedFiles = new Set();
+function saveState() {
+  try { window.openai?.setWidgetState?.({ sections: { ...sectionState } }); } catch (_) {}
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────
-function statusBadge(task) {
+function statusText(task) {
   const s = (task.status || "").toLowerCase();
   if (!s || s === "n/a") return "";
   const done = s === "submitted" || s === "complete";
   const late = !done && task.due_past && (s === "pending" || s === "not submitted" || s === "incomplete");
-  const cls = done ? "b-status-done" : late ? "b-status-late" : "b-status-pending";
-  const text = late && s !== "incomplete" ? "Overdue" : task.status;
-  return `<span class="badge ${cls}"><span class="dot"></span>${esc(text)}</span>`;
-}
-
-function labelBadges(task) {
-  return (task.labels || []).slice(0, 3).map((l) => {
-    const t = (l.text || "").toLowerCase();
-    const cls = t === "summative" ? "b-summative" : t === "formative" ? "b-formative" : "";
-    return `<span class="badge ${cls}">${esc(l.text)}</span>`;
-  }).join("");
+  return late && s !== "incomplete" ? "Overdue" : task.status;
 }
 
 function allFiles(task) {
   const out = [];
-  for (const f of task.desc_files || []) out.push({ name: f.name, meta: f.size || "", url: f.url });
-  for (const r of task.resources || [])
-    for (const f of r.files || []) out.push({ name: f.name, meta: f.size || "", url: f.url });
+  (task.desc_files || []).forEach((f, i) =>
+    out.push({ key: `desc:${i}:${f.url || f.name}`, source: "attachment", name: f.name, meta: f.size || "", url: f.url }));
+  (task.resources || []).forEach((r, ri) => {
+    (r.files || []).forEach((f, fi) =>
+      out.push({ key: `resource:${ri}:${fi}:${f.url || f.name}`, source: "resource", name: f.name, meta: f.size || "", url: f.url }));
+  });
   return out;
 }
-
+function submittedFile(f, i) {
+  return { key: `submitted:${i}:${f.url || f.name}`, source: "submission", name: f.name, meta: f.uploaded || "", url: f.url };
+}
 function fileRow(f) {
-  return `<a class="file" href="${esc(f.url)}" target="_blank" rel="noopener">${FILE_ICON}<span class="file-name">${esc(f.name)}</span><span class="file-meta">${esc(f.meta)}</span></a>`;
+  const selected = selectedFiles.has(f.key);
+  return `<button class="file${selected ? " selected" : ""}" type="button" data-file-key="${esc(f.key)}" aria-pressed="${selected ? "true" : "false"}">
+    ${FILE_ICON}
+    <span class="file-name">${esc(f.name)}</span>
+    <span class="file-meta">${esc(f.meta)}</span>
+    ${f.url ? `<span class="file-open" data-open-url="${esc(f.url)}" title="Open file">${LINK_ICON}</span>` : ""}
+  </button>`;
+}
+function imageStrip(images) {
+  if (!images || !images.length) return "";
+  return `<div class="images">` + images.slice(0, 3).map((src, i) =>
+    `<a class="image-link" href="${esc(src)}" target="_blank" rel="noopener"><img src="${esc(src)}" alt="Task image ${i + 1}" loading="lazy"></a>`
+  ).join("") + `</div>`;
+}
+function emptyState(title, copy) {
+  return `<div class="empty-state"><div class="empty-title">${esc(title)}</div>${copy ? `<div class="empty-copy">${esc(copy)}</div>` : ""}</div>`;
+}
+function gradeRow(g) {
+  const score = Number(g.score);
+  const max = Number(g.max);
+  const pct = Number.isFinite(score) && Number.isFinite(max) && max > 0
+    ? Math.max(0, Math.min(100, (score / max) * 100))
+    : 0;
+  return `<div class="grade">
+    <div class="grade-key">${esc(g.label)}</div>
+    <div class="grade-track" aria-hidden="true"><div class="grade-fill" style="--grade-fill:${pct.toFixed(1)}%"></div></div>
+    <div class="grade-score"><b>${esc(g.score)}</b>/${esc(g.max)}</div>
+  </div>`;
 }
 
 // ── Render ───────────────────────────────────────────────────────────────
@@ -251,137 +338,264 @@ function render(task) {
   currentTask = task;
   const files = allFiles(task);
   const submitted = task.submitted_files; // null = no dropbox, [] = empty dropbox
+  const submittedRows = (submitted || []).map(submittedFile);
+  const selectableFiles = [...files, ...submittedRows];
+  selectedFiles = new Set([...selectedFiles].filter((key) => selectableFiles.some((f) => f.key === key)));
+  const discussions = task.discussions; // null = hide, [] = show empty state
+  const grades = task.grades || [];
+  const status = statusText(task);
   const overdueUnsubmitted = task.due_past && submitted !== null &&
     (!submitted || !submitted.length) &&
     !["submitted", "complete"].includes((task.status || "").toLowerCase());
+  const hiddenAttachmentCount = Math.max(0, files.length - 2);
+  const hiddenSubmissionCount = Math.max(0, submittedRows.length - 1);
+  const hiddenDiscussionCount = Array.isArray(discussions) ? discussions.length : 0;
 
   let h = "";
+  const metaItems = [];
+  if (task.class_name) metaItems.push(esc(task.class_name));
+  const labelText = (task.labels || []).slice(0, 3).map((l) => l.text).filter(Boolean).join(" · ");
+  if (labelText) metaItems.push(esc(labelText));
 
-  // Header
+  // ═══ Box 1: title · class · due · tags · status ═══
   h += `<div class="head"><div class="head-main">
           <div class="title">${esc(task.title)}</div>
-          ${task.class_name ? `<div class="klass">${esc(task.class_name)}</div>` : ""}
+          ${metaItems.length ? `<div class="meta-line">${metaItems.join('<span class="meta-sep">|</span>')}</div>` : ""}
         </div>`;
-  if (task.due_month && task.due_day) {
+  if ((task.due_month && task.due_day) || (task.unit && task.unit.name)) {
     h += `<div class="due">
-            <div class="due-date${overdueUnsubmitted ? " overdue" : ""}">${esc(task.due_month)} ${esc(task.due_day)}</div>
+            ${task.due_month && task.due_day ? `<div class="due-date${overdueUnsubmitted ? " overdue" : ""}">${esc(task.due_month)} ${esc(task.due_day)}</div>` : ""}
             ${task.due_time ? `<div class="due-time">${esc(task.due_time)}</div>` : ""}
+            ${task.unit && task.unit.name ? `<div class="due-time">Unit: ${esc(task.unit.name)}</div>` : ""}
+            ${status ? `<div class="due-time due-status">${esc(status)}</div>` : ""}
           </div>`;
   }
   h += `</div>`;
 
-  // Badges (type/tags + status)
-  const badges = labelBadges(task) + statusBadge(task);
-  if (badges) h += `<div class="badges">${badges}</div>`;
+  const gradesHtml = grades.length ? `<div class="grades">` + grades.map(gradeRow).join("") + `</div>` : "";
 
-  // Grades
-  if (task.grades && task.grades.length) {
-    h += `<div class="grades">` + task.grades.map((g) =>
-      `<div class="grade">${esc(g.label)} <b>${esc(g.score)}</b><span>/ ${esc(g.max)}</span></div>`
-    ).join("") + `</div>`;
+  // Grades are a distinct outcome layer, separate from metadata/status tags.
+  if (gradesHtml) {
+    h += `<div class="divider"></div>
+          <div class="section-label">Grades</div>
+          ${gradesHtml}`;
   }
 
-  // Description preview (clamped when collapsed; description is server-sanitized HTML)
-  if (task.description) {
-    h += `<div class="section"><div class="desc clamped" id="desc">${task.description}</div></div>`;
-  }
-
-  // Teacher comment preview
+  // ═══ Box 2a: teacher feedback (own section, right under the header) ═══
   if (task.teacher_comment) {
-    h += `<div class="section"><div class="section-label">Teacher feedback</div>
-          <div class="comment clamped" id="comment">${esc(task.teacher_comment)}</div></div>`;
+    h += `<div class="divider"></div>
+          <div class="section-label">Teacher feedback</div>
+          <div class="prose clamp-2" id="feedback">${esc(task.teacher_comment)}</div>
+          <button class="more-btn" id="feedback-more">Show more</button>`;
   }
 
-  // Attachments: first 2 inline, rest behind "+ N more"
-  if (files.length) {
-    h += `<div class="section"><div class="section-label">Attachments</div><div class="files">`;
-    h += files.slice(0, 2).map(fileRow).join("");
-    h += `</div>${files.length > 2 ? `<div class="more-row" id="more-files">+ ${files.length - 2} more</div>` : ""}</div>`;
+  // ═══ Box 2b: instructions ═══
+  if (task.description) {
+    h += `<div class="divider"></div>
+          <div class="section-label">Instructions</div>
+          <div class="prose clamp-3" id="desc">${task.description}</div>
+          ${imageStrip(task.images)}
+          <div class="section-actions">
+            <button class="more-btn" id="desc-more">Show more</button>
+            <button class="more-btn section-action" id="desc-summarize">Summarize</button>
+          </div>`;
   }
 
-  // Submission state (compact — full list in detail)
-  if (submitted && submitted.length) {
-    const f = submitted[0];
-    h += `<div class="section"><div class="section-label">Your submission</div><div class="files">` +
-         fileRow({ name: f.name, meta: f.uploaded || "", url: f.url }) +
-         `</div>${submitted.length > 1 ? `<div class="more-row">+ ${submitted.length - 1} more</div>` : ""}</div>`;
-  } else if (submitted && !submitted.length && !task.due_past) {
-    h += `<div class="section"><div class="section-label">Your submission</div>
-          <div class="more-row">Nothing submitted yet</div></div>`;
+  // ═══ Box 3: attachments · submission · discussion/resources ═══
+  if (files.length || submitted !== null || discussions !== null) {
+    h += `<div class="divider"></div>`;
+    if (files.length) {
+      h += `<div class="section-label">Attachments</div><div class="files">`;
+      h += files.slice(0, 2).map(fileRow).join("");
+      h += `</div><div class="files" id="files-extra" style="display:none;margin-top:6px">${files.slice(2).map(fileRow).join("")}</div>`;
+      if (hiddenAttachmentCount > 0) {
+        h += `<button class="more-btn" id="attachments-more">+ ${hiddenAttachmentCount} more</button>`;
+      }
+    } else {
+      h += `<div class="section-label">Attachments</div>${emptyState("No attachments", "This task does not include any attached files.")}`;
+    }
+    if (submitted && submitted.length) {
+      h += `<div class="section-label sub-label">Your submission</div><div class="files">` +
+           fileRow(submittedRows[0]) +
+           `</div><div class="files" id="sub-extra" style="display:none;margin-top:6px">` +
+           submittedRows.slice(1).map(fileRow).join("") + `</div>`;
+      if (hiddenSubmissionCount > 0) {
+        h += `<button class="more-btn" id="submissions-more">+ ${hiddenSubmissionCount} more</button>`;
+      }
+    } else if (submitted !== null && submitted.length === 0) {
+      h += `<div class="section-label sub-label">Your submission</div>
+            ${emptyState(task.due_past ? "No submission uploaded" : "Nothing submitted yet", task.due_past ? "ManageBac did not find a submitted file for this deadline." : "A submission box exists, but no file has been uploaded.")}`;
+    }
+    if (Array.isArray(discussions) && discussions.length) {
+      h += `<div class="section-label sub-label">Discussion</div><div id="disc-extra" style="display:none">` +
+           discussions.map((d) =>
+             `<div class="disc"><div class="disc-author">${esc(d.author)}</div>
+              <div class="disc-body">${esc(d.body)}</div>
+              ${d.posted ? `<div class="disc-date">${esc(d.posted)}</div>` : ""}</div>`).join("") + `</div>`;
+      if (hiddenDiscussionCount > 0) {
+        h += `<button class="more-btn" id="discussions-more">Show discussion</button>`;
+      }
+    } else if (Array.isArray(discussions)) {
+      h += `<div class="section-label sub-label">Discussion</div>${emptyState("No discussion posts yet", "Comments will appear here when the class or teacher adds them.")}`;
+    }
+    if (selectableFiles.length) {
+      h += `<div class="selection-bar" id="selection-bar">
+              <div class="selection-count" id="selection-count">No attachments selected</div>
+              <div class="selection-actions">
+                <button class="mini-btn" id="clear-files" type="button">Clear</button>
+                <button class="mini-btn primary" id="ask-files" type="button">Ask ChatGPT</button>
+              </div>
+            </div>`;
+    }
   }
 
-  // ── Detail (visible only when expanded) ──
-  h += `<div id="detail">`;
-  if (files.length > 2) {
-    h += `<div class="section"><div class="section-label">All attachments</div>
-          <div class="files">${files.slice(2).map(fileRow).join("")}</div></div>`;
+  if (!grades.length && !task.teacher_comment && !task.description &&
+      !files.length && submitted === null && discussions === null) {
+    h += `<div class="divider"></div>
+          ${emptyState("No extra details yet", "ManageBac only returned the title, class, and due-date information for this task.")}`;
   }
-  if (submitted && submitted.length > 1) {
-    h += `<div class="section"><div class="section-label">All submissions</div>
-          <div class="files">${submitted.slice(1).map((f) => fileRow({ name: f.name, meta: f.uploaded || "", url: f.url })).join("")}</div></div>`;
-  }
-  if (task.discussions && task.discussions.length) {
-    h += `<div class="section"><div class="section-label">Discussion</div>` +
-         task.discussions.map((d) =>
-           `<div class="disc"><div class="disc-author">${esc(d.author)}</div>
-            <div class="disc-body">${esc(d.body)}</div>
-            ${d.posted ? `<div class="disc-date">${esc(d.posted)}</div>` : ""}</div>`).join("") +
-         `</div>`;
-  }
-  if (task.unit && task.unit.name) {
-    h += `<div class="unit-row">Unit: <b>${esc(task.unit.name)}</b>${task.unit.duration ? ` · ${esc(task.unit.duration)}` : ""}</div>`;
-  }
-  h += `</div>`;
 
-  // Actions — max two, per Apps SDK inline-card rules
-  const hasDetail = task.description || task.teacher_comment || files.length > 2 ||
-    (submitted && submitted.length > 1) || (task.discussions && task.discussions.length) || task.unit;
-  h += `<div class="actions">`;
-  if (hasDetail) h += `<button class="btn" id="toggle">Show details</button>`;
-  if (task.url) h += `<button class="btn primary" id="open">${LINK_ICON} Open in ManageBac</button>`;
-  h += `</div>`;
+  // ═══ Action — single primary, per-section expansion replaces Show details ═══
+  if (task.url) {
+    h += `<div class="actions"><button class="btn primary" id="open">${LINK_ICON} Open in ManageBac</button></div>`;
+  }
 
-  card.classList.remove("expanded");
   card.innerHTML = h;
 
-  // ── Wire actions ──
+  // ── Wire: open ──
   document.getElementById("open")?.addEventListener("click", () => {
-    // ChatGPT extension first (skips sandbox popup restrictions), plain fallback otherwise
     if (window.openai?.openExternal) window.openai.openExternal({ href: task.url });
     else window.open(task.url, "_blank", "noopener");
   });
-  const toggle = document.getElementById("toggle");
-  toggle?.addEventListener("click", () => {
-    const expanded = card.classList.toggle("expanded");
-    document.getElementById("desc")?.classList.toggle("clamped", !expanded);
-    document.getElementById("comment")?.classList.toggle("clamped", !expanded);
-    toggle.textContent = expanded ? "Hide details" : "Show details";
-    try { window.openai?.setWidgetState?.({ expanded }); } catch (_) {}
-    reportHeight();
-  });
-  document.getElementById("more-files")?.addEventListener("click", () => toggle?.click());
 
-  // Hide the toggle when expanding would reveal nothing: no hidden detail
-  // sections AND neither clamped block actually overflows its clamp.
-  if (toggle) {
-    const hiddenDetail = document.getElementById("detail").children.length > 0;
-    const clampedOverflows = ["desc", "comment"].some((id) => {
-      const el = document.getElementById(id);
-      return el && el.scrollHeight > el.clientHeight + 1;
-    });
-    if (!hiddenDetail && !clampedOverflows) toggle.remove();
+  // ── Wire: attachment multi-select / future ChatGPT handoff ──
+  function selectedFileObjects() {
+    return selectableFiles.filter((f) => selectedFiles.has(f.key));
   }
+  function saveSelection() {
+    const selected = selectedFileObjects().map((f) => ({
+      name: f.name,
+      url: f.url,
+      source: f.source,
+      meta: f.meta,
+      task_title: task.title,
+      class_name: task.class_name,
+    }));
+    try {
+      window.openai?.setWidgetState?.({
+        sections: { ...sectionState },
+        selected_task_attachments: selected,
+      });
+    } catch (_) {}
+  }
+  function updateSelectionBar() {
+    const bar = document.getElementById("selection-bar");
+    const count = document.getElementById("selection-count");
+    if (!bar || !count) return;
+    const n = selectedFiles.size;
+    bar.classList.toggle("active", n > 0);
+    count.textContent = n === 1 ? "1 attachment selected" : `${n} attachments selected`;
+    for (const row of card.querySelectorAll("[data-file-key]")) {
+      const active = selectedFiles.has(row.dataset.fileKey);
+      row.classList.toggle("selected", active);
+      row.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+    saveSelection();
+    reportHeight();
+  }
+  card.querySelectorAll("[data-file-key]").forEach((row) => {
+    row.addEventListener("click", (ev) => {
+      const openTarget = ev.target.closest("[data-open-url]");
+      if (openTarget) {
+        ev.stopPropagation();
+        const href = openTarget.dataset.openUrl;
+        if (window.openai?.openExternal) window.openai.openExternal({ href });
+        else window.open(href, "_blank", "noopener");
+        return;
+      }
+      const key = row.dataset.fileKey;
+      if (selectedFiles.has(key)) selectedFiles.delete(key);
+      else selectedFiles.add(key);
+      updateSelectionBar();
+    });
+  });
+  document.getElementById("clear-files")?.addEventListener("click", () => {
+    selectedFiles.clear();
+    updateSelectionBar();
+  });
+  document.getElementById("ask-files")?.addEventListener("click", async () => {
+    const selected = selectedFileObjects();
+    if (!selected.length) return;
+    const list = selected.map((f, i) => `${i + 1}. ${f.name}${f.source ? ` (${f.source})` : ""}`).join("\n");
+    const prompt = `Look at this ManageBac task and the selected attachment(s), then help me understand what I need to do.\n\nTask: ${task.title}\nClass: ${task.class_name || "Unknown class"}\n\nSelected attachment(s):\n${list}`;
 
-  // Restore expanded state across re-renders
-  try { if (window.openai?.widgetState?.expanded) document.getElementById("toggle")?.click(); } catch (_) {}
+    // Future real wiring: call a batched backend tool such as
+    // prepare_attachments_for_chatgpt with selected.map(({url,name,source}) => ...)
+    // before sending the follow-up, so ChatGPT receives extracted file content.
+    try { await window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {}
+  });
+  updateSelectionBar();
+
+  // ── Wire: per-section show more/less ──
+  function wireProse(key, blockId, btnId, clampClass, actionId) {
+    const block = document.getElementById(blockId);
+    const btn = document.getElementById(btnId);
+    const action = actionId ? document.getElementById(actionId) : null;
+    if (!block || !btn) return;
+    const apply = () => {
+      block.classList.toggle(clampClass, !sectionState[key]);
+      btn.textContent = sectionState[key] ? "Show less" : "Show more";
+      if (action) action.style.display = sectionState[key] ? "inline-block" : "none";
+    };
+    // Drop the button entirely when the text doesn't actually overflow its clamp
+    if (!sectionState[key] && block.scrollHeight <= block.clientHeight + 1) {
+      btn.remove();
+      if (action) action.style.display = "inline-block";
+      return;
+    }
+    btn.addEventListener("click", () => {
+      sectionState[key] = !sectionState[key];
+      apply(); saveState(); reportHeight();
+    });
+    apply();
+  }
+  wireProse("feedback", "feedback", "feedback-more", "clamp-2");
+  wireProse("desc", "desc", "desc-more", "clamp-3", "desc-summarize");
+
+  document.getElementById("desc-summarize")?.addEventListener("click", () => {
+    const prompt = `Summarize the instructions for "${task.title}" into a short, readable checklist.`;
+    try { window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {}
+  });
+
+  function wireReveal(key, targetId, btnId, closedLabel, openLabel = "Show less") {
+    const target = document.getElementById(targetId);
+    const btn = document.getElementById(btnId);
+    if (!target || !btn) return;
+    const apply = () => {
+      target.style.display = sectionState[key] ? "" : "none";
+      btn.textContent = sectionState[key] ? openLabel : closedLabel;
+    };
+    btn.addEventListener("click", () => {
+      sectionState[key] = !sectionState[key];
+      apply(); saveState(); reportHeight();
+    });
+    apply();
+  }
+  wireReveal("attachments", "files-extra", "attachments-more", `+ ${hiddenAttachmentCount} more`);
+  wireReveal("submissions", "sub-extra", "submissions-more", `+ ${hiddenSubmissionCount} more`);
+  wireReveal("discussions", "disc-extra", "discussions-more", "Show discussion", "Hide discussion");
 
   reportHeight();
 }
 
-// ── Data intake: toolOutput now, notifications later ─────────────────────
+// ── Data intake ──────────────────────────────────────────────────────────
 function hasData(d) { return d && typeof d === "object" && (d.title || d.url); }
 
-applyTheme();
+applyHostContext();
+try {
+  const saved = window.openai?.widgetState?.sections;
+  if (saved && typeof saved === "object") sectionState = { ...sectionState, ...saved };
+} catch (_) {}
 if (hasData(window.openai?.toolOutput)) render(window.openai.toolOutput);
 
 window.addEventListener("message", (ev) => {
@@ -394,7 +608,7 @@ window.addEventListener("message", (ev) => {
 }, { passive: true });
 
 window.addEventListener("openai:set_globals", (ev) => {
-  applyTheme();
+  applyHostContext();
   const d = ev.detail?.globals?.toolOutput ?? window.openai?.toolOutput;
   if (hasData(d) && d !== currentTask) render(d);
 }, { passive: true });

@@ -47,7 +47,9 @@
   .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
   .btn.primary:hover { background:#0270DB; }
   .btn svg { width:14px; height:14px; stroke:currentColor; }
-  .empty { color:var(--text-3); font-size:13px; padding:16px 0 2px; }
+  .empty, .empty-state { color:var(--text-3); font-size:13px; padding:16px 0 2px; }
+  .empty-title { color:var(--text-2); font-weight:600; font-size:13.5px; }
+  .empty-copy { margin-top:2px; color:var(--text-3); }
 
   /* Final grade (emphasised) */
   .final { text-align:right; flex-shrink:0; line-height:1; }
@@ -96,8 +98,9 @@
   .slider-label .val b { color:var(--text); font-weight:600; font-size:14px; }
   .na-tag { font-size:12px; color:var(--text-3); font-style:italic; }
 
-  /* Slider styled to read like the bar chart: filled track + draggable thumb */
-  input[type=range].slider { -webkit-appearance:none; appearance:none; width:100%; height:16px; background:transparent; cursor:grab; margin:0; display:block; }
+  /* Slider styled to read like the bar chart: filled track + draggable thumb.
+     Restrained hover (no glow) — the thumb + grab cursor already signal drag. */
+  input[type=range].slider { -webkit-appearance:none; appearance:none; width:100%; height:16px; background:transparent; cursor:grab; margin:0; display:block; touch-action:none; }
   input[type=range].slider:active { cursor:grabbing; }
   input[type=range].slider::-webkit-slider-runnable-track {
     height:6px; border-radius:999px; background-color:var(--track);
@@ -107,15 +110,14 @@
   input[type=range].slider::-webkit-slider-thumb {
     -webkit-appearance:none; appearance:none; margin-top:-5px;
     width:16px; height:16px; border-radius:50%; background:var(--bg); border:2px solid var(--accent);
-    box-shadow:0 1px 3px rgba(0,0,0,.18); transition:transform .1s ease;
+    box-shadow:0 1px 2px rgba(0,0,0,.16); transition:background-color .1s ease, border-color .1s ease;
   }
-  input[type=range].slider:hover::-webkit-slider-thumb { transform:scale(1.2); box-shadow:0 0 0 6px rgba(2,133,255,.12); }
-  input[type=range].slider:active::-webkit-slider-thumb { transform:scale(1.2); }
-  input[type=range].slider:focus-visible::-webkit-slider-thumb { outline:2px solid var(--accent); outline-offset:3px; }
+  input[type=range].slider:active::-webkit-slider-thumb { background:var(--accent); }
+  input[type=range].slider:focus-visible::-webkit-slider-thumb { outline:2px solid var(--accent); outline-offset:2px; }
   input[type=range].slider::-moz-range-track { height:6px; border-radius:999px; background:var(--track); }
   input[type=range].slider::-moz-range-progress { height:6px; border-radius:999px; background:var(--accent); }
-  input[type=range].slider::-moz-range-thumb { width:16px; height:16px; border-radius:50%; background:var(--bg); border:2px solid var(--accent); box-shadow:0 1px 3px rgba(0,0,0,.18); }
-  input[type=range].slider:hover::-moz-range-thumb { box-shadow:0 0 0 6px rgba(2,133,255,.12); }
+  input[type=range].slider::-moz-range-thumb { width:16px; height:16px; border-radius:50%; background:var(--bg); border:2px solid var(--accent); box-shadow:0 1px 2px rgba(0,0,0,.16); }
+  input[type=range].slider:active::-moz-range-thumb { background:var(--accent); }
 
   .edit-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
   .edit-summary .lbl { font-size:13px; font-weight:600; }
@@ -149,6 +151,9 @@ function reportHeight() { try { window.openai?.notifyIntrinsicHeight?.(document.
 new ResizeObserver(() => reportHeight()).observe(document.body);
 function requestFullscreen() { try { window.openai?.requestDisplayMode?.({ mode: "fullscreen" }); } catch (_) {} }
 function askChatGPT(prompt) { try { window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {} }
+function emptyState(title, copy) {
+  return `<div class="empty-state"><div class="empty-title">${esc(title)}</div>${copy ? `<div class="empty-copy">${esc(copy)}</div>` : ""}</div>`;
+}
 
 // Final IB MYP grade (1-7) from criterion scores. null = not enough data.
 function finalGrade(scoresByCrit) {
@@ -204,7 +209,7 @@ function classRowInline(cls) {
   const level = finalGrade(latestScores(cls.criteria));
   const inline = critInline(cls.criteria || {});
   return `<div class="class-row row-a"><div class="grow"><div class="class-name">${esc(cls.class_name || "Class")}</div>
-    ${inline ? `<div class="crit-inline">${inline}</div>` : `<div class="crit-inline">No grades yet</div>`}</div>${finalGradeEl(level)}</div>`;
+    ${inline ? `<div class="crit-inline">${inline}</div>` : `<div class="crit-inline">No criterion scores yet</div>`}</div>${finalGradeEl(level)}</div>`;
 }
 function classRowBar(cls) {
   const level = finalGrade(latestScores(cls.criteria));
@@ -212,14 +217,14 @@ function classRowBar(cls) {
   const fill = level != null ? (level / MAXGRADE) * 100 : 0;
   return `<div class="class-row row-b"><div class="class-top"><div class="class-name">${esc(cls.class_name || "Class")}</div>${finalGradeEl(level)}</div>
     <div class="grade-bar"><div class="grade-bar-fill" style="width:${fill.toFixed(1)}%"></div></div>
-    ${inline ? `<div class="crit-inline">${inline}</div>` : `<div class="crit-inline">No grades yet</div>`}</div>`;
+    ${inline ? `<div class="crit-inline">${inline}</div>` : `<div class="crit-inline">No criterion scores yet</div>`}</div>`;
 }
 function classRowDetail(cls) {
   const level = finalGrade(latestScores(cls.criteria));
   const present = CRIT.filter((k) => cls.criteria?.[k] && typeof cls.criteria[k].latest === "number");
   const bars = present.map((k) => barRow(k, cls.criteria[k].latest, cls.criteria[k].best)).join("");
   return `<div class="class-row row-b"><div class="class-top"><div class="class-name">${esc(cls.class_name || "Class")}</div>${finalGradeEl(level)}</div>
-    ${present.length ? `<div class="crit-list">${bars}</div>` : `<div class="crit-inline">Not enough data yet</div>`}</div>`;
+    ${present.length ? `<div class="crit-list">${bars}</div>` : `<div class="crit-inline">No criterion scores have been posted yet</div>`}</div>`;
 }
 
 function renderRead(data) {
@@ -228,7 +233,7 @@ function renderRead(data) {
   let h = header(data, classes.length);
   h += `<div class="divider"></div>`;
   if (!classes.length) {
-    h += `<div class="empty">No grades found.</div>`;
+    h += emptyState("No grades available", "ManageBac has not returned any class grades yet.");
   } else if (single) {
     h += `<div class="section-label">Class</div>` + classRowDetail(classes[0]);
     h += `<div class="hint">Final grade is a rough estimate from your latest scores; teachers use best-fit.</div>`;
@@ -280,12 +285,12 @@ function editSliderRow(id, labelHtml, value, min, max, suffix) {
   const fill = ((value - min) / (max - min)) * 100;
   return `<div class="slider-row">
     <div class="slider-label"><span>${labelHtml}</span><span class="val" id="val-${id}"><b>${value}</b>${suffix}</span></div>
-    <input type="range" class="slider" data-id="${id}" min="${min}" max="${max}" step="1" value="${value}"
+    <input type="range" class="slider" data-id="${id}" min="${min}" max="${max}" step="0.01" value="${value}"
       style="--fill:${fill.toFixed(1)}%" aria-label="${labelHtml.replace(/<[^>]+>/g, "")}">
   </div>`;
 }
 function editNARow(labelHtml) {
-  return `<div class="slider-row"><div class="slider-label"><span>${labelHtml}</span><span class="na-tag">N/A · no data</span></div></div>`;
+  return `<div class="slider-row"><div class="slider-label"><span>${labelHtml}</span><span class="na-tag">No criterion scores</span></div></div>`;
 }
 
 function summaryInner(value, was, isOverall) {
@@ -310,7 +315,7 @@ function renderEdit() {
   if (st.mode === "single") {
     h += `<div class="section-label">${esc(st.className)}</div>`;
     if (!st.keys.length) {
-      h += `<div class="empty">Not enough data to predict a grade for this class yet.</div>`;
+      h += emptyState("No scores to adjust yet", "Once criterion scores are posted, sliders will appear here.");
     } else {
       for (const k of st.keys) h += editSliderRow(k, `Criterion <b>${k}</b>`, st.values[k], 0, MAXSCORE, "/8");
       const proj = finalGrade(st.values), was = finalGrade(st.base);
@@ -338,19 +343,51 @@ function renderEdit() {
   card.querySelector("#done")?.addEventListener("click", () => renderRead(st.data));
   card.querySelector("#improve")?.addEventListener("click", askImprove);
   // Live, in-place updates on drag — no re-render, so the drag stays smooth.
-  card.querySelectorAll("input.slider").forEach((inp) => inp.addEventListener("input", () => onSlide(inp)));
+  card.querySelectorAll("input.slider").forEach((inp) => wireSlider(inp));
   reportHeight();
+}
+
+function sliderBounds() {
+  const st = editState;
+  return st.mode === "single"
+    ? { min: 0, max: MAXSCORE, suffix: "/8" }
+    : { min: 1, max: MAXGRADE, suffix: "/7" };
+}
+
+function roundWithin(raw, min, max) {
+  return Math.max(min, Math.min(max, Math.round(Number(raw))));
+}
+
+function setSliderFill(inp, raw, min, max) {
+  const pct = ((Number(raw) - min) / (max - min)) * 100;
+  inp.style.setProperty("--fill", Math.max(0, Math.min(100, pct)).toFixed(1) + "%");
+}
+
+function wireSlider(inp) {
+  inp.addEventListener("input", () => onSlide(inp));
+  inp.addEventListener("change", () => snapSlider(inp));
+  inp.addEventListener("keydown", (ev) => {
+    if (!["ArrowLeft", "ArrowDown", "ArrowRight", "ArrowUp", "Home", "End"].includes(ev.key)) return;
+    ev.preventDefault();
+    const { min, max } = sliderBounds();
+    let next = roundWithin(inp.value, min, max);
+    if (ev.key === "ArrowLeft" || ev.key === "ArrowDown") next -= 1;
+    if (ev.key === "ArrowRight" || ev.key === "ArrowUp") next += 1;
+    if (ev.key === "Home") next = min;
+    if (ev.key === "End") next = max;
+    inp.value = String(Math.max(min, Math.min(max, next)));
+    onSlide(inp);
+  });
 }
 
 function onSlide(inp) {
   const st = editState;
   const id = inp.dataset.id;
-  const min = st.mode === "single" ? 0 : 1;
-  const max = st.mode === "single" ? MAXSCORE : MAXGRADE;
-  const suffix = st.mode === "single" ? "/8" : "/7";
-  const v = parseInt(inp.value, 10);
+  const { min, max, suffix } = sliderBounds();
+  const raw = Number(inp.value);
+  const v = roundWithin(raw, min, max);
   st.values[id] = v;
-  inp.style.setProperty("--fill", (((v - min) / (max - min)) * 100).toFixed(1) + "%");
+  setSliderFill(inp, raw, min, max);
   const valEl = document.getElementById("val-" + id);
   if (valEl) valEl.innerHTML = `<b>${v}</b>${suffix}`;
   const slot = document.getElementById("summary-slot");
@@ -362,6 +399,13 @@ function onSlide(inp) {
       slot.innerHTML = summaryInner(proj, overallOf(Object.values(st.base)), true);
     }
   }
+}
+
+function snapSlider(inp) {
+  const { min, max } = sliderBounds();
+  const v = roundWithin(inp.value, min, max);
+  inp.value = String(v);
+  setSliderFill(inp, v, min, max);
 }
 
 function askImprove() {
