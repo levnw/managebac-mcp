@@ -109,7 +109,7 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_TASK_DETAIL_URI = "ui://widget/task-detail-v7.html"
+_TASK_DETAIL_URI = "ui://widget/task-detail-v8.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -423,17 +423,17 @@ _TASK_CARD_PATH = Path(__file__).parent.parent / "widget-preview" / "task-card.h
 _TASK_CARD_HTML: str = _TASK_CARD_PATH.read_text(encoding="utf-8")
 
 # Class files widget — loaded from disk.
-_CLASS_FILES_URI = "ui://widget/class-files-v2.html"
+_CLASS_FILES_URI = "ui://widget/class-files-v3.html"
 _CLASS_FILES_PATH = Path(__file__).parent.parent / "widget-preview" / "class-files.html"
 _CLASS_FILES_HTML: str = _CLASS_FILES_PATH.read_text(encoding="utf-8")
 
 # Grades widget — per-class criterion bars + estimated MYP level.
-_GRADES_URI = "ui://widget/grades-v2.html"
+_GRADES_URI = "ui://widget/grades-v3.html"
 _GRADES_PATH = Path(__file__).parent.parent / "widget-preview" / "grades-card.html"
 _GRADES_HTML: str = _GRADES_PATH.read_text(encoding="utf-8")
 
 # Timetable widget — weekly grid of classes.
-_TIMETABLE_URI = "ui://widget/timetable-v2.html"
+_TIMETABLE_URI = "ui://widget/timetable-v3.html"
 _TIMETABLE_PATH = Path(__file__).parent.parent / "widget-preview" / "timetable-card.html"
 _TIMETABLE_HTML: str = _TIMETABLE_PATH.read_text(encoding="utf-8")
 
@@ -1805,29 +1805,25 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 # (graded_tasks) so the toolOutput payload stays small; the full
                 # JSON is still in the text content for the model.
                 def _sc_class(c):
-                    # The widget only ever reads criteria[letter].latest (verified against
-                    # widget-preview/grades-card.html) — best/average/out_of/count are real
-                    # data the MODEL can still reason about via the full `content` JSON below,
-                    # but shipping them into structuredContent too was pure dead weight: on
-                    # this project's own 18-class test account, get_grades() with no class_id
-                    # was already 4.6KB — right at ChatGPT's undocumented ~4-5KB widget-drop
-                    # ceiling — from data the widget never displays. See WIDGETS.md §19.
+                    # The redesigned grades widget (widget-preview/grades-card.html) reads
+                    # criteria[letter].latest for the score and .best for the "best" tick on
+                    # the criterion bars — nothing else. average/out_of/count stay out of the
+                    # widget payload (the MODEL still gets them via the full `content` JSON)
+                    # to keep structuredContent under ChatGPT's ~4-5KB widget-drop ceiling.
+                    # graded_tasks was dropped entirely: the old sparkline view that used it
+                    # was removed, so it was pure dead weight (~1.5KB single-class). See
+                    # WIDGETS.md §19.
                     raw_criteria = c.get("criteria") or {}
+                    def _crit(v):
+                        d = {"latest": v.get("latest")}
+                        if v.get("best") is not None:
+                            d["best"] = v.get("best")
+                        return d
                     slim_criteria = {
-                        k: {"latest": v.get("latest")} for k, v in raw_criteria.items()
+                        k: _crit(v) for k, v in raw_criteria.items()
                         if isinstance(v, dict) and v.get("latest") is not None
                     }
-                    out = {"class_name": c.get("class_name"), "criteria": slim_criteria}
-                    # For a single-class request, include slimmed per-task grades so
-                    # the widget can draw ManageBac's task-by-task progress chart.
-                    gts = c.get("graded_tasks")
-                    if gts and len(result["classes"]) == 1:
-                        out["graded_tasks"] = [
-                            {"title": t.get("title"), "type": t.get("type"),
-                             "date": t.get("date"), "grades": t.get("grades")}
-                            for t in gts[:40] if t.get("grades")
-                        ]
-                    return out
+                    return {"class_name": c.get("class_name"), "criteria": slim_criteria}
                 sc = {
                     "scope": result.get("scope"),
                     "url": require_user().mb_url.rstrip("/") + "/student",
