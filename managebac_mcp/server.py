@@ -109,7 +109,7 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_TASK_DETAIL_URI = "ui://widget/task-detail-v8.html"
+_TASK_DETAIL_URI = "ui://widget/task-detail-v9.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -423,27 +423,27 @@ _TASK_CARD_PATH = Path(__file__).parent.parent / "widget-preview" / "task-card.h
 _TASK_CARD_HTML: str = _TASK_CARD_PATH.read_text(encoding="utf-8")
 
 # Class files widget — loaded from disk.
-_CLASS_FILES_URI = "ui://widget/class-files-v3.html"
+_CLASS_FILES_URI = "ui://widget/class-files-v4.html"
 _CLASS_FILES_PATH = Path(__file__).parent.parent / "widget-preview" / "class-files.html"
 _CLASS_FILES_HTML: str = _CLASS_FILES_PATH.read_text(encoding="utf-8")
 
 # Grades widget — per-class criterion bars + estimated MYP level.
-_GRADES_URI = "ui://widget/grades-v3.html"
+_GRADES_URI = "ui://widget/grades-v4.html"
 _GRADES_PATH = Path(__file__).parent.parent / "widget-preview" / "grades-card.html"
 _GRADES_HTML: str = _GRADES_PATH.read_text(encoding="utf-8")
 
 # Timetable widget — weekly grid of classes.
-_TIMETABLE_URI = "ui://widget/timetable-v3.html"
+_TIMETABLE_URI = "ui://widget/timetable-v4.html"
 _TIMETABLE_PATH = Path(__file__).parent.parent / "widget-preview" / "timetable-card.html"
 _TIMETABLE_HTML: str = _TIMETABLE_PATH.read_text(encoding="utf-8")
 
 # Task list widget (get_upcoming) — grouped Upcoming/Completed rows
-_TASK_LIST_URI = "ui://widget/task-list-v1.html"
+_TASK_LIST_URI = "ui://widget/task-list-v2.html"
 _TASK_LIST_PATH = Path(__file__).parent.parent / "widget-preview" / "task-list.html"
 _TASK_LIST_HTML: str = _TASK_LIST_PATH.read_text(encoding="utf-8")
 
 # Class list widget (get_classes) — selectable class rows
-_CLASS_LIST_URI = "ui://widget/class-list-v1.html"
+_CLASS_LIST_URI = "ui://widget/class-list-v2.html"
 _CLASS_LIST_PATH = Path(__file__).parent.parent / "widget-preview" / "class-list.html"
 _CLASS_LIST_HTML: str = _CLASS_LIST_PATH.read_text(encoding="utf-8")
 
@@ -966,18 +966,30 @@ async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerR
     uri = req.params.uri
     uri_str = str(uri)
     info = _STATIC_WIDGETS.get(uri_str) or _TASK_WIDGETS.get(uri_str)
+    canonical_uri = uri_str if uri_str in _STATIC_WIDGETS else None
+    if info is None and uri_str.startswith("ui://widget/task-list"):
+        info = _STATIC_WIDGETS.get(_TASK_LIST_URI)
+        canonical_uri = _TASK_LIST_URI
     if info is None and uri_str.startswith("ui://widget/task"):
         info = _STATIC_WIDGETS.get(_TASK_DETAIL_URI)
+        canonical_uri = _TASK_DETAIL_URI
     if info is None and uri_str.startswith("ui://widget/class-files"):
         info = _STATIC_WIDGETS.get(_CLASS_FILES_URI)
+        canonical_uri = _CLASS_FILES_URI
+    if info is None and uri_str.startswith("ui://widget/grades"):
+        info = _STATIC_WIDGETS.get(_GRADES_URI)
+        canonical_uri = _GRADES_URI
+    if info is None and uri_str.startswith("ui://widget/timetable"):
+        info = _STATIC_WIDGETS.get(_TIMETABLE_URI)
+        canonical_uri = _TIMETABLE_URI
+    if info is None and uri_str.startswith("ui://widget/class-list"):
+        info = _STATIC_WIDGETS.get(_CLASS_LIST_URI)
+        canonical_uri = _CLASS_LIST_URI
     if info is None:
         return types.ServerResult(
             types.ReadResourceResult(contents=[], _meta={"error": f"Unknown resource: {uri_str}"})
         )
-    canonical_uri = (
-        _CLASS_FILES_URI if uri_str.startswith("ui://widget/class-files") else
-        uri_str if uri_str in _STATIC_WIDGETS else _TASK_DETAIL_URI
-    )
+    canonical_uri = canonical_uri or _TASK_DETAIL_URI
     meta = _resource_meta(canonical_uri)
     contents = [
         types.TextResourceContents(uri=uri, mimeType=WIDGET_MIME, text=info["html"], _meta=meta),
@@ -1806,7 +1818,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     *[_detail_sc(c, t, d) for (c, t), d in zip(pairs, fetched)]
                 )
                 full = {"tasks": list(fetched)}
-                sc = {"tasks": list(scs)}
+                sc = scs[0] if len(scs) == 1 else {"tasks": list(scs)}
             else:
                 cid = arguments.get("class_id")
                 tid = arguments.get("task_id")
