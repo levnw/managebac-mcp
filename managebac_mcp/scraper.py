@@ -4,7 +4,9 @@ be unit-tested with fixture files without hitting the network.
 The fetch_*_live wrappers handle HTTP + cache.
 """
 import re
+from datetime import date, datetime
 from typing import Any
+from urllib.parse import urlencode
 from bs4 import BeautifulSoup, Tag
 
 from . import cache
@@ -291,7 +293,31 @@ async def fetch_classes() -> list[dict]:
 # Timetable
 # ---------------------------------------------------------------------------
 
-def parse_timetable(html: str) -> list[dict]:
+def _timetable_day_headers(html: str, year: int | None = None) -> list[dict]:
+    soup = BeautifulSoup(html, "lxml")
+    table = soup.find("table", class_="f-timetable")
+    if not table:
+        return []
+    thead = table.find("thead")
+    if not thead:
+        return []
+    days = []
+    for th in thead.find_all("th")[1:]:  # skip "Period" column
+        label = th.get_text(strip=True)
+        if not label:
+            continue
+        item = {"label": label}
+        if year:
+            try:
+                parsed = datetime.strptime(label, "%b %d, %a").date().replace(year=year)
+                item["date_iso"] = parsed.isoformat()
+            except ValueError:
+                pass
+        days.append(item)
+    return days
+
+
+def parse_timetable(html: str, year: int | None = None) -> list[dict]:
     """
     Parse the weekly timetable from table.f-timetable.
 
@@ -319,11 +345,8 @@ def parse_timetable(html: str) -> list[dict]:
         return slots
 
     # Day names from header row
-    thead = table.find("thead")
-    days = []
-    if thead:
-        for th in thead.find_all("th")[1:]:  # skip "Period" column
-            days.append(th.get_text(strip=True))
+    day_headers = _timetable_day_headers(html, year)
+    days = [d["label"] for d in day_headers]
 
     tbody = table.find("tbody")
     if not tbody:
@@ -393,7 +416,7 @@ def parse_timetable(html: str) -> list[dict]:
                 class_id = class_id_match.group(1) if class_id_match else ""
 
                 if class_name:
-                    slots.append({
+                    slot = {
                         "period": period if period else period_name,
                         "day": day,
                         "time_start": times[0] if times else "",
@@ -403,7 +426,10 @@ def parse_timetable(html: str) -> list[dict]:
                         "teacher": teacher,
                         "room": room,
                         "task_count": task_count,
-                    })
+                    }
+                    if i < len(day_headers) and day_headers[i].get("date_iso"):
+                        slot["date_iso"] = day_headers[i]["date_iso"]
+                    slots.append(slot)
 
     return slots
 
@@ -442,20 +468,70 @@ def _format_file_datetime(iso: str) -> str:
     )
 
 
-async def fetch_timetable() -> dict:
+def _normalize_timetable_anchor(anchor_date: str | date | None) -> date | None:
+    if isinstance(anchor_date, date):
+        return anchor_date
+    raw = (anchor_date or "").strip()
+    if not raw:
+        return None
+    for fmt in ("%Y-%m-%d", "%b %d, %Y", "%B %d, %Y", "%b %d", "%B %d"):
+        try:
+            parsed = datetime.strptime(raw, fmt).date()
+            if "%Y" not in fmt:
+                parsed = parsed.replace(year=date.today().year)
+            return parsed
+        except ValueError:
+            continue
+    return None
+
+
+def _timetable_contains_anchor(days: list[dict], anchor: date) -> bool:
+    return any(d.get("date_iso") == anchor.isoformat() for d in days)
+
+
+async def fetch_timetable(anchor_date: str | date | None = None) -> dict:
     # Timetable slots are cached (they change rarely); the "current" time is
     # always computed fresh so the AI knows what day/time it actually is.
-    # `if slots:` treats a cached EMPTY timetable as a miss — a student always
-    # has a timetable, so empty means a transient fetch failure, not real data.
-    slots = cache.get("get_timetable")
-    if not slots:
-        async with await get_client() as client:
-            r = await authed_get(client, "/student/timetables")
-        slots = parse_timetable(r.text)
-        if slots:                       # never cache an empty parse
-            cache.set("get_timetable", slots, "get_timetable")
+    anchor = _normalize_timetable_anchor(anchor_date)
+    cache_key = f"get_timetable:{anchor.isoformat()}" if anchor else "get_timetable"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        if isinstance(cached, dict):
+            return {"current": _now_info(), **cached}
+        return {"current": _now_info(), "timetable": cached}
 
-    return {"current": _now_info(), "timetable": slots}
+    async with await get_client() as client:
+        if not anchor:
+            r = await authed_get(client, "/student/timetables")
+            slots = parse_timetable(r.text)
+            days = _timetable_day_headers(r.text)
+        else:
+            # ManageBac timetable URLs have varied across deployments. Try the
+            # common date parameter names and keep the response whose header
+            # actually contains the requested date.
+            best_slots: list[dict] = []
+            best_days: list[dict] = []
+            for params in (
+                {"date": anchor.isoformat()},
+                {"day": anchor.isoformat()},
+                {"week": anchor.isoformat()},
+                {"start_date": anchor.isoformat()},
+            ):
+                r = await authed_get(client, "/student/timetables?" + urlencode(params))
+                slots = parse_timetable(r.text, anchor.year)
+                days = _timetable_day_headers(r.text, anchor.year)
+                if _timetable_contains_anchor(days, anchor):
+                    best_slots, best_days = slots, days
+                    break
+                if not best_days:
+                    best_slots, best_days = slots, days
+            slots, days = best_slots, best_days
+
+    payload = {"timetable": slots, "days": days}
+    # Empty historical days are valid if ManageBac returned day headers.
+    if slots or days:
+        cache.set(cache_key, payload, "get_timetable")
+    return {"current": _now_info(), **payload}
 
 
 # ---------------------------------------------------------------------------

@@ -263,9 +263,14 @@ function slotRow(s, currentDay) {
 
 function weekGrid(slots, currentDay, options = {}) {
   const hideSingleDayHeader = !!options.hideSingleDayHeader;
-  const dayOrder = [];
+  const explicitDays = Array.isArray(options.days) ? options.days : [];
+  const dayOrder = explicitDays.map((d) => d.label || d).filter(Boolean);
   const days = new Set();
   const byDay = new Map();
+  for (const day of dayOrder) {
+    days.add(day);
+    byDay.set(day, []);
+  }
   for (const s of slots) {
     const day = s.day || "Today";
     if (!days.has(day)) {
@@ -284,6 +289,9 @@ function weekGrid(slots, currentDay, options = {}) {
     h += `<div class="day-col${today}">
       ${showHeader ? `<div class="day-head"><div class="day-name">${esc(d.label)}</div>${d.date ? `<span class="day-date">${esc(d.date)}</span>` : ""}</div>` : ""}
       <div class="day-body">`;
+    if (!rows.length) {
+      h += `<div class="empty" style="padding:10px 0;color:var(--text-3);font-size:12.5px">No classes</div>`;
+    }
     for (const s of rows) {
       const meta = [s.teacher, s.room].filter(Boolean).join(" | ");
       const time = [s.time, s.time_end].filter(Boolean).join(" - ");
@@ -307,14 +315,15 @@ function renderTimetable(data) {
   selectedLessons = new Set([...selectedLessons].filter((key) => slots.some((s) => s.key === key)));
   const current = data.current || {};
   const currentDay = current.day || current.raw_day || "";
-  const uniqueDays = [...new Set(slots.map((s) => s.day || "Today"))];
+  const explicitDays = (data.days || []).map((d) => d.label || d).filter(Boolean);
+  const uniqueDays = explicitDays.length ? explicitDays : [...new Set(slots.map((s) => s.day || "Today"))];
   const headerSubtitle = [current.weekday, current.date].filter(Boolean).join(", ");
   let h = `<div class="head"><div><div class="title">Timetable</div>${headerSubtitle ? `<div class="subtitle">${esc(headerSubtitle)}</div>` : ""}</div><div class="head-side"><div class="count">${slots.length} ${slots.length === 1 ? "class" : "classes"}</div><button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button></div></div>`;
   h += `<div class="divider"></div>`;
-  if (!slots.length) {
+  if (!slots.length && !uniqueDays.length) {
     h += emptyState("No classes scheduled", "There is no timetable data for this view.");
   } else {
-    h += weekGrid(slots, currentDay, { hideSingleDayHeader: uniqueDays.length === 1 });
+    h += weekGrid(slots, currentDay, { hideSingleDayHeader: uniqueDays.length === 1, days: data.days || [] });
     h += `<div class="selection-bar" id="selection-bar">
             <div class="selection-count" id="selection-count">No classes selected</div>
             <div class="selection-actions">

@@ -274,7 +274,8 @@ function gradeText(task) {
 
 function isUpcoming(task) {
   if (typeof task.due_past === "boolean") return !task.due_past;
-  return (task.group || task.bucket || "").toLowerCase() !== "completed";
+  const group = (task.group || task.bucket || "").toLowerCase();
+  return group !== "completed" && group !== "past";
 }
 
 function row(task) {
@@ -321,7 +322,7 @@ function group(title, tasks, key) {
 function renderTaskList(data) {
   const tasks = (data.tasks || []).filter((t) => t && t.title);
   const upcoming = tasks.filter(isUpcoming);
-  const completed = tasks.filter((t) => !isUpcoming(t));
+  const past = tasks.filter((t) => !isUpcoming(t));
 
   let h = `<div class="head">
     <div>
@@ -339,7 +340,7 @@ function renderTaskList(data) {
   } else {
     h += `<div class="divider"></div>`;
     h += group("Upcoming", upcoming, "upcoming");
-    h += group("Completed", completed, "completed");
+    h += group("Past", past, "past");
   }
 
   if (data.url) {

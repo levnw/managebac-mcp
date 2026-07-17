@@ -4,6 +4,7 @@ import json
 import os
 import sys
 from collections import OrderedDict
+from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
 import time
@@ -1099,10 +1100,11 @@ async def list_tools() -> list[types.Tool]:
                 "actually due or still to submit. "
                 "DAY FILTERING: by default returns the whole week. To show only specific days, "
                 "pass 'days' (a single value or list of: 'today', 'tomorrow', a weekday like "
-                "'Monday', or a date as shown in the timetable like 'Jun 9'). For a span of days, "
-                "pass 'from' and 'to' instead (same accepted values) — e.g. from 'Monday' to "
-                "'Wednesday'. Relative words ('today'/'tomorrow') are resolved in the school's "
-                "timezone, so just pass the student's words through."
+                "'Monday', an ISO date like '2026-05-11', or a date like 'May 11, 2026'). "
+                "For a span of days, pass 'from' and 'to' instead — e.g. from '2026-05-11' "
+                "to '2026-05-14'. Exact dated/ranged requests fetch the timetable anchored to "
+                "those dates; do not claim historical timetable dates are unavailable unless "
+                "the tool returns no data for that exact range. Visual ranges are capped at 4 days."
             ),
             inputSchema={
                 "type": "object",
@@ -1110,7 +1112,7 @@ async def list_tools() -> list[types.Tool]:
                     "days": {
                         "description": "Optional. Which day(s) to show. Omit for the whole week. "
                                        "A single value or a list of: 'today', 'tomorrow', a weekday "
-                                       "('Monday'), or a date ('Jun 9').",
+                                       "('Monday'), an ISO date ('2026-05-11'), or a date ('May 11, 2026').",
                         "oneOf": [
                             {"type": "string"},
                             {"type": "array", "items": {"type": "string"}},
@@ -1119,7 +1121,7 @@ async def list_tools() -> list[types.Tool]:
                     "from": {
                         "type": "string",
                         "description": "Optional start of a day range (weekday, 'today'/'tomorrow', "
-                                       "or a date like 'Jun 9'). Use together with 'to'.",
+                                       "or a date like '2026-05-11' / 'May 11, 2026'). Use together with 'to'.",
                     },
                     "to": {
                         "type": "string",
@@ -1134,8 +1136,9 @@ async def list_tools() -> list[types.Tool]:
             name="show_timetable",
             description=(
                 "Render a visual timetable widget. Use this when the student asks to see today's "
-                "timetable, the week timetable, or a selectable schedule. For reasoning or text-only "
-                "answers, call get_timetable instead."
+                "timetable, the week timetable, a historical date, or a date range. For reasoning "
+                "or text-only answers, call get_timetable instead. Exact dated/ranged requests are "
+                "supported; visual ranges are capped at 4 days."
             ),
             inputSchema={
                 "type": "object",
@@ -1143,7 +1146,7 @@ async def list_tools() -> list[types.Tool]:
                     "days": {
                         "description": "Optional. Which day(s) to show. Omit for the whole week. "
                                        "A single value or a list of: 'today', 'tomorrow', a weekday "
-                                       "('Monday'), or a date ('Jun 9').",
+                                       "('Monday'), an ISO date ('2026-05-11'), or a date ('May 11, 2026').",
                         "oneOf": [
                             {"type": "string"},
                             {"type": "array", "items": {"type": "string"}},
@@ -1152,7 +1155,7 @@ async def list_tools() -> list[types.Tool]:
                     "from": {
                         "type": "string",
                         "description": "Optional start of a day range (weekday, 'today'/'tomorrow', "
-                                       "or a date like 'Jun 9'). Use together with 'to'.",
+                                       "or a date like '2026-05-11' / 'May 11, 2026'). Use together with 'to'.",
                     },
                     "to": {
                         "type": "string",
@@ -1716,6 +1719,83 @@ def _tt_month_day(s: str):
     return (mm.group(1) if mm else None, int(dd.group(1)) if dd else None)
 
 
+def _parse_tt_exact_date(token: str | None) -> date | None:
+    raw = (token or "").strip()
+    if not raw:
+        return None
+    lowered = raw.lower()
+    today = date.today()
+    if lowered in ("today", "tonight"):
+        return today
+    if lowered == "tomorrow":
+        return today + timedelta(days=1)
+    if lowered == "yesterday":
+        return today - timedelta(days=1)
+    for fmt in ("%Y-%m-%d", "%b %d, %Y", "%B %d, %Y", "%b %d", "%B %d"):
+        try:
+            parsed = datetime.strptime(raw, fmt).date()
+            if "%Y" not in fmt:
+                parsed = parsed.replace(year=today.year)
+            return parsed
+        except ValueError:
+            continue
+    return None
+
+
+def _format_tt_day(d: date) -> str:
+    return f"{d.strftime('%b')} {d.day}, {d.strftime('%a')}"
+
+
+def _requested_tt_dates(days_arg, from_arg, to_arg) -> list[date] | None:
+    import re
+    if from_arg or to_arg:
+        start = _parse_tt_exact_date(from_arg) if from_arg else None
+        end = _parse_tt_exact_date(to_arg) if to_arg else None
+        if start or end:
+            start = start or end
+            end = end or start
+            if end < start:
+                start, end = end, start
+            out = []
+            cur = start
+            while cur <= end and len(out) < 4:
+                out.append(cur)
+                cur += timedelta(days=1)
+            return out
+
+    tokens = days_arg if isinstance(days_arg, list) else ([days_arg] if days_arg else [])
+    if len(tokens) == 1 and isinstance(tokens[0], str):
+        parts = re.split(r"\s+[–—-]\s+", tokens[0], maxsplit=1)
+        if len(parts) == 2:
+            start = _parse_tt_exact_date(parts[0])
+            end = _parse_tt_exact_date(parts[1])
+            if start or end:
+                start = start or end
+                end = end or start
+                if end < start:
+                    start, end = end, start
+                out = []
+                cur = start
+                while cur <= end and len(out) < 4:
+                    out.append(cur)
+                    cur += timedelta(days=1)
+                return out
+    exact = [_parse_tt_exact_date(t) for t in tokens]
+    exact = [d for d in exact if d is not None]
+    if exact:
+        seen = set()
+        out = []
+        for d in exact:
+            if d.isoformat() in seen:
+                continue
+            seen.add(d.isoformat())
+            out.append(d)
+            if len(out) >= 4:
+                break
+        return out
+    return None
+
+
 def _tt_matcher(token: str):
     """Resolve a day token to a matcher: ('wd', 'mon') or ('date', (month, day))."""
     import datetime
@@ -1755,16 +1835,24 @@ def _tt_entry_matches(entry, matcher) -> bool:
 
 def _filter_timetable(result: dict, days_arg, from_arg, to_arg) -> dict:
     slots = result.get("timetable") or []
-    if not slots:
+    days_meta = result.get("days") or []
+    if not slots and not days_meta:
         return result
     # distinct days in week order
     order = []
+    for d_item in days_meta:
+        d = d_item.get("label") or ""
+        if not d or any(o[0] == d for o in order):
+            continue
+        parts = [p.strip() for p in d.split(",")]
+        order.append((d, parts[1].lower() if len(parts) > 1 else "",
+                      parts[0].lower() if parts else "", d_item.get("date_iso")))
     for s in slots:
         d = s.get("day") or ""
         if not any(o[0] == d for o in order):
             parts = [p.strip() for p in d.split(",")]
             order.append((d, parts[1].lower() if len(parts) > 1 else "",
-                          parts[0].lower() if parts else ""))
+                          parts[0].lower() if parts else "", s.get("date_iso")))
     keep = None
     tokens = days_arg if isinstance(days_arg, list) else ([days_arg] if days_arg else [])
     if tokens:
@@ -1792,7 +1880,51 @@ def _filter_timetable(result: dict, days_arg, from_arg, to_arg) -> dict:
         return result
     filtered = dict(result)
     filtered["timetable"] = [s for s in slots if (s.get("day") or "") in keep]
+    if days_meta:
+        filtered["days"] = [d for d in days_meta if d.get("label") in keep]
     return filtered
+
+
+def _combine_timetable_days(results: list[dict], requested_dates: list[date]) -> dict:
+    requested_iso = {d.isoformat() for d in requested_dates}
+    requested_labels = {_format_tt_day(d) for d in requested_dates}
+    days_by_iso: OrderedDict[str, dict] = OrderedDict(
+        (d.isoformat(), {"label": _format_tt_day(d), "date_iso": d.isoformat()})
+        for d in requested_dates
+    )
+    slots = []
+    for result in results:
+        for d in result.get("days") or []:
+            iso = d.get("date_iso")
+            label = d.get("label")
+            if iso in requested_iso:
+                days_by_iso[iso] = {"label": label or _format_tt_day(date.fromisoformat(iso)), "date_iso": iso}
+        for s in result.get("timetable") or []:
+            if s.get("date_iso") in requested_iso or s.get("day") in requested_labels:
+                slots.append(s)
+    current = results[0].get("current") if results else {}
+    if len(requested_dates) == 1:
+        d = requested_dates[0]
+        current = {
+            **(current or {}),
+            "weekday": d.strftime("%A"),
+            "date": d.strftime("%B ") + str(d.day) + d.strftime(", %Y"),
+            "day": _format_tt_day(d),
+        }
+    else:
+        start, end = requested_dates[0], requested_dates[-1]
+        current = {
+            **(current or {}),
+            "weekday": "",
+            "date": f"{start.strftime('%b')} {start.day}, {start.year} - {end.strftime('%b')} {end.day}, {end.year}",
+            "day": "",
+        }
+    return {
+        "current": current,
+        "days": list(days_by_iso.values()),
+        "timetable": slots,
+        "range_truncated": len(requested_dates) >= 4,
+    }
 
 
 def _classes_widget_sc(classes: list) -> dict:
@@ -1825,6 +1957,7 @@ def _timetable_widget_sc(result: dict) -> dict:
         slim_slots.append(slot)
     return {
         "current": {k: cur.get(k) for k in ("weekday", "date", "time")},
+        "days": result.get("days") or [],
         "timetable": slim_slots,
         "url": require_user().mb_url.rstrip("/") + "/student/timetables",
     }
@@ -1862,12 +1995,28 @@ def _upcoming_widget_sc(result: dict, view: str) -> dict:
     }
 
 
+def _is_past_task_date(raw: str | None) -> bool | None:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    for fmt in ("%b %d", "%B %d"):
+        try:
+            parsed = datetime.strptime(raw, fmt).date()
+            today = date.today()
+            candidate = parsed.replace(year=today.year)
+            return candidate < today
+        except ValueError:
+            continue
+    return None
+
+
 def _tasks_widget_sc(result, class_names: dict[str, str], title: str = "Tasks") -> dict:
     def is_completed(t: dict) -> bool:
         status = (t.get("status") or "").strip().lower()
         return status in {"submitted", "complete", "completed"} or bool(t.get("grades"))
 
     def slim(t: dict, class_id: str | None = None) -> dict:
+        due_past = _is_past_task_date(t.get("date"))
         out = {
             "title": t.get("title"),
             "url": t.get("url"),
@@ -1876,8 +2025,12 @@ def _tasks_widget_sc(result, class_names: dict[str, str], title: str = "Tasks") 
             "date": t.get("date"),
             "due_day_time": t.get("due_day_time"),
             "grades": t.get("grades"),
-            "bucket": "Completed" if is_completed(t) else "Upcoming",
+            "bucket": "Past" if due_past else "Upcoming",
         }
+        if due_past is not None:
+            out["due_past"] = due_past
+        if is_completed(t):
+            out["is_completed"] = True
         labels = []
         if t.get("type"):
             labels.append({"text": t.get("type")})
@@ -2045,9 +2198,22 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             # else (empty/error) → common return below
 
         elif name in ("get_timetable", "show_timetable"):
-            result = await fetch_timetable()
-            # Optional day filtering: days=["tomorrow"]/"Monday"/"Jun 9", or from/to range.
-            if isinstance(result, dict) and result.get("timetable") and (
+            requested_dates = _requested_tt_dates(arguments.get("days"), arguments.get("from"), arguments.get("to"))
+            if requested_dates:
+                fetched = []
+                seen_anchors = set()
+                for d in requested_dates:
+                    # One anchored week covers multiple requested days, but trying each
+                    # date is harmless and makes cross-week ranges work.
+                    if d.isoformat() in seen_anchors:
+                        continue
+                    seen_anchors.add(d.isoformat())
+                    fetched.append(await fetch_timetable(d.isoformat()))
+                result = _combine_timetable_days(fetched, requested_dates)
+            else:
+                result = await fetch_timetable()
+            # Optional current-week filtering: days=["tomorrow"]/"Monday"/"Jun 9", or from/to range.
+            if not requested_dates and isinstance(result, dict) and (result.get("timetable") or result.get("days")) and (
                 arguments.get("days") or arguments.get("from") or arguments.get("to")
             ):
                 result = _filter_timetable(
