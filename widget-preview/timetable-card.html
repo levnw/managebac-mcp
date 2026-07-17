@@ -189,10 +189,19 @@ function applyHostContext() {
   if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
   document.documentElement.dataset.display = window.openai?.displayMode || "inline";
 }
+let heightFrame = 0;
+let lastReportedHeight = 0;
 function reportHeight() {
-  try { window.openai?.notifyIntrinsicHeight?.(document.body.scrollHeight); } catch (_) {}
+  if (heightFrame) return;
+  heightFrame = requestAnimationFrame(() => {
+    heightFrame = 0;
+    const h = Math.ceil(document.body.scrollHeight);
+    if (Math.abs(h - lastReportedHeight) < 2) return;
+    lastReportedHeight = h;
+    try { window.openai?.notifyIntrinsicHeight?.(h); } catch (_) {}
+  });
 }
-new ResizeObserver(() => reportHeight()).observe(document.body);
+new ResizeObserver(reportHeight).observe(document.body);
 function requestFullscreen() {
   try { window.openai?.requestDisplayMode?.({ mode: "fullscreen" }); } catch (_) {}
 }
@@ -330,7 +339,7 @@ function renderTimetable(data) {
     }));
     try { window.openai?.setWidgetState?.({ selected_timetable_classes: selected }); } catch (_) {}
   }
-  function updateSelectionBar() {
+  function updateSelectionBar(persist = true) {
     const bar = document.getElementById("selection-bar");
     const count = document.getElementById("selection-count");
     if (!bar || !count) return;
@@ -342,7 +351,7 @@ function renderTimetable(data) {
       row.classList.toggle("selected", active);
       row.setAttribute("aria-pressed", active ? "true" : "false");
     });
-    saveSelection();
+    if (persist) saveSelection();
     reportHeight();
   }
   card.querySelectorAll(".lesson").forEach((lesson) => {
@@ -350,7 +359,7 @@ function renderTimetable(data) {
       const key = lesson.dataset.slotKey;
       if (selectedLessons.has(key)) selectedLessons.delete(key);
       else selectedLessons.add(key);
-      updateSelectionBar();
+      updateSelectionBar(true);
     };
     lesson.addEventListener("click", toggleLesson);
     lesson.addEventListener("keydown", (ev) => {
@@ -361,7 +370,7 @@ function renderTimetable(data) {
   });
   document.getElementById("clear-lessons")?.addEventListener("click", () => {
     selectedLessons.clear();
-    updateSelectionBar();
+    updateSelectionBar(true);
   });
   document.getElementById("ask-lessons")?.addEventListener("click", () => {
     const selected = selectedSlotObjects();
@@ -374,7 +383,7 @@ function renderTimetable(data) {
     const prompt = `Use these selected ManageBac timetable classes to help me plan or answer my question.\n\nSelected classes:\n${list}\n\nYou can suggest a study plan, identify likely tasks to check, or help me prepare for these classes.`;
     try { window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {}
   });
-  updateSelectionBar();
+  updateSelectionBar(false);
   reportHeight();
 }
 
@@ -391,6 +400,15 @@ window.addEventListener("openai:set_globals", (ev) => {
   const d = ev.detail?.globals?.toolOutput ?? window.openai?.toolOutput;
   if (d && Array.isArray(d.timetable)) renderTimetable(d);
 }, { passive:true });
+// Safety net: ChatGPT draws the widget frame from the tool template even when
+// the call errors or the payload is dropped — never spin forever. If nothing
+// has rendered after 8s, show a quiet empty state instead of the loader.
+setTimeout(() => {
+  if (!card.querySelector(".head")) {
+    card.innerHTML = '<div style="color:var(--text-3);font-size:13px;padding:14px 0;text-align:center">Nothing to show right now \u2014 ask ChatGPT to try again.</div>';
+    reportHeight();
+  }
+}, 8000);
 </script>
 </body>
 </html>

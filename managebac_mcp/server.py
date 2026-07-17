@@ -1640,7 +1640,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
     try:
         if name == "get_classes":
             result = await fetch_classes()
-            if isinstance(result, list) and result:
+            if isinstance(result, list):
                 # Slim structuredContent for the class-list widget (selectable rows).
                 # id + name are all it renders/needs for selection prompts; the full
                 # class objects (urls, level_tags, has_journal) stay in content.
@@ -1667,11 +1667,16 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 result = _filter_timetable(
                     result, arguments.get("days"), arguments.get("from"), arguments.get("to")
                 )
-            if isinstance(result, dict) and result.get("timetable"):
+            if isinstance(result, dict) and isinstance(result.get("timetable"), list):
                 # Slim structuredContent for the widget — the full timetable is ~7KB,
                 # which ChatGPT silently drops as oversized toolOutput. Short keys +
                 # combined time + omitted empties keep the grid renderable but small.
                 # (p=period, d=day, t=time, c=class, tr=teacher, r=room, n=task_count)
+                # NOTE: an EMPTY timetable (holidays/summer) must still return widget
+                # structuredContent — ChatGPT renders the widget frame from the tool's
+                # outputTemplate regardless, so falling through to the plain {"result":…}
+                # return leaves the frame stuck on "Loading timetable..." forever. The
+                # widget renders its own "No timetable available." empty state.
                 cur = result.get("current") or {}
                 slim_slots = []
                 for s in result["timetable"]:
@@ -1711,10 +1716,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             view = arguments.get("view", "upcoming")
             view = view if view in ("upcoming", "overdue", "past") else "upcoming"
             result = await fetch_upcoming(view)
-            if isinstance(result, dict) and result.get("tasks"):
+            if isinstance(result, dict) and isinstance(result.get("tasks"), list):
                 # Slim structuredContent for the task-list widget. It groups rows by
                 # due_past (false → "Upcoming", true → "Completed") and parses
                 # date/due_time itself; the model still gets the full JSON in content.
+                # Empty task lists still return widget sc (widget shows its own empty
+                # state) — see the get_timetable note on stuck "Loading…" frames.
                 due_past = view in ("overdue", "past")
 
                 def _slim_upcoming(t):
@@ -1838,17 +1845,63 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
         elif name == "get_files":
             cid = arguments["class_id"]
+
+            # Widget payload builder shared by the single-class and batch paths.
+            # File lists can blow ChatGPT's ~4-5KB structuredContent ceiling fast —
+            # presigned download URLs alone run hundreds of bytes each — and an
+            # oversized payload is silently dropped (frame stuck on "Loading…").
+            # Degrade deliberately instead: keep URLs while they fit, then shed
+            # URLs (rows lose their direct link but still render), then cap count.
+            def _files_sc(files_list, class_name, page_url):
+                def slim(f, with_url):
+                    d = {"name": f.get("name")}
+                    for k in ("size", "uploaded_at", "uploaded_by", "folder"):
+                        if f.get(k):
+                            d[k] = f[k]
+                    if with_url and f.get("url"):
+                        d["url"] = f["url"]
+                    return d
+                for with_url, cap in ((True, 80), (True, 40), (False, 80), (False, 40),
+                                      (False, 25), (False, 15), (False, 8)):
+                    sc = {"files": [slim(f, with_url) for f in files_list[:cap]],
+                          "class_name": class_name, "url": page_url}
+                    if len(json.dumps(sc).encode("utf-8")) <= 4200:
+                        return sc
+                return {"files": [], "class_name": class_name, "url": page_url}
+
+            mb_url = require_user().mb_url.rstrip("/")
             if _is_batch(cid):
                 result = await _batch(fetch_files, cid)
+                # Batch also renders the files widget: merge every class's files into
+                # one list, using the class NAME as the folder label so the widget's
+                # folder grouping becomes per-class grouping. Without this the batch
+                # path fell through to {"result":…} and the widget frame ChatGPT had
+                # already drawn stayed stuck on "Loading files...".
+                classes = await fetch_classes()
+                name_of = {str(c.get("id")): c.get("name", "") for c in classes}
+                merged = []
+                for one_id, one_files in result.items():
+                    if not isinstance(one_files, list):
+                        continue
+                    label = name_of.get(str(one_id)) or f"Class {one_id}"
+                    for f in one_files:
+                        merged.append({**f, "folder": label})
+                n_classes = len([v for v in result.values() if isinstance(v, list)])
+                sc = _files_sc(merged, f"{n_classes} classes", f"{mb_url}/student")
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
+                return types.CallToolResult(
+                    content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
+                    structuredContent=sc,
+                    _meta=_FILES_META_STATIC,
+                )
             else:
                 files = await fetch_files(cid)
                 # Resolve class name from cached classes list (usually free).
                 classes = await fetch_classes()
                 cls = next((c for c in classes if str(c.get("id")) == str(cid)), {})
                 class_name = cls.get("name", "")
-                mb_url = require_user().mb_url.rstrip("/")
-                files_url = f"{mb_url}/student/classes/{cid}/files"
-                sc = {"files": files[:80], "class_name": class_name, "url": files_url}
+                sc = _files_sc(files, class_name, f"{mb_url}/student/classes/{cid}/files")
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, {"files": files}, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
@@ -1886,7 +1939,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
         elif name == "get_grades":
             result = await fetch_grades(arguments.get("class_id", ""))
-            if isinstance(result, dict) and result.get("classes"):
+            if isinstance(result, dict) and isinstance(result.get("classes"), list):
                 # Slim structuredContent for the widget: drop per-task detail
                 # (graded_tasks) so the toolOutput payload stays small; the full
                 # JSON is still in the text content for the model.

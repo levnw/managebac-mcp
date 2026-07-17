@@ -266,10 +266,19 @@ function applyHostContext() {
   if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
   document.documentElement.dataset.display = window.openai?.displayMode || "inline";
 }
+let heightFrame = 0;
+let lastReportedHeight = 0;
 function reportHeight() {
-  try { window.openai?.notifyIntrinsicHeight?.(document.body.scrollHeight); } catch (_) {}
+  if (heightFrame) return;
+  heightFrame = requestAnimationFrame(() => {
+    heightFrame = 0;
+    const h = Math.ceil(document.body.scrollHeight);
+    if (Math.abs(h - lastReportedHeight) < 2) return;
+    lastReportedHeight = h;
+    try { window.openai?.notifyIntrinsicHeight?.(h); } catch (_) {}
+  });
 }
-new ResizeObserver(() => reportHeight()).observe(document.body);
+new ResizeObserver(reportHeight).observe(document.body);
 
 // ── Per-section expanded state, persisted via setWidgetState ─────────────
 let sectionState = { feedback: false, desc: false, attachments: false, submissions: false, discussions: false };
@@ -488,7 +497,7 @@ function render(task) {
       });
     } catch (_) {}
   }
-  function updateSelectionBar() {
+  function updateSelectionBar(persist = true) {
     const bar = document.getElementById("selection-bar");
     const count = document.getElementById("selection-count");
     if (!bar || !count) return;
@@ -500,7 +509,7 @@ function render(task) {
       row.classList.toggle("selected", active);
       row.setAttribute("aria-pressed", active ? "true" : "false");
     }
-    saveSelection();
+    if (persist) saveSelection();
     reportHeight();
   }
   card.querySelectorAll("[data-file-key]").forEach((row) => {
@@ -516,12 +525,12 @@ function render(task) {
       const key = row.dataset.fileKey;
       if (selectedFiles.has(key)) selectedFiles.delete(key);
       else selectedFiles.add(key);
-      updateSelectionBar();
+      updateSelectionBar(true);
     });
   });
   document.getElementById("clear-files")?.addEventListener("click", () => {
     selectedFiles.clear();
-    updateSelectionBar();
+    updateSelectionBar(true);
   });
   document.getElementById("ask-files")?.addEventListener("click", async () => {
     const selected = selectedFileObjects();
@@ -534,7 +543,7 @@ function render(task) {
     // before sending the follow-up, so ChatGPT receives extracted file content.
     try { await window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {}
   });
-  updateSelectionBar();
+  updateSelectionBar(false);
 
   // ── Wire: per-section show more/less ──
   function wireProse(key, blockId, btnId, clampClass, actionId) {
@@ -615,6 +624,15 @@ window.addEventListener("openai:set_globals", (ev) => {
 
 // Console/harness hook
 window.renderTaskCard = render;
+// Safety net: ChatGPT draws the widget frame from the tool template even when
+// the call errors or the payload is dropped — never spin forever. If nothing
+// has rendered after 8s, show a quiet empty state instead of the loader.
+setTimeout(() => {
+  if (!card.querySelector(".head")) {
+    card.innerHTML = '<div style="color:var(--text-3);font-size:13px;padding:14px 0;text-align:center">Nothing to show right now \u2014 ask ChatGPT to try again.</div>';
+    reportHeight();
+  }
+}, 8000);
 </script>
 </body>
 </html>

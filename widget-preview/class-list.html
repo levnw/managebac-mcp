@@ -77,10 +77,19 @@ function applyHostContext() {
   if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
   document.documentElement.dataset.display = window.openai?.displayMode || "inline";
 }
+let heightFrame = 0;
+let lastReportedHeight = 0;
 function reportHeight() {
-  try { window.openai?.notifyIntrinsicHeight?.(document.body.scrollHeight); } catch (_) {}
+  if (heightFrame) return;
+  heightFrame = requestAnimationFrame(() => {
+    heightFrame = 0;
+    const h = Math.ceil(document.body.scrollHeight);
+    if (Math.abs(h - lastReportedHeight) < 2) return;
+    lastReportedHeight = h;
+    try { window.openai?.notifyIntrinsicHeight?.(h); } catch (_) {}
+  });
 }
-new ResizeObserver(() => reportHeight()).observe(document.body);
+new ResizeObserver(reportHeight).observe(document.body);
 function emptyState(title, copy) {
   return `<div class="empty-state"><div class="empty-title">${esc(title)}</div>${copy ? `<div class="empty-copy">${esc(copy)}</div>` : ""}</div>`;
 }
@@ -142,7 +151,7 @@ function renderClasses(data) {
     }));
     try { window.openai?.setWidgetState?.({ selected_classes: selected }); } catch (_) {}
   }
-  function updateSelectionBar() {
+  function updateSelectionBar(persist = true) {
     const bar = document.getElementById("selection-bar");
     const count = document.getElementById("selection-count");
     if (!bar || !count) return;
@@ -154,7 +163,7 @@ function renderClasses(data) {
       row.classList.toggle("selected", active);
       row.setAttribute("aria-pressed", active ? "true" : "false");
     });
-    saveSelection();
+    if (persist) saveSelection();
     reportHeight();
   }
   card.querySelectorAll("[data-class-key]").forEach((row) => {
@@ -162,12 +171,12 @@ function renderClasses(data) {
       const key = row.dataset.classKey;
       if (selectedClasses.has(key)) selectedClasses.delete(key);
       else selectedClasses.add(key);
-      updateSelectionBar();
+      updateSelectionBar(true);
     });
   });
   document.getElementById("clear-classes")?.addEventListener("click", () => {
     selectedClasses.clear();
-    updateSelectionBar();
+    updateSelectionBar(true);
   });
   document.getElementById("ask-classes")?.addEventListener("click", () => {
     const selected = selectedClassObjects();
@@ -179,7 +188,7 @@ function renderClasses(data) {
     const prompt = `Use these selected ManageBac classes to help me plan, find tasks, or organize what I should work on.\n\nSelected classes:\n${list}`;
     try { window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {}
   });
-  updateSelectionBar();
+  updateSelectionBar(false);
   reportHeight();
 }
 
@@ -196,6 +205,15 @@ window.addEventListener("openai:set_globals", (ev) => {
   const d = ev.detail?.globals?.toolOutput ?? window.openai?.toolOutput;
   if (d && Array.isArray(d.classes)) renderClasses(d);
 }, { passive:true });
+// Safety net: ChatGPT draws the widget frame from the tool template even when
+// the call errors or the payload is dropped — never spin forever. If nothing
+// has rendered after 8s, show a quiet empty state instead of the loader.
+setTimeout(() => {
+  if (!card.querySelector(".head")) {
+    card.innerHTML = '<div style="color:var(--text-3);font-size:13px;padding:14px 0;text-align:center">Nothing to show right now \u2014 ask ChatGPT to try again.</div>';
+    reportHeight();
+  }
+}, 8000);
 </script>
 </body>
 </html>
