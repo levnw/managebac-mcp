@@ -924,12 +924,7 @@ async def _ui_task_detail(request):
             document.querySelectorAll('.view-file').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const url = e.target.dataset.url;
-                    window.parent.postMessage({
-                        jsonrpc: "2.0",
-                        id: Math.random(),
-                        method: "tools/call",
-                        params: { name: "get_file_content", arguments: { url: url } }
-                    }, "*");
+                    window.open(url, "_blank", "noopener");
                 });
             });
         }

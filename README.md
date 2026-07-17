@@ -34,12 +34,12 @@ Once set up, you can ask your AI things like:
 | `get_units(class_id)` | All curriculum units with the full IB framework — statement of inquiry, key concepts, related concepts, global context, inquiry questions, ATL skills, status |
 | `get_files(class_id)` | Resource files the teacher uploaded to the class, each with a download URL |
 | `get_journal(class_id)` | Learner portfolio / journal entries with body text (Markdown), links, and attached files |
-| `get_file_content(url)` | Downloads any attachment using your session and returns the raw file (PDF, image, …) for the AI to read natively — no text conversion |
 | `submit_task_file(class_id, task_id, file_path)` | ⚠️ Uploads a local file to a task's dropbox. Always previews first; only submits on explicit confirmation |
 | `find_task(query)` | Find a task by pasting a ManageBac URL, or fuzzy-search by title across all classes |
 | `get_upcoming` | Upcoming tasks across **all** classes in one call, sorted by due date |
 | `get_grades(class_id?)` | Grades across all classes, or the per-criterion breakdown + graded tasks for one class |
 | `tag_search(tag)` | Find tasks carrying a given tag (e.g. "Summative", "Homework") across all classes |
+| `show_*` tools | Visual ChatGPT widgets (`show_task_detail`, `show_grades`, `show_timetable`, `show_files`, `show_classes`, `show_upcoming`) |
 | `refresh` | Drop the cache for the current user so the next fetch pulls live data from ManageBac |
 
 > For cross-class questions the AI should prefer the consolidated tools
@@ -56,10 +56,9 @@ This lets the AI pull data for every subject at once instead of one call per cla
 - **Fuzzy title mode**: type part of a task name → searches across all classes and returns the best match
 
 ### Reading attachments
-`get_task_detail` and `get_files` expose a `url` on every file. Pass that URL to
-`get_file_content` and the server downloads it through your authenticated session
-and hands the raw file straight to the AI — so the AI can read a teacher's PDF
-worksheet, rubric, or novel without you downloading anything yourself.
+`get_task_detail` and `get_files` expose a `url` on every file. ChatGPT-facing
+file analysis now goes through the widget attachment-selection flow rather than
+a separate file-content command.
 
 ### Submitting work
 `submit_task_file` uploads a local file to a task's submission dropbox. It is the
@@ -317,7 +316,7 @@ tests/
 - **In-chat enroll via `/connect`** — a second keyless MCP endpoint (`enroll_server.py`) exposes a single `enroll` tool. Students add the `/connect` URL as a connector, say "enroll me", and the tool collects email + invite code (never the password). It hands back a one-time `/set-password` link (30-min TTL); the password is typed there, not in chat. Compliant with OpenAI Apps SDK policy.
 - **Pending-enrollment store** — `admin.py` gains a `pending_enrollments` SQLite table with `create_pending / get_pending / delete_pending`; tokens are one-time and expire automatically.
 - **Invite code system** — new users require a valid, unused invite code (generated via the admin panel). Codes are consumed atomically *after* the ManageBac login is confirmed valid, so a failed attempt never wastes a code. Returning users can re-enroll to update their password without a code.
-- **Rich ChatGPT widgets** — four native-card widgets (Apps SDK structuredContent): task card (`get_task_detail` / `find_task`), grades progress chart (`get_grades`), weekly timetable (`get_timetable`), class files view (`get_files`). Header colour matches the student's ManageBac theme.
+- **Rich ChatGPT widgets** — native-card widgets (Apps SDK structuredContent) are exposed through `show_*` tools, separate from data-only `get_*` tools.
 - **Multi-user isolation** — request-scoped per-user context (`context.py`) with fail-closed enforcement; every cache row is namespaced by user id; passwords encrypted at rest.
 - **ChatGPT / remote support** — `managebac-mcp serve` runs the same tools over Streamable HTTP, protected by a secret token, through a Cloudflare Tunnel or reverse proxy. Stdio (Claude Desktop) and HTTP share the same tool definitions.
 - **`submit_task_file` now works remotely** — accepts `file_base64` + `filename` in addition to a local `file_path`, so clients with no shared filesystem (ChatGPT) can submit too.
@@ -329,13 +328,12 @@ The full toolset is in place and working end-to-end against a live account.
 
 **New tools since v0.1.0:**
 - `get_units` — every curriculum unit with the full IB framework (statement of inquiry, key concepts + definitions, related concepts, global context, conceptual understanding, inquiry questions typed Factual/Conceptual/Debatable, ATL skills, status). Fetches all unit detail popups concurrently in one session.
-- `get_file_content` — downloads any attachment through the authenticated session and returns the **raw file** (PDF/image/…) so the AI reads it natively — no lossy text conversion.
 - `submit_task_file` — uploads a local file to a task's dropbox (multipart POST with CSRF). The only write operation; defaults to `dry_run=true` and only uploads on explicit confirmation.
 
 **Improvements:**
 - **Batch fetching** — `get_tasks`, `get_task_detail`, `get_units`, `get_files`, and `get_journal` accept a list of IDs and fetch concurrently (≈3× faster for multi-subject queries).
 - Tool descriptions rewritten to be school-agnostic — no hardcoded URL, no IB/MYP wording — so the server works for any ManageBac school.
-- `get_files` now exposes a `url` (pre-signed download link) on every file, so class-wide files can be read with `get_file_content`.
+- `get_files` now exposes a `url` (pre-signed download link) on every file.
 
 **Bugs fixed:**
 - `lxml` was silently stripping the `data-ec3-info` attribute that holds class file download URLs → `parse_files` now uses `html.parser`.
@@ -367,7 +365,7 @@ Future work is tracked in GitHub Issues instead of being maintained as a static 
 ### Done
 
 - ✅ Unit context (`get_units`)
-- ✅ Reading protected task attachments and class files (`get_file_content`)
+- ✅ Selecting protected task attachments and class files for ChatGPT handoff
 - ✅ Submitting work to a task (`submit_task_file`)
 - ✅ Multi-user hosted server with per-user isolation and encrypted credential storage
 - ✅ ChatGPT support via Streamable HTTP + Cloudflare Tunnel

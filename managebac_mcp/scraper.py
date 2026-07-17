@@ -945,9 +945,8 @@ def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
             continue
 
         # The real, downloadable file URL — a signed CDN link in the filename
-        # anchor's href. THIS is what get_file_content needs. (The old code kept
-        # only the preview-modal token below, which is an HTML popup, not a file,
-        # so reading a submitted file 404'd.)
+        # anchor's href. The widget attachment-selection flow needs this direct
+        # file URL; the preview-modal token below is an HTML popup, not a file.
         download_url = ""
         if file_link and file_link.name == "a":
             download_url = file_link.get("href", "")
@@ -970,7 +969,7 @@ def parse_task_detail(html: str, class_id: str, task_id: str) -> dict:
 
         submitted_files.append({
             "name": fname,
-            "url": download_url,          # pass this to get_file_content to read it
+            "url": download_url,
             "uploaded_at": uploaded_at,
             "teacher_feedback_token": feedback_token,
         })

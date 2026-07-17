@@ -990,8 +990,8 @@ conversation). It caught two real issues the first pass missed:
    widget UI can show an honest "this is a preview" state instead of implying "Show More" always
    has more to actually show.
 
-Codex separately confirmed: the annotation choices are correct (including the two it was asked
-to double-check, `refresh` and `get_file_content`); the dropped grade fields
+Codex separately confirmed: the annotation choices were correct for the then-current tool set
+(including `refresh`); the dropped grade fields
 (`best`/`average`/`out_of`/`count`) are genuinely unused by `grades-card.html`, confirmed by its
 own read of the widget source; and the decision to defer the data/render tool split is sound for
 the stated reason — the combined shape's real downside (data tools having to budget for widget
@@ -1032,10 +1032,11 @@ respectively, both safely under the ~4-5KB ceiling).
     attachment URL into a composer attachment.
   - Tools can accept ChatGPT file inputs via `_meta["openai/fileParams"]`, but that solves the
     inverse case: ChatGPT/user passes a file to a tool.
-  - For ManageBac attachments, the likely implementation is still widget -> `callTool` ->
-    server-side authenticated download/extraction (`get_file_content`, batched, or a new
-    `prepare_attachments_for_chatgpt`) -> `sendFollowUpMessage` asking ChatGPT to analyze the
-    selected files with the current task context. If we later need true file handles instead of
+  - For ManageBac attachments, the preferred implementation is widget selection ->
+    a dedicated attachment-preparation path (for example `prepare_attachments_for_chatgpt`,
+    batched) -> `sendFollowUpMessage` asking ChatGPT to analyze the selected files with the
+    current task context. Do not expose a general `get_file_content` command to the model.
+    If we later need true file handles instead of
     extracted text/image content, research whether MCP tool file references can be returned by this
     Python SDK/server stack and then consumed with `getFileDownloadUrl`.
   - UX should separate "open/download attachment" from "ask ChatGPT about this attachment", and

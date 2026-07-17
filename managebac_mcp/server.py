@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import os
 import sys
 from collections import OrderedDict
 from html.parser import HTMLParser
@@ -18,7 +19,6 @@ from .scraper import (
     fetch_files,
     fetch_journal,
     fetch_units,
-    fetch_file_readable,
     fetch_upcoming,
     fetch_grades,
     tag_search,
@@ -43,8 +43,8 @@ SERVER_INSTRUCTIONS = (
     "- When the student asks about several subjects at once, pass a list of class_ids "
     "in a single call rather than calling one class at a time.\n"
     "- Dates and times are already in the student's school timezone — use them as given.\n"
-    "- get_task_detail and get_files expose a file `url`; if the student wants to read "
-    "an attachment, pass that url to get_file_content.\n"
+    "- get_task_detail and get_files expose attachment/file URLs. If the student wants ChatGPT "
+    "to inspect attachments, use the widget attachment-selection flow rather than an MCP file-reading tool.\n"
     "- Use `get_*` tools when you need data for reasoning or text answers; they do not render widgets. "
     "Use `show_*` tools only when the student asks to see a visual card/list/table/widget.\n"
     "- Data is cached for speed (tasks ~10 min, classes/units longer). If the student asks "
@@ -384,11 +384,7 @@ _TASK_DETAIL_HTML = """<!DOCTYPE html>
 
       document.querySelectorAll('.view-file').forEach(btn => {
         btn.addEventListener('click', () => {
-          window.parent.postMessage({
-            jsonrpc: '2.0', id: Date.now(),
-            method: 'tools/call',
-            params: { name: 'get_file_content', arguments: { url: btn.dataset.url } }
-          }, '*');
+          window.open(btn.dataset.url, '_blank', 'noopener');
         });
       });
     }
@@ -466,7 +462,9 @@ _STATIC_WIDGETS = {
 _TASK_WIDGETS: OrderedDict = OrderedDict()
 
 # Public base URL — set by http_server.py at startup so we can build widget URLs.
-_SERVER_PUBLIC_URL: str = "http://localhost:8000"
+# Default to the deployed HTTPS origin so import-time tool metadata never points
+# ChatGPT at localhost.
+_SERVER_PUBLIC_URL: str = "https://managebac.822538.xyz"
 
 
 def set_server_public_url(url: str) -> None:
@@ -554,19 +552,6 @@ def _md_to_html(md: str) -> str:
     flush_para()
     flush_list()
     return "\n".join(html_parts)
-
-
-# ManageBac personalisation themes → their primary brand colour (from ManageBac's
-# own CSS). The widget header uses this so the card matches the student's chosen
-# ManageBac theme. Keys match the `theme-<name>` body class on every MB page.
-_THEME_COLORS = {
-    "blue":   "#1570ef",
-    "orange": "#dc6803",
-    "red":    "#d92d20",
-    "plum":   "#5d3460",
-    "teal":   "#00857d",
-}
-_DEFAULT_THEME_COLOR = _THEME_COLORS["blue"]  # ManageBac's default theme
 
 
 class _HtmlTruncator(HTMLParser):
@@ -846,7 +831,6 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
         "resources": resources,
         "discussions": discussions,
         "due_passed_late": due_past,
-        "theme_color": _THEME_COLORS.get(detail.get("theme"), _DEFAULT_THEME_COLOR),
         "images": desc_images or [],
     }
     return task_obj
@@ -869,13 +853,12 @@ def _make_task_widget(task_obj: dict) -> str:
     return _TASK_DETAIL_URI
 
 
-# Content-Security-Policy for the widget iframe. resourceDomains lists the hosts
-# the widget may load images/fonts/scripts from — needed so embedded ManageBac
-# description images (served from *.managebac.com, incl. the regional CDNs the
-# /attachments permalinks redirect to) render inside ChatGPT's sandbox.
+# Content-Security-Policy for the widget iframe. Keep the two domains separate:
+# - ManageBac domains: remote LMS assets/images/files the widget may display.
+# - Widget domain: the origin hosting this MCP server's widget resources.
 # CRITICAL: the CSP must be on the resource returned by resources/read, not just
 # resources/list (that's why it kept showing "CSP not set").
-_CSP_DOMAINS = [
+_MANAGEBAC_RESOURCE_DOMAINS = [
     "https://*.managebac.com",
     "https://es.managebac.com",
     "https://assets.managebac.com",
@@ -883,18 +866,37 @@ _CSP_DOMAINS = [
     "https://cdn.uk.managebac.com",
     "https://cdn.managebac.com",
 ]
+_DEFAULT_WIDGET_DOMAIN = "https://managebac.822538.xyz"
+
+
+def _widget_domain() -> str:
+    return (os.environ.get("MANAGEBAC_WIDGET_DOMAIN") or _SERVER_PUBLIC_URL or _DEFAULT_WIDGET_DOMAIN).rstrip("/")
+
+
 # Apps SDK documented format (ui.csp, camelCase)
-_WIDGET_CSP = {"connectDomains": [], "resourceDomains": _CSP_DOMAINS}
+def _widget_csp() -> dict:
+    return {
+        "connectDomains": [_widget_domain()],
+        "resourceDomains": _MANAGEBAC_RESOURCE_DOMAINS,
+    }
+
+
 # Alternate format some ChatGPT builds read (openai/widgetCSP, snake_case).
 # Including both maximises the chance the sandbox honours one of them.
-_WIDGET_CSP_ALT = {"connect_domains": [], "resource_domains": _CSP_DOMAINS, "redirect_domains": []}
+def _widget_csp_alt() -> dict:
+    return {
+        "connect_domains": [_widget_domain()],
+        "resource_domains": _MANAGEBAC_RESOURCE_DOMAINS,
+        "redirect_domains": [_widget_domain()],
+    }
 
 
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
     return {
         "openai/outputTemplate": uri,
-        "ui": {"resourceUri": uri, "csp": _WIDGET_CSP},
-        "openai/widgetCSP": _WIDGET_CSP_ALT,
+        "ui": {"resourceUri": uri, "domain": _widget_domain(), "csp": _widget_csp()},
+        "openai/widgetDomain": _widget_domain(),
+        "openai/widgetCSP": _widget_csp_alt(),
         "openai/toolInvocation/invoking": invoking,
         "openai/toolInvocation/invoked": invoked,
         "openai/widgetAccessible": True,
@@ -932,8 +934,9 @@ def _resource_meta(uri: str) -> dict:
         "openai/widgetAccessible": True,
         "openai/toolInvocation/invoking": invoking,
         "openai/toolInvocation/invoked": invoked,
-        "ui": {"csp": _WIDGET_CSP},
-        "openai/widgetCSP": _WIDGET_CSP_ALT,
+        "ui": {"domain": _widget_domain(), "csp": _widget_csp()},
+        "openai/widgetDomain": _widget_domain(),
+        "openai/widgetCSP": _widget_csp_alt(),
     }
 
 
@@ -1223,8 +1226,7 @@ async def list_tools() -> list[types.Tool]:
                 "description.text (full instructions as Markdown), "
                 "description.links (external URLs embedded by the teacher), "
                 "resources (teacher-posted files), "
-                "submitted_files (the student's own uploads — each has a `url` you can pass to "
-                "get_file_content to read the PDF/doc they turned in), "
+                "submitted_files (the student's own uploads, with file URLs for the widget attachment-selection flow), "
                 "task_history, discussions."
             ),
             inputSchema={
@@ -1310,7 +1312,7 @@ async def list_tools() -> list[types.Tool]:
                 "resources, or worksheets on ManageBac. "
                 "BATCH SUPPORTED: class_id can be a single ID or a list. "
                 "Each file has: name, size, url (pre-signed download link), uploaded_by, uploaded_at. "
-                "Pass url to get_file_content to read the actual file contents."
+                "For ChatGPT file analysis, use the widget file-selection flow instead of an MCP file-content command."
             ),
             inputSchema={
                 "type": "object",
@@ -1370,28 +1372,6 @@ async def list_tools() -> list[types.Tool]:
                     },
                 },
                 "required": ["class_id"],
-            },
-            annotations=_RO_ANNOTATIONS,
-        ),
-        types.Tool(
-            name="get_file_content",
-            description=(
-                "Reads an attachment (PDF, Word .docx, text, or image) using the student's "
-                "authenticated session and returns its CONTENT directly — extracted text for "
-                "documents, or the image itself. Use the url from description.embedded_files[].url, "
-                "resources[].files[].url, or a class file's url. "
-                "Returns lightweight text (not a raw file blob), so it won't bloat the conversation. "
-                "Long documents are truncated. Cached on disk for 1 hour."
-            ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "Full attachment URL from embedded_files[].url or resources[].files[].url",
-                    }
-                },
-                "required": ["url"],
             },
             annotations=_RO_ANNOTATIONS,
         ),
@@ -1546,7 +1526,7 @@ async def list_tools() -> list[types.Tool]:
     _passthrough_schema = {"type": "object", "additionalProperties": True}
     _own_sc_tools = {
         "show_classes", "show_timetable", "show_upcoming", "show_task_detail",
-        "show_files", "show_grades", "get_file_content", "test_ui",
+        "show_files", "show_grades", "test_ui",
     }
     for _t in _tools:
         _t.outputSchema = _passthrough_schema if _t.name in _own_sc_tools else _result_schema
@@ -2111,26 +2091,6 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 result = await _batch(fetch_journal, cid)
             else:
                 result = await fetch_journal(cid)
-
-        elif name == "get_file_content":
-            f = await fetch_file_readable(arguments["url"])
-            duration_ms = int((time.monotonic() - t0) * 1000)
-            if f["kind"] == "image":
-                cache.log_request(name, arguments, {"kind": "image", "content_type": f.get("content_type")},
-                                  source="mcp", duration_ms=duration_ms)
-                return types.CallToolResult(
-                    content=[types.ImageContent(type="image", data=f["data_b64"], mimeType=f["content_type"])],
-                    structuredContent={"kind": "image", "content_type": f.get("content_type")},
-                )
-            elif f["kind"] == "text":
-                cache.log_request(name, arguments, {"kind": "text", "truncated": f.get("truncated")},
-                                  source="mcp", duration_ms=duration_ms)
-                return types.CallToolResult(
-                    content=[types.TextContent(type="text", text=f["text"])],
-                    structuredContent={"kind": "text", "truncated": bool(f.get("truncated"))},
-                )
-            else:
-                result = {"error": f["error"], "tool": name}
 
         elif name in ("get_grades", "show_grades"):
             result = await fetch_grades(arguments.get("class_id", ""))
