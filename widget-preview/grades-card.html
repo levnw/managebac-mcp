@@ -54,8 +54,6 @@
   /* Final grade (emphasised) */
   .final { text-align:right; flex-shrink:0; line-height:1; }
   .final-num { font-size:24px; font-weight:700; color:var(--text); }
-  .final-num .of { font-size:13px; font-weight:600; color:var(--text-3); }
-  .final-label { font-size:10px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin-top:3px; }
   .final-num.na { font-size:15px; color:var(--text-3); font-weight:600; }
 
   /* Inline criteria */
@@ -71,6 +69,34 @@
   .row-b .class-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
   .grade-bar { position:relative; height:8px; border-radius:999px; background:var(--track); overflow:hidden; margin:9px 0 8px; }
   .grade-bar-fill { position:absolute; left:0; top:0; bottom:0; border-radius:999px; background:var(--accent); }
+
+  /* Report-card fullscreen view */
+  .report { border-top:1px solid var(--border); }
+  .report-head, .report-row {
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) 210px 70px;
+    gap:14px;
+    align-items:start;
+  }
+  .report-head {
+    color:var(--text-2);
+    font-size:12px;
+    font-weight:600;
+    padding:0 0 8px;
+    border-bottom:1px solid var(--border);
+  }
+  .report-row { padding:12px 0; border-bottom:1px solid var(--border); }
+  .report-class { min-width:0; }
+  .report-name { color:var(--text); font-size:14px; font-weight:600; line-height:1.25; }
+  .report-teacher { color:var(--text-2); font-size:12.5px; font-weight:600; margin-top:2px; }
+  .criteria-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; text-align:center; }
+  .crit-letter { color:var(--accent); font-size:12px; font-weight:600; line-height:1.1; }
+  .crit-value { color:var(--text); font-size:13px; line-height:1.2; margin-top:2px; }
+  .report-final { color:var(--text); font-size:15px; font-weight:600; text-align:center; }
+  :root:not([data-display="fullscreen"]) .report { display:none; }
+  @media (max-width:560px) {
+    .report-head, .report-row { grid-template-columns:minmax(0, 1fr) 164px 44px; gap:10px; }
+  }
 
   /* Criterion bars */
   .crit-list { margin-top:12px; display:flex; flex-direction:column; gap:9px; }
@@ -197,8 +223,8 @@ function overallOf(levels) {
 function fmtOverall(v) { return v == null ? "N/A" : (Math.round(v * 10) / 10).toFixed(1); }
 
 function finalGradeEl(level) {
-  if (level == null) return `<div class="final"><div class="final-num na">N/A</div><div class="final-label">Final grade</div></div>`;
-  return `<div class="final"><div class="final-num">${level}<span class="of">/7</span></div><div class="final-label">Final grade</div></div>`;
+  if (level == null) return `<div class="final"><div class="final-num na">N/A</div></div>`;
+  return `<div class="final"><div class="final-num">${level}</div></div>`;
 }
 function critInline(criteria) {
   return CRIT.map((k) => {
@@ -238,30 +264,55 @@ function classRowDetail(cls) {
     ${present.length ? `<div class="crit-list">${bars}</div>` : `<div class="crit-inline">No criterion scores have been posted yet</div>`}</div>`;
 }
 
+function reportClassRow(cls) {
+  const scores = latestScores(cls.criteria);
+  const level = finalGrade(scores);
+  const criteria = CRIT.map((k) => {
+    const v = typeof scores[k] === "number" ? scores[k] : "N/A";
+    return `<div><div class="crit-letter">${k}</div><div class="crit-value">${esc(v)}</div></div>`;
+  }).join("");
+  return `<div class="report-row">
+    <div class="report-class">
+      <div class="report-name">${esc(cls.class_name || "Class")}</div>
+      ${cls.teacher ? `<div class="report-teacher">${esc(cls.teacher)}</div>` : ""}
+    </div>
+    <div class="criteria-grid">${criteria}</div>
+    <div class="report-final">${level == null ? "N/A" : esc(level)}</div>
+  </div>`;
+}
+
+function reportView(classes) {
+  return `<div class="report">
+    <div class="report-head">
+      <div>Class</div>
+      <div style="text-align:center">Achievement Levels</div>
+      <div style="text-align:center">Final Grade</div>
+    </div>
+    ${classes.map(reportClassRow).join("")}
+  </div>`;
+}
+
 function renderRead(data) {
   const classes = (data.classes || []).filter(Boolean);
   const single = classes.length === 1;
+  const fullscreen = document.documentElement.dataset.display === "fullscreen";
   let h = header(data, classes.length);
   h += `<div class="divider"></div>`;
   if (!classes.length) {
     h += emptyState("No grades available", "ManageBac has not returned any class grades yet.");
+  } else if (fullscreen) {
+    h += reportView(classes);
   } else if (single) {
     h += `<div class="section-label">Class</div>` + classRowDetail(classes[0]);
-    h += `<div class="hint">Final grade is a rough estimate from your latest scores; teachers use best-fit.</div>`;
   } else {
     h += `<div class="section-label">Classes</div>`;
-    h += classes.map(gradeStyle() === "bar" ? classRowBar : classRowInline).join("");
-    const overall = overallOf(classes.map((c) => finalGrade(latestScores(c.criteria))));
-    h += `<div class="overall"><div class="overall-label">Overall</div><div class="overall-val${overall == null ? " na" : ""}">${overall == null ? "N/A" : fmtOverall(overall)}${overall == null ? "" : '<span class="of" style="font-size:13px;font-weight:600;color:var(--text-3)"> /7</span>'}</div></div>`;
-    h += `<div class="hint">Overall is the average of your class final grades. Estimates use latest scores; teachers use best-fit.</div>`;
+    h += classes.map(classRowInline).join("");
   }
   h += `<div class="actions">
-    <button class="btn" id="edit">${EDIT_ICON} Edit &amp; predict</button>
     ${data.url ? `<a class="btn primary" href="${esc(data.url)}" target="_blank" rel="noopener">${LINK_ICON} Open in ManageBac</a>` : ""}
   </div>`;
   card.innerHTML = h;
   card.querySelector("#expand")?.addEventListener("click", requestFullscreen);
-  card.querySelector("#edit")?.addEventListener("click", () => enterEdit(data));
   reportHeight();
 }
 

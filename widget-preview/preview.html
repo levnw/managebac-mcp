@@ -282,16 +282,16 @@ const GRADES_SCENARIOS = {
     scope: "All classes",
     url: "https://es.managebac.com/student/classes",
     classes: [
-      { class_name: "IB MYP Geography (Grade 8) B", criteria: { A: { latest: 7 }, B: { latest: 6 }, C: { latest: 8 }, D: { latest: 7 } } },
-      { class_name: "Design (Grade 8) AB", criteria: { A: { latest: 6 }, C: { latest: 7 } } },
-      { class_name: "Spanish Phase 1", criteria: { B: { latest: 5 }, C: { latest: 6 }, D: { latest: 6 } } },
+      { class_name: "IB MYP Geography (Grade 8) B", teacher: "Tamar Tako Pilauri", criteria: { A: { latest: 7 }, B: { latest: 6 }, C: { latest: 8 }, D: { latest: 7 } } },
+      { class_name: "Design (Grade 8) AB", teacher: "Ms. Gvazava", criteria: { A: { latest: 6 }, C: { latest: 7 } } },
+      { class_name: "Spanish Phase 1", teacher: "Sabrina Fagué", criteria: { B: { latest: 5 }, C: { latest: 6 }, D: { latest: 6 } } },
     ],
   },
   "some classes N/A": {
     scope: "All classes",
     url: "https://es.managebac.com/student/classes",
     classes: [
-      { class_name: "IB MYP Geography (Grade 8) B", criteria: { A: { latest: 7 }, B: { latest: 6 }, C: { latest: 8 }, D: { latest: 7 } } },
+      { class_name: "IB MYP Geography (Grade 8) B", teacher: "Tamar Tako Pilauri", criteria: { A: { latest: 7 }, B: { latest: 6 }, C: { latest: 8 }, D: { latest: 7 } } },
       { class_name: "Design (Grade 8) AB — new term", criteria: {} },
       { class_name: "Georgian B (Extracurricular)", criteria: {} },
       { class_name: "Spanish Phase 1", criteria: { B: { latest: 5 }, C: { latest: 6 }, D: { latest: 6 } } },
@@ -315,6 +315,7 @@ const GRADES_SCENARIOS = {
     url: "https://es.managebac.com/student/classes/12905543/grades",
     classes: [{
       class_name: "IB MYP Geography (Grade 8) B",
+      teacher: "Tamar Tako Pilauri",
       criteria: { A: { latest: 7, best: 7 }, B: { latest: 6, best: 7 }, C: { latest: 8, best: 8 }, D: { latest: 7, best: 7 } },
       // newest first (as ManageBac returns) — the card reverses for trend order.
       // Trajectories: A climbing, B slipping (7→6), C climbing to ceiling, D climbing.

@@ -1502,8 +1502,8 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="show_grades",
             description=(
-                "Render a visual grades widget with criterion bars and predictor controls. "
-                "Use this when the student asks to see grades visually or interact with grade prediction. "
+                "Render a visual grades widget with class final grades and IB criterion scores. "
+                "Use this when the student asks to see grades visually. "
                 "For advice/reasoning about grades without a widget, call get_grades instead."
             ),
             inputSchema={
@@ -2107,7 +2107,10 @@ def _grades_widget_sc(result: dict) -> dict:
             k: crit(v) for k, v in raw_criteria.items()
             if isinstance(v, dict) and v.get("latest") is not None
         }
-        return {"class_name": c.get("class_name"), "criteria": slim_criteria}
+        out = {"class_name": c.get("class_name"), "criteria": slim_criteria}
+        if c.get("teacher"):
+            out["teacher"] = c.get("teacher")
+        return out
 
     return {
         "scope": result.get("scope"),
