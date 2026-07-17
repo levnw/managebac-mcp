@@ -39,7 +39,7 @@ Once set up, you can ask your AI things like:
 | `get_upcoming` | Upcoming tasks across **all** classes in one call, sorted by due date |
 | `get_grades(class_id?)` | Grades across all classes, or the per-criterion breakdown + graded tasks for one class |
 | `tag_search(tag)` | Find tasks carrying a given tag (e.g. "Summative", "Homework") across all classes |
-| `show_*` tools | Visual ChatGPT widgets (`show_task_detail`, `show_grades`, `show_timetable`, `show_files`, `show_classes`, `show_upcoming`) |
+| `show_*` tools | Visual ChatGPT widgets (`show_task_detail`, `show_tasks`, `show_grades`, `show_timetable`, `show_files`, `show_classes`, `show_upcoming`) |
 | `refresh` | Drop the cache for the current user so the next fetch pulls live data from ManageBac |
 
 > For cross-class questions the AI should prefer the consolidated tools

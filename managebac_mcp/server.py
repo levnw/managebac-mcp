@@ -47,6 +47,8 @@ SERVER_INSTRUCTIONS = (
     "to inspect attachments, use the widget attachment-selection flow rather than an MCP file-reading tool.\n"
     "- Use `get_*` tools when you need data for reasoning or text answers; they do not render widgets. "
     "Use `show_*` tools only when the student asks to see a visual card/list/table/widget.\n"
+    "- After calling a `show_*` tool, do not repeat the widget's rows/details in prose. Give at most "
+    "a one-sentence orientation or summary, because the widget is already the visual answer.\n"
     "- Data is cached for speed (tasks ~10 min, classes/units longer). If the student asks "
     "to 'update', 'refresh', 'check again', or is waiting on a new grade/task, call refresh "
     "first and then re-fetch — that pulls live data from ManageBac.\n"
@@ -891,12 +893,51 @@ def _widget_csp_alt() -> dict:
     }
 
 
+def _widget_description(uri: str) -> str:
+    if uri == _CLASS_LIST_URI:
+        return "Interactive class list. Do not repeat the class names in prose unless the user asks for a written copy."
+    if uri == _TASK_LIST_URI:
+        return "Interactive task list. Do not restate the full task list in prose; summarize only if useful."
+    if uri == _TASK_DETAIL_URI:
+        return "Interactive task-detail card. Do not repeat the full task description, files, or feedback in prose."
+    if uri == _GRADES_URI:
+        return "Interactive grades widget. Do not duplicate every criterion score in prose unless asked."
+    if uri == _TIMETABLE_URI:
+        return "Interactive timetable widget. Do not repeat every class period in prose unless asked."
+    if uri == _CLASS_FILES_URI:
+        return "Interactive class-files widget. Do not repeat every file name in prose unless asked."
+    return "Interactive ManageBac widget. Avoid duplicating the widget contents in prose."
+
+
+def _widget_content_text(uri: str, sc: dict | None = None) -> str:
+    sc = sc or {}
+    if uri == _CLASS_LIST_URI:
+        count = len(sc.get("classes") or [])
+        return f"Rendered an interactive class list widget with {count} classes. Do not repeat the list in prose."
+    if uri == _TASK_LIST_URI:
+        count = len(sc.get("tasks") or [])
+        return f"Rendered an interactive task list widget with {count} tasks. Do not repeat the task rows in prose."
+    if uri == _TASK_DETAIL_URI:
+        return "Rendered an interactive task-detail widget. Do not repeat the task description, files, or feedback in prose."
+    if uri == _GRADES_URI:
+        count = len(sc.get("classes") or [])
+        return f"Rendered an interactive grades widget for {count} classes. Do not repeat the scores in prose."
+    if uri == _TIMETABLE_URI:
+        count = len(sc.get("days") or sc.get("timetable") or [])
+        return f"Rendered an interactive timetable widget with {count} days. Do not repeat the schedule in prose."
+    if uri == _CLASS_FILES_URI:
+        count = len(sc.get("files") or [])
+        return f"Rendered an interactive class-files widget with {count} files. Do not repeat the file names in prose."
+    return "Rendered an interactive ManageBac widget. Do not repeat the widget contents in prose."
+
+
 def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
     return {
         "openai/outputTemplate": uri,
         "ui": {"resourceUri": uri, "domain": _widget_domain(), "csp": _widget_csp()},
         "openai/widgetDomain": _widget_domain(),
         "openai/widgetCSP": _widget_csp_alt(),
+        "openai/widgetDescription": _widget_description(uri),
         "openai/toolInvocation/invoking": invoking,
         "openai/toolInvocation/invoked": invoked,
         "openai/widgetAccessible": True,
@@ -934,6 +975,7 @@ def _resource_meta(uri: str) -> dict:
         "openai/widgetAccessible": True,
         "openai/toolInvocation/invoking": invoking,
         "openai/toolInvocation/invoked": invoked,
+        "openai/widgetDescription": _widget_description(uri),
         "ui": {"domain": _widget_domain(), "csp": _widget_csp()},
         "openai/widgetDomain": _widget_domain(),
         "openai/widgetCSP": _widget_csp_alt(),
@@ -1213,6 +1255,30 @@ async def list_tools() -> list[types.Tool]:
                 },
                 "required": ["class_id"],
             },
+            annotations=_RO_ANNOTATIONS,
+        ),
+        types.Tool(
+            name="show_tasks",
+            description=(
+                "Render a visual task-list widget for recent tasks in one class, or a small batch of classes. "
+                "Use this when the student asks to show/list/display tasks for a specific class using a widget "
+                "(for example, 'show my Digital Design tasks using a widget'). For text-only reasoning, call get_tasks instead. "
+                "After this tool renders, do not repeat the full task list in prose."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "class_id": {
+                        "description": "A single class ID or a small list of class IDs for batch rendering",
+                        "oneOf": [
+                            {"type": "string"},
+                            {"type": "array", "items": {"type": "string"}},
+                        ],
+                    }
+                },
+                "required": ["class_id"],
+            },
+            _meta=_TASK_LIST_META_STATIC,
             annotations=_RO_ANNOTATIONS,
         ),
         types.Tool(
@@ -1526,7 +1592,7 @@ async def list_tools() -> list[types.Tool]:
     _passthrough_schema = {"type": "object", "additionalProperties": True}
     _own_sc_tools = {
         "show_classes", "show_timetable", "show_upcoming", "show_task_detail",
-        "show_files", "show_grades", "test_ui",
+        "show_tasks", "show_files", "show_grades", "test_ui",
     }
     for _t in _tools:
         _t.outputSchema = _passthrough_schema if _t.name in _own_sc_tools else _result_schema
@@ -1796,6 +1862,57 @@ def _upcoming_widget_sc(result: dict, view: str) -> dict:
     }
 
 
+def _tasks_widget_sc(result, class_names: dict[str, str], title: str = "Tasks") -> dict:
+    def is_completed(t: dict) -> bool:
+        status = (t.get("status") or "").strip().lower()
+        return status in {"submitted", "complete", "completed"} or bool(t.get("grades"))
+
+    def slim(t: dict, class_id: str | None = None) -> dict:
+        out = {
+            "title": t.get("title"),
+            "url": t.get("url"),
+            "type": t.get("type"),
+            "status": t.get("status"),
+            "date": t.get("date"),
+            "due_day_time": t.get("due_day_time"),
+            "grades": t.get("grades"),
+            "bucket": "Completed" if is_completed(t) else "Upcoming",
+        }
+        labels = []
+        if t.get("type"):
+            labels.append({"text": t.get("type")})
+        labels.extend({"text": tag} for tag in (t.get("tags") or [])[:2])
+        if labels:
+            out["labels"] = labels
+        cid = str(t.get("class_id") or class_id or "")
+        class_name = t.get("class_name") or class_names.get(cid)
+        if class_name:
+            out["class_name"] = class_name
+        if t.get("teacher_comment"):
+            out["teacher_comment"] = True
+        return {k: v for k, v in out.items() if v not in (None, "", [], {})}
+
+    tasks = []
+    class_name = ""
+    if isinstance(result, dict):
+        for cid, class_tasks in result.items():
+            tasks.extend(slim(t, str(cid)) for t in (class_tasks or []) if isinstance(t, dict))
+        if len(result) == 1:
+            only_id = str(next(iter(result.keys())))
+            class_name = class_names.get(only_id, "")
+    else:
+        tasks = [slim(t) for t in (result or []) if isinstance(t, dict)]
+
+    sc = {
+        "title": title,
+        "tasks": tasks[:40],
+        "url": require_user().mb_url.rstrip("/") + "/student",
+    }
+    if class_name:
+        sc["class_name"] = class_name
+    return sc
+
+
 def _files_widget_sc(files_list, class_name, page_url):
     # File lists can blow ChatGPT's ~4-5KB structuredContent ceiling fast:
     # presigned download URLs alone run hundreds of bytes each. Keep URLs while
@@ -1917,11 +2034,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
         if name in ("get_classes", "show_classes"):
             result = await fetch_classes()
             if name == "show_classes" and isinstance(result, list):
+                sc = _classes_widget_sc(result)
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
-                    content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
-                    structuredContent=_classes_widget_sc(result),
+                    content=[types.TextContent(type="text", text=_widget_content_text(_CLASS_LIST_URI, sc))],
+                    structuredContent=sc,
                     _meta=_CLASS_LIST_META_STATIC,
                 )
             # else (empty/error) → common return below
@@ -1936,11 +2054,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     result, arguments.get("days"), arguments.get("from"), arguments.get("to")
                 )
             if name == "show_timetable" and isinstance(result, dict) and isinstance(result.get("timetable"), list):
+                sc = _timetable_widget_sc(result)
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
-                    content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
-                    structuredContent=_timetable_widget_sc(result),
+                    content=[types.TextContent(type="text", text=_widget_content_text(_TIMETABLE_URI, sc))],
+                    structuredContent=sc,
                     _meta=_TIMETABLE_META_STATIC,
                 )
             # else (empty/error) → common return below
@@ -1955,21 +2074,34 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             view = view if view in ("upcoming", "overdue", "past") else "upcoming"
             result = await fetch_upcoming(view)
             if name == "show_upcoming" and isinstance(result, dict) and isinstance(result.get("tasks"), list):
+                sc = _upcoming_widget_sc(result, view)
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
-                    content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
-                    structuredContent=_upcoming_widget_sc(result, view),
+                    content=[types.TextContent(type="text", text=_widget_content_text(_TASK_LIST_URI, sc))],
+                    structuredContent=sc,
                     _meta=_TASK_LIST_META_STATIC,
                 )
             # else (empty/error) → common return below
 
-        elif name == "get_tasks":
+        elif name in ("get_tasks", "show_tasks"):
             cid = arguments["class_id"]
             if _is_batch(cid):
                 result = await _batch(fetch_tasks, cid)
             else:
                 result = await fetch_tasks(cid)
+            if name == "show_tasks":
+                classes = await fetch_classes()
+                class_names = {str(c.get("id")): c.get("name", "") for c in classes}
+                title = "Class tasks" if _is_batch(cid) else "Tasks"
+                sc = _tasks_widget_sc(result, class_names, title)
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
+                return types.CallToolResult(
+                    content=[types.TextContent(type="text", text=_widget_content_text(_TASK_LIST_URI, sc))],
+                    structuredContent=sc,
+                    _meta=_TASK_LIST_META_STATIC,
+                )
             result = _slim_tasks(result)   # drop teacher_comment to protect context
 
         elif name in ("get_task_detail", "show_task_detail"):
@@ -2013,7 +2145,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     duration_ms = int((time.monotonic() - t0) * 1000)
                     cache.log_request(name, arguments, full, source="mcp", duration_ms=duration_ms)
                     return types.CallToolResult(
-                        content=[types.TextContent(type="text", text=json.dumps(full, ensure_ascii=False, separators=(",", ":")))],
+                        content=[types.TextContent(type="text", text=_widget_content_text(_TASK_DETAIL_URI, sc))],
                         structuredContent=sc,
                         _meta=_TASK_META_STATIC,
                     )
@@ -2032,7 +2164,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, full, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
-                    content=[types.TextContent(type="text", text=json.dumps(full, ensure_ascii=False, separators=(",", ":")))],
+                    content=[types.TextContent(type="text", text=_widget_content_text(_TASK_DETAIL_URI, sc))],
                     structuredContent=sc,
                     _meta=_TASK_META_STATIC,
                 )
@@ -2065,7 +2197,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     duration_ms = int((time.monotonic() - t0) * 1000)
                     cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
                     return types.CallToolResult(
-                        content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
+                        content=[types.TextContent(type="text", text=_widget_content_text(_CLASS_FILES_URI, sc))],
                         structuredContent=sc,
                         _meta=_FILES_META_STATIC,
                     )
@@ -2080,7 +2212,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                     duration_ms = int((time.monotonic() - t0) * 1000)
                     cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
                     return types.CallToolResult(
-                        content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
+                        content=[types.TextContent(type="text", text=_widget_content_text(_CLASS_FILES_URI, sc))],
                         structuredContent=sc,
                         _meta=_FILES_META_STATIC,
                     )
@@ -2095,11 +2227,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
         elif name in ("get_grades", "show_grades"):
             result = await fetch_grades(arguments.get("class_id", ""))
             if name == "show_grades" and isinstance(result, dict) and isinstance(result.get("classes"), list):
+                sc = _grades_widget_sc(result)
                 duration_ms = int((time.monotonic() - t0) * 1000)
                 cache.log_request(name, arguments, result, source="mcp", duration_ms=duration_ms)
                 return types.CallToolResult(
-                    content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, separators=(",", ":")))],
-                    structuredContent=_grades_widget_sc(result),
+                    content=[types.TextContent(type="text", text=_widget_content_text(_GRADES_URI, sc))],
+                    structuredContent=sc,
                     _meta=_GRADES_META_STATIC,
                 )
             # else (error / no classes) → common return below
