@@ -4,7 +4,7 @@ An MCP (Model Context Protocol) server that gives AI assistants access to your M
 
 Works with **Claude Desktop** out of the box (local stdio), and with **ChatGPT** or any HTTP MCP client via the built-in HTTP server (`managebac-mcp serve`) behind a tunnel or reverse proxy.
 
-> ⚠️ **Almost entirely read-only.** Every tool reads data except one: `submit_task_file`, which uploads a file to a task's dropbox. It defaults to a preview-only dry run and only ever uploads when explicitly confirmed. The server never comments, deletes, or modifies anything else.
+> ⚠️ **Read-only over MCP.** Every tool exposed to an AI assistant only reads data — the server never comments, deletes, or modifies anything in ManageBac. (File submission to a task dropbox exists only as an operator CLI command, `managebac-mcp submit`; it is not exposed as an AI tool.)
 
 ---
 
@@ -34,7 +34,6 @@ Once set up, you can ask your AI things like:
 | `get_units(class_id)` | All curriculum units with the full IB framework — statement of inquiry, key concepts, related concepts, global context, inquiry questions, ATL skills, status |
 | `get_files(class_id)` | Resource files the teacher uploaded to the class, each with a download URL |
 | `get_journal(class_id)` | Learner portfolio / journal entries with body text (Markdown), links, and attached files |
-| `submit_task_file(class_id, task_id, file_path)` | ⚠️ Uploads a local file to a task's dropbox. Always previews first; only submits on explicit confirmation |
 | `find_task(query)` | Find a task by pasting a ManageBac URL, or fuzzy-search by title across all classes |
 | `get_upcoming` | Upcoming tasks across **all** classes in one call, sorted by due date |
 | `get_grades(class_id?)` | Grades across all classes, or the per-criterion breakdown + graded tasks for one class |
@@ -60,11 +59,10 @@ This lets the AI pull data for every subject at once instead of one call per cla
 file analysis now goes through the widget attachment-selection flow rather than
 a separate file-content command.
 
-### Submitting work
-`submit_task_file` uploads a local file to a task's submission dropbox. It is the
-only **write** operation in the server and is deliberately cautious: it defaults to
-`dry_run=true` (preview only) and only uploads when explicitly told to. Save the
-file to an absolute path (e.g. `/tmp/essay.pdf`) before calling it.
+### Submitting work (operator CLI only)
+`managebac-mcp submit` uploads a local file to a task's submission dropbox — the
+one **write** path, available only from the terminal, never as an AI tool. It
+defaults to `--dry-run` (preview only) and uploads only when explicitly told to.
 
 ---
 
@@ -205,13 +203,6 @@ view (`get_files`). The card header colour matches the student's ManageBac theme
 managebac-mcp users          # list enrolled users
 managebac-mcp deluser <id>   # remove a user and wipe their cached data
 ```
-
-### Submitting files from ChatGPT
-
-`submit_task_file` accepts the file two ways. Locally (Claude) it reads a
-`file_path`. Remotely (ChatGPT) there's no shared filesystem, so it accepts
-`file_base64` + `filename` instead — the AI sends the file's bytes through the
-tool. Both still preview first with `dry_run=true`.
 
 ---
 

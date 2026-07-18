@@ -4,6 +4,16 @@ A complete cold-start briefing for another AI/engineer picking up this project.
 Everything you need: what it is, where it lives, how it's deployed, what's been
 fixed, what to watch out for, and what's left.
 
+> **Doc map (read these for current specifics):** `DEPLOY.md` = how prod is
+> deployed (macOS/launchd). `WIDGETS.md` = the ChatGPT Apps SDK reference + the
+> widget/backend gap analysis. `ARCHIVE_2026-07-16_pre-redesign.md` = frozen
+> checkpoint before the design refresh. This file is the overview; where it and
+> a specialized doc disagree, trust the specialized doc and the code.
+>
+> **Auth note:** the connector is now OAuth 2.1 (ChatGPT sign-in popup, see
+> `oauth.py` + `/authorize`/`/token`), NOT the old `?key=` URL — some sections
+> below predate that change.
+
 ---
 
 ## 1. What this is
