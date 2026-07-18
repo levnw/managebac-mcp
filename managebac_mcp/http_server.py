@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from urllib.parse import urlencode
 
 from starlette.applications import Starlette
-from starlette.routing import Mount, Route
+from starlette.routing import Route
 from starlette.responses import HTMLResponse, PlainTextResponse, JSONResponse, RedirectResponse, Response
 from starlette.types import Scope, Receive, Send
 
@@ -24,7 +24,7 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
 from . import users, config, admin, cache, branding, oauth
 from .context import set_current_user, reset_user, User
-from .server import server, _TASK_WIDGETS, set_server_public_url
+from .server import server, set_server_public_url
 from .enroll_server import enroll_server, set_enroll_public_url
 
 # Public URL for UI component links (set by build_app)
@@ -1002,196 +1002,6 @@ async def _admin_panel(request):
 
 
 # ---------------------------------------------------------------------------
-# UI Components (served to ChatGPT iframes)
-# ---------------------------------------------------------------------------
-
-async def _ui_task_detail(request):
-    """Serve the task-detail UI component page."""
-    html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Task Detail</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        html, body { margin: 0; padding: 0; height: 100%; }
-        body { display: flex; flex-direction: column; overflow: hidden; }
-        #root { flex: 1; overflow: auto; }
-        .file-list { display: flex; flex-direction: column; gap: 0.5rem; }
-        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid; }
-        .file-item.attachment { background-color: #f1f5f9; border-color: #e2e8f0; }
-        .file-item.submitted { background-color: #f0fdf4; border-color: #dcfce7; }
-        .dark .file-item.attachment { background-color: #1e293b; border-color: #334155; }
-        .dark .file-item.submitted { background-color: #052e16; border-color: #166534; }
-        .prose { max-width: 100%; }
-    </style>
-</head>
-<body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50">
-    <div id="root">
-        <div class="p-4 text-center text-gray-500">Loading task...</div>
-    </div>
-
-    <script>
-        // Render task detail
-        function render(task) {
-            if (!task) {
-                document.getElementById('root').innerHTML = '<div class="p-4 text-center text-gray-500">No task data</div>';
-                return;
-            }
-
-            let html = '<div class="overflow-auto p-6 max-w-4xl mx-auto">';
-
-            // Header
-            html += '<div class="mb-6">';
-            html += '<h1 class="text-3xl font-bold mb-2">' + _escape(task.title || 'Task') + '</h1>';
-            if (task.status) {
-                const statusClass = task.status.includes('submitted')
-                    ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100'
-                    : task.status.includes('not submitted')
-                    ? 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-100'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100';
-                html += '<span class="inline-block px-3 py-1 rounded-full text-sm font-medium ' + statusClass + '">' + _escape(task.status) + '</span>';
-            }
-            html += '</div>';
-
-            // Due date
-            if (task.due_date) {
-                html += '<div class="mb-4 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg">';
-                html += '<p class="text-sm text-slate-600 dark:text-slate-400">Due: <strong>' + _escape(task.due_date) + '</strong></p>';
-                html += '</div>';
-            }
-
-            // Description
-            if (task.description) {
-                html += '<div class="mb-6">';
-                html += '<h2 class="text-xl font-semibold mb-3">Description</h2>';
-                if (typeof task.description === 'string') {
-                    html += '<p>' + _escape(task.description) + '</p>';
-                } else if (task.description.text) {
-                    html += '<div class="prose dark:prose-invert">' + task.description.text + '</div>';
-                }
-                if (task.description.links && task.description.links.length > 0) {
-                    html += '<div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">';
-                    html += '<p class="text-sm font-medium mb-2">Links:</p>';
-                    html += '<ul class="space-y-2">';
-                    for (const link of task.description.links) {
-                        html += '<li><a href="' + _escape(link) + '" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline break-all">' + _escape(link) + '</a></li>';
-                    }
-                    html += '</ul></div>';
-                }
-                html += '</div>';
-            }
-
-            // Attachments
-            if (task.attachments && task.attachments.length > 0) {
-                html += '<div class="mb-6">';
-                html += '<h2 class="text-xl font-semibold mb-3">Attachments</h2>';
-                html += '<div class="file-list">';
-                for (const file of task.attachments) {
-                    html += '<div class="file-item attachment">';
-                    html += '<div><p class="font-medium">' + _escape(file.name) + '</p>';
-                    if (file.size) html += '<p class="text-sm text-slate-600 dark:text-slate-400">' + _escape(file.size) + '</p>';
-                    html += '</div>';
-                    if (file.url) {
-                        html += '<a href="' + _escape(file.url) + '" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline text-sm">Download</a>';
-                    }
-                    html += '</div>';
-                }
-                html += '</div></div>';
-            }
-
-            // Submitted files
-            if (task.submitted_files && task.submitted_files.length > 0) {
-                html += '<div class="mb-6">';
-                html += '<h2 class="text-xl font-semibold mb-3">Your Submissions</h2>';
-                html += '<div class="file-list">';
-                for (const file of task.submitted_files) {
-                    html += '<div class="file-item submitted">';
-                    html += '<div><p class="font-medium">' + _escape(file.name) + '</p>';
-                    if (file.size) html += '<p class="text-sm text-slate-600 dark:text-slate-400">' + _escape(file.size) + '</p>';
-                    html += '</div>';
-                    if (file.url) {
-                        html += '<button class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium view-file" data-url="' + _escape(file.url) + '">View</button>';
-                    }
-                    html += '</div>';
-                }
-                html += '</div></div>';
-            }
-
-            // Open in ManageBac button
-            if (task.url) {
-                html += '<div class="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">';
-                html += '<a href="' + _escape(task.url) + '" target="_blank" rel="noopener noreferrer" class="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Open in ManageBac</a>';
-                html += '</div>';
-            }
-
-            html += '</div>';
-            document.getElementById('root').innerHTML = html;
-
-            // Attach event listeners to view file buttons
-            document.querySelectorAll('.view-file').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const url = e.target.dataset.url;
-                    window.open(url, "_blank", "noopener");
-                });
-            });
-        }
-
-        function _escape(text) {
-            if (!text) return '';
-            return String(text)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-
-        // Listen for tool results
-        window.addEventListener('message', (event) => {
-            if (event.source !== window.parent) return;
-            const msg = event.data;
-            if (msg.method === 'ui/notifications/tool-result') {
-                render(msg.params?.structuredContent);
-            }
-        }, { passive: true });
-
-        // Listen for theme changes
-        window.addEventListener('openai:set_globals', (event) => {
-            const theme = event.detail?.globals?.theme;
-            if (theme === 'dark') {
-                document.documentElement.classList.add('dark');
-            } else if (theme === 'light') {
-                document.documentElement.classList.remove('dark');
-            }
-        }, { passive: true });
-
-        // Initial render from window.openai
-        if (window.openai?.toolOutput) {
-            render(window.openai.toolOutput);
-        }
-
-        // Set initial theme
-        if (window.openai?.globals?.theme === 'dark') {
-            document.documentElement.classList.add('dark');
-        }
-    </script>
-</body>
-</html>"""
-    return HTMLResponse(html)
-
-
-async def _ui_task(request):
-    """Serve a baked task card widget by hash — called by ChatGPT to render the iframe."""
-    h = request.path_params.get("hash", "")
-    info = _TASK_WIDGETS.get(h)
-    if info is None:
-        return PlainTextResponse("Widget not found", status_code=404)
-    return HTMLResponse(info["html"])
-
-
-# ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 
@@ -1332,9 +1142,6 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
             Route("/admin/audit", _admin_audit, methods=["GET"]),
             Route("/admin/messages", _admin_messages_get, methods=["GET"]),
             Route("/admin/broadcast", _admin_broadcast, methods=["POST"]),
-            # UI components (served to ChatGPT iframes)
-            Route("/ui/task-detail", _ui_task_detail, methods=["GET"]),
-            Route("/ui/task/{hash}", _ui_task, methods=["GET"]),
         ],
         lifespan=lifespan,
     )

@@ -417,10 +417,6 @@ _STATIC_WIDGETS = {
     _CLASS_LIST_URI: {"html": _CLASS_LIST_HTML, "title": "Classes"},
 }
 
-# Per-task dynamic widgets: hash → {html, title}  (LRU capped at 60)
-# Keyed by the short SHA1 hash; served at /ui/task/{hash} over HTTPS.
-_TASK_WIDGETS: OrderedDict = OrderedDict()
-
 # Public base URL — set by http_server.py at startup so we can build widget URLs.
 # Default to the deployed HTTPS origin so import-time tool metadata never points
 # ChatGPT at localhost.
@@ -796,23 +792,6 @@ def _build_task_obj(detail: dict, meta: dict | None, class_name: str = "") -> di
     return task_obj
 
 
-def _make_task_widget(task_obj: dict) -> str:
-    """Return the stable task-detail widget URI.
-
-    We deliberately do NOT bake task data into the served HTML anymore.
-    The widget HTML at _TASK_DETAIL_URI stays a clean template (_INJECTED_TASK
-    is null) and the per-call task data reaches the widget via
-    window.openai.toolOutput (the CallToolResult.structuredContent).
-
-    Why: the widget URI is shared across every task and every user. Baking
-    one task's data into that single shared HTML meant the LAST call's task
-    leaked into earlier widgets (and across users) whenever a widget fell back
-    to the baked _INJECTED_TASK instead of toolOutput. Relying solely on
-    toolOutput keeps every widget showing its own task.
-    """
-    return _TASK_DETAIL_URI
-
-
 # Content-Security-Policy for the widget iframe. Keep the two domains separate:
 # - ManageBac domains: remote LMS assets/images/files the widget may display.
 # - Widget domain: the origin hosting this MCP server's widget resources.
@@ -901,8 +880,8 @@ def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
         "openai/widgetAccessible": True,
     }
 
-# Static task meta used only in the tool *definition* so ChatGPT knows the tool has a widget.
-# Actual CallToolResult uses a per-task URI from _make_task_widget().
+# Static task meta: the shared task-detail widget URI. Per-call task data reaches
+# the widget via CallToolResult.structuredContent (window.openai.toolOutput).
 _TASK_META_STATIC = _widget_meta(_TASK_DETAIL_URI, "Loading task...", "Task loaded")
 _FILES_META_STATIC = _widget_meta(_CLASS_FILES_URI, "Loading files...", "Files loaded")
 _GRADES_META_STATIC = _widget_meta(_GRADES_URI, "Loading grades...", "Grades loaded")
@@ -939,16 +918,11 @@ def _resource_meta(uri: str) -> dict:
 
 @server.list_resources()
 async def list_resources() -> list[types.Resource]:
-    # Static widgets use their URI as key; task widgets use hash as key (served via HTTPS)
-    resources = [
+    return [
         types.Resource(uri=uri, name=info["title"], title=info["title"],
                        mimeType=WIDGET_MIME, _meta=_resource_meta(uri))
         for uri, info in _STATIC_WIDGETS.items()
     ]
-    for h, info in _TASK_WIDGETS.items():
-        url = f"{_SERVER_PUBLIC_URL}/ui/task/{h}"
-        resources.append(types.Resource(uri=url, name=info["title"], title=info["title"], mimeType=WIDGET_MIME))
-    return resources
 
 
 @server.list_resource_templates()
@@ -967,7 +941,7 @@ async def list_resource_templates() -> list[types.ResourceTemplate]:
 async def _handle_read_resource(req: types.ReadResourceRequest) -> types.ServerResult:
     uri = req.params.uri
     uri_str = str(uri)
-    info = _STATIC_WIDGETS.get(uri_str) or _TASK_WIDGETS.get(uri_str)
+    info = _STATIC_WIDGETS.get(uri_str)
     canonical_uri = uri_str if uri_str in _STATIC_WIDGETS else None
     if info is None and uri_str.startswith("ui://widget/task-list"):
         info = _STATIC_WIDGETS.get(_TASK_LIST_URI)
