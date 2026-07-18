@@ -25,7 +25,6 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from . import users, config, admin, cache, branding, oauth
 from .context import set_current_user, reset_user, User
 from .server import server, set_server_public_url
-from .enroll_server import enroll_server, set_enroll_public_url
 
 # Public URL for UI component links (set by build_app)
 _PUBLIC_URL = "http://localhost:8000"
@@ -161,28 +160,6 @@ _ENROLL_FORM = """<!doctype html>
 </div>
 </body></html>"""
 
-_SET_PASSWORD_FORM = """<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Finish connecting</title>
-<style>""" + _STYLE + """</style></head><body>
-<div class="card">
- {head}
- <form method="post" action="/set-password">
-  <input type="hidden" name="t" value="{token}">
-  <div class="body">
-   {error}
-   <div class="labelrow"><label>Login</label></div>
-   <div class="field"><input value="{email}" readonly>""" + _IC_MAIL + """</div>
-   <div class="labelrow"><label>Password<span class="req">*</span></label></div>
-   <div class="field"><input name="password" type="password" placeholder="Your ManageBac password" required autofocus autocomplete="off">""" + _IC_LOCK + """</div>
-  </div>
-  <div class="actions"><button type="submit">Finish connecting</button></div>
- </form>
- <p class="note">Read-only. Your login is stored encrypted and used only to read your
- own ManageBac data.</p>
-</div>
-</body></html>"""
-
 _SUCCESS_PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Connected</title>
@@ -206,43 +183,9 @@ _SUCCESS_PAGE = """<!doctype html>
 </div>
 </body></html>"""
 
-_PENDING_PAGE = """<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Request received</title>
-<style>""" + _STYLE + """</style></head><body>
-<div class="card">
- {head}
- <div class="body">
-  <h1>Request received, {label}</h1>
-  <p class="sub">Your account is connected and waiting for the admin to approve you.
-  As soon as they do, the connector below will start working in ChatGPT.</p>
-  <div class="steps">
-   <p>What happens next</p>
-   <ol>
-    <li>The admin approves your request.</li>
-    <li>Add the link below to ChatGPT (Settings → Connectors → Add custom connector).</li>
-    <li>Click <b>Sign in</b> when ChatGPT asks, and log in with your ManageBac account.</li>
-   </ol>
-  </div>
-  <code>{connector_url}</code>
- </div>
-</div>
-</body></html>"""
-
-
 def _enroll_form(error: str = "", code: str = "", brand: dict | None = None) -> str:
     err_html = f'<div class="err">{_html.escape(error)}</div>' if error else ""
     return _ENROLL_FORM.format(head=_head(brand), error=err_html, invite_value=_html.escape(code, quote=True))
-
-
-def _set_password_form(token: str, email: str, error: str = "", brand: dict | None = None) -> str:
-    err_html = f'<div class="err">{_html.escape(error)}</div>' if error else ""
-    return _SET_PASSWORD_FORM.format(
-        head=_head(brand),
-        token=_html.escape(token, quote=True),
-        email=_html.escape(email, quote=True),
-        error=err_html,
-    )
 
 
 async def _handle_enroll_get(request):
@@ -259,7 +202,7 @@ async def _create_and_verify(mb_url, email, password, invite, existing):
     Shared enrollment finish: create/update the user, verify the login against
     ManageBac, consume the one-time invite code, and warm the cache. Returns
     (user, None) on success or (None, error_message) on failure. Used by both
-    the web /enroll form and the in-chat /set-password handoff.
+    the web /enroll form and the OAuth /authorize sign-in.
     """
     if existing:
         users.update_password(existing.id, password)
@@ -333,57 +276,6 @@ async def _handle_enroll_post(request):
         status = 401 if "log in" in error else 403
         return HTMLResponse(_enroll_form(error, code=invite, brand=brand), status_code=status)
 
-    connector_url = f"{_PUBLIC_URL}/mcp"
-    return HTMLResponse(_SUCCESS_PAGE.format(head=_head(brand), label=_html.escape(user.label), connector_url=connector_url))
-
-
-_PENDING_EXPIRED = (
-    "This link has expired or has already been used. Start again from ChatGPT by "
-    "asking to enroll, and you'll get a fresh link."
-)
-
-
-async def _handle_set_password_get(request):
-    """Secure one-time page where an in-chat enrollee types their ManageBac password."""
-    token = request.query_params.get("t", "")
-    pending = admin.get_pending(token)
-    if pending is None:
-        return HTMLResponse(_enroll_form(_PENDING_EXPIRED, brand=await branding.get_branding(config.BASE_URL)), status_code=410)
-    brand = await branding.get_branding(pending["mb_url"])
-    return HTMLResponse(_set_password_form(token, pending["email"], brand=brand))
-
-
-async def _handle_set_password_post(request):
-    form = await request.form()
-    token = (form.get("t") or "").strip()
-    password = (form.get("password") or "").strip()
-
-    pending = admin.get_pending(token)
-    if pending is None:
-        return HTMLResponse(_enroll_form(_PENDING_EXPIRED, brand=await branding.get_branding(config.BASE_URL)), status_code=410)
-
-    mb_url, email, invite = pending["mb_url"], pending["email"], pending["invite"]
-    brand = await branding.get_branding(mb_url)
-    if not password:
-        return HTMLResponse(_set_password_form(token, email, "Password is required.", brand=brand), status_code=400)
-
-    existing = users.get_user_by_email(mb_url, email)
-    # Guard: if the code was consumed between the chat step and now.
-    if not existing and not admin.code_unused(invite):
-        admin.delete_pending(token)
-        return HTMLResponse(_set_password_form(token, email,
-            "That invite code is no longer valid. Ask the admin for a new one.", brand=brand), status_code=403)
-
-    user, error = await _create_and_verify(mb_url, email, password, invite, existing)
-    if error:
-        # Keep the link alive on a wrong password so they can retry; drop it on
-        # a consumed-code race (unrecoverable here).
-        if "invite code" in error:
-            admin.delete_pending(token)
-            return HTMLResponse(_set_password_form(token, email, error, brand=brand), status_code=403)
-        return HTMLResponse(_set_password_form(token, email, error, brand=brand), status_code=401)
-
-    admin.delete_pending(token)
     connector_url = f"{_PUBLIC_URL}/mcp"
     return HTMLResponse(_SUCCESS_PAGE.format(head=_head(brand), label=_html.escape(user.label), connector_url=connector_url))
 
@@ -1014,19 +906,11 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
         print("WARNING: serving with a localhost public URL — OAuth discovery "
               "metadata will advertise it. Pass --public-url for production.",
               file=sys.stderr)
-    # Tell server.py the public URL so _make_task_widget generates correct HTTPS URLs
+    # Tell server.py the public URL so widget resource URLs use the right origin.
     set_server_public_url(_PUBLIC_URL)
-    set_enroll_public_url(_PUBLIC_URL)
 
     session_manager = StreamableHTTPSessionManager(
         app=server,
-        stateless=stateless,
-        json_response=False,
-    )
-
-    # Separate, keyless MCP server for the in-chat enroll flow (/connect).
-    enroll_session_manager = StreamableHTTPSessionManager(
-        app=enroll_server,
         stateless=stateless,
         json_response=False,
     )
@@ -1070,28 +954,12 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
         finally:
             reset_user(ctx)
 
-    def _normalize_mcp_scope(scope: Scope) -> Scope:
-        scope = dict(scope)
-        scope["path"] = "/"
-        scope["raw_path"] = b"/"
-        headers = [(k, v) for (k, v) in scope["headers"]
-                   if k.lower() not in (b"accept", b"content-type")]
-        headers.append((b"accept", b"application/json, text/event-stream"))
-        headers.append((b"content-type", b"application/json"))
-        scope["headers"] = headers
-        return scope
-
-    async def handle_connect(scope: Scope, receive: Receive, send: Send) -> None:
-        # Keyless onboarding connector — no user context. Only the `enroll` tool
-        # is exposed here; it never touches a student's ManageBac data.
-        await enroll_session_manager.handle_request(_normalize_mcp_scope(scope), receive, send)
-
     async def health(request):
         return PlainTextResponse("ManageBac MCP server is running. Visit /enroll to connect an account.")
 
     @asynccontextmanager
     async def lifespan(app):
-        async with session_manager.run(), enroll_session_manager.run():
+        async with session_manager.run():
             yield
 
     # Starlette handles the human-facing routes (/, /enroll) including form parsing.
@@ -1100,8 +968,6 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
             Route("/", health, methods=["GET"]),
             Route("/enroll", _handle_enroll_get, methods=["GET"]),
             Route("/enroll", _handle_enroll_post, methods=["POST"]),
-            Route("/set-password", _handle_set_password_get, methods=["GET"]),
-            Route("/set-password", _handle_set_password_post, methods=["POST"]),
             # OAuth 2.1 (ChatGPT sign-in popup): discovery + authorize + token + DCR
             Route("/.well-known/oauth-protected-resource", _oauth_protected_resource, methods=["GET"]),
             Route("/.well-known/oauth-protected-resource/mcp", _oauth_protected_resource, methods=["GET"]),
@@ -1162,9 +1028,6 @@ def build_app(*, stateless: bool = True, public_url: str | None = None):
                 scope = dict(scope)
                 scope["path"] = path[len("/mcp"):]
                 scope["raw_path"] = scope["path"].encode("latin-1")
-            elif path == "/connect" or path == "/connect/":
-                await handle_connect(scope, receive, send)
-                return
         await inner(scope, receive, send)
 
     return app

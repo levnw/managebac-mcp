@@ -47,16 +47,6 @@ def _connect() -> sqlite3.Connection:
         )
     """)
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS pending_enrollments (
-            token      TEXT PRIMARY KEY,
-            mb_url     TEXT NOT NULL,
-            email      TEXT NOT NULL,
-            invite     TEXT NOT NULL,
-            created_at INTEGER NOT NULL,
-            expires_at INTEGER NOT NULL
-        )
-    """)
-    conn.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
             text           TEXT NOT NULL,
@@ -201,47 +191,6 @@ def redeem_code(code: str, user_id: str, email: str) -> bool:
 def delete_code(code: str) -> None:
     with _connect() as conn:
         conn.execute("DELETE FROM invite_codes WHERE code = ?", (code,))
-
-
-# ---------------------------------------------------------------------------
-# Pending enrollments (in-chat enroll → secure password link handoff)
-# ---------------------------------------------------------------------------
-
-_PENDING_TTL = 30 * 60   # 30 minutes to open the link and set a password
-
-
-def create_pending(mb_url: str, email: str, invite: str, ttl: int = _PENDING_TTL) -> str:
-    """Stash an in-progress enrollment and return its one-time token."""
-    token = secrets.token_urlsafe(24)
-    now = int(time.time())
-    with _connect() as conn:
-        conn.execute(
-            "INSERT INTO pending_enrollments (token, mb_url, email, invite, created_at, expires_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (token, mb_url, email, invite, now, now + ttl),
-        )
-    return token
-
-
-def get_pending(token: str) -> dict | None:
-    """Return the pending enrollment if the token exists and hasn't expired."""
-    if not token:
-        return None
-    now = int(time.time())
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT mb_url, email, invite, expires_at FROM pending_enrollments WHERE token = ?",
-            (token,),
-        ).fetchone()
-    if row is None or row[3] < now:
-        return None
-    return {"mb_url": row[0], "email": row[1], "invite": row[2], "expires_at": row[3]}
-
-
-def delete_pending(token: str) -> None:
-    with _connect() as conn:
-        conn.execute("DELETE FROM pending_enrollments WHERE token = ?", (token,))
-        conn.execute("DELETE FROM pending_enrollments WHERE expires_at < ?", (int(time.time()),))
 
 
 # ---------------------------------------------------------------------------
