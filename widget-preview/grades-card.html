@@ -31,11 +31,14 @@
   .title { font-size:16px; font-weight:600; line-height:1.3; }
   .subtitle { color:var(--text-2); font-size:13px; margin-top:2px; }
   .head-side { display:flex; align-items:flex-start; gap:8px; flex-shrink:0; }
+  .score-head { text-align:right; }
   .count { color:var(--text-3); font-size:12px; white-space:nowrap; margin-top:2px; text-align:right; }
+  .grade-label { color:var(--text-3); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; margin-top:3px; }
   .icon-btn { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text-2); cursor:pointer; }
   .icon-btn:hover { background:var(--bg-secondary); color:var(--text); }
   .icon-btn svg { width:14px; height:14px; stroke:currentColor; }
   :root[data-display="fullscreen"] #expand { display:none; }
+  :root[data-display="fullscreen"] .grade-label { display:none; }
   .divider { height:1px; background:var(--border); margin:14px -16px; }
   .section-label { font-size:11.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px; }
   .class-row { padding:12px 0; border-bottom:1px solid var(--border); }
@@ -245,17 +248,13 @@ function barRow(k, latest, best) {
 // ── READ MODE ─────────────────────────────────────────────────────────────
 function classRowInline(cls) {
   const level = finalGrade(latestScores(cls.criteria));
-  const inline = critInline(cls.criteria || {});
-  return `<div class="class-row row-a"><div class="grow"><div class="class-name">${esc(cls.class_name || "Class")}</div>
-    ${inline ? `<div class="crit-inline">${inline}</div>` : `<div class="crit-inline">No criterion scores yet</div>`}</div>${finalGradeEl(level)}</div>`;
+  return `<div class="class-row row-a"><div class="grow"><div class="class-name">${esc(cls.class_name || "Class")}</div></div>${finalGradeEl(level)}</div>`;
 }
 function classRowBar(cls) {
   const level = finalGrade(latestScores(cls.criteria));
-  const inline = critInline(cls.criteria || {});
   const fill = level != null ? (level / MAXGRADE) * 100 : 0;
   return `<div class="class-row row-b"><div class="class-top"><div class="class-name">${esc(cls.class_name || "Class")}</div>${finalGradeEl(level)}</div>
-    <div class="grade-bar"><div class="grade-bar-fill" style="width:${fill.toFixed(1)}%"></div></div>
-    ${inline ? `<div class="crit-inline">${inline}</div>` : `<div class="crit-inline">No criterion scores yet</div>`}</div>`;
+    <div class="grade-bar"><div class="grade-bar-fill" style="width:${fill.toFixed(1)}%"></div></div></div>`;
 }
 function classRowDetail(cls) {
   const level = finalGrade(latestScores(cls.criteria));
@@ -304,7 +303,7 @@ function renderRead(data) {
   } else if (fullscreen) {
     h += reportView(classes);
   } else if (single) {
-    h += `<div class="section-label">Class</div>` + classRowDetail(classes[0]);
+    h += `<div class="section-label">Class</div>` + classRowInline(classes[0]);
   } else {
     h += `<div class="section-label">Classes</div>`;
     h += classes.map(classRowInline).join("");
@@ -319,7 +318,7 @@ function renderRead(data) {
 
 function header(data, count) {
   return `<div class="head"><div><div class="title">Grades</div>${data.scope ? `<div class="subtitle">${esc(data.scope)}</div>` : ""}</div>
-    <div class="head-side"><div class="count">${count} ${count === 1 ? "class" : "classes"}</div>
+    <div class="head-side"><div class="score-head"><div class="count">${count} ${count === 1 ? "class" : "classes"}</div><div class="grade-label">Final grade</div></div>
     <button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button></div></div>`;
 }
 

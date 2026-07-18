@@ -114,7 +114,7 @@ _TEST_WIDGET_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-_TASK_DETAIL_URI = "ui://widget/task-detail-v9.html"
+_TASK_DETAIL_URI = "ui://widget/task-detail-v10.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -424,27 +424,27 @@ _TASK_CARD_PATH = Path(__file__).parent.parent / "widget-preview" / "task-card.h
 _TASK_CARD_HTML: str = _TASK_CARD_PATH.read_text(encoding="utf-8")
 
 # Class files widget — loaded from disk.
-_CLASS_FILES_URI = "ui://widget/class-files-v4.html"
+_CLASS_FILES_URI = "ui://widget/class-files-v5.html"
 _CLASS_FILES_PATH = Path(__file__).parent.parent / "widget-preview" / "class-files.html"
 _CLASS_FILES_HTML: str = _CLASS_FILES_PATH.read_text(encoding="utf-8")
 
 # Grades widget — per-class criterion bars + estimated MYP level.
-_GRADES_URI = "ui://widget/grades-v4.html"
+_GRADES_URI = "ui://widget/grades-v5.html"
 _GRADES_PATH = Path(__file__).parent.parent / "widget-preview" / "grades-card.html"
 _GRADES_HTML: str = _GRADES_PATH.read_text(encoding="utf-8")
 
 # Timetable widget — weekly grid of classes.
-_TIMETABLE_URI = "ui://widget/timetable-v4.html"
+_TIMETABLE_URI = "ui://widget/timetable-v5.html"
 _TIMETABLE_PATH = Path(__file__).parent.parent / "widget-preview" / "timetable-card.html"
 _TIMETABLE_HTML: str = _TIMETABLE_PATH.read_text(encoding="utf-8")
 
 # Task list widget (get_upcoming) — grouped Upcoming/Completed rows
-_TASK_LIST_URI = "ui://widget/task-list-v2.html"
+_TASK_LIST_URI = "ui://widget/task-list-v3.html"
 _TASK_LIST_PATH = Path(__file__).parent.parent / "widget-preview" / "task-list.html"
 _TASK_LIST_HTML: str = _TASK_LIST_PATH.read_text(encoding="utf-8")
 
 # Class list widget (get_classes) — selectable class rows
-_CLASS_LIST_URI = "ui://widget/class-list-v2.html"
+_CLASS_LIST_URI = "ui://widget/class-list-v3.html"
 _CLASS_LIST_PATH = Path(__file__).parent.parent / "widget-preview" / "class-list.html"
 _CLASS_LIST_HTML: str = _CLASS_LIST_PATH.read_text(encoding="utf-8")
 

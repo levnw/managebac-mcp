@@ -85,7 +85,6 @@
   .meta-sep { color: var(--text-3); margin: 0 2px; }
   .due { text-align: right; flex-shrink: 0; }
   .due-date { font-size: 13px; font-weight: 600; white-space: nowrap; }
-  .due-date.overdue { color: var(--red); }
   .due-time { font-size: 11.5px; color: var(--text-3); white-space: nowrap; margin-top: 1px; }
   .due-status { color: var(--text-2); }
 
@@ -184,22 +183,8 @@
   }
   .file-open:hover { color: var(--text); background: var(--bg-tertiary); }
   .file-open svg { width: 14px; height: 14px; stroke: currentColor; }
-  .selection-bar {
-    display: none; align-items: center; justify-content: space-between; gap: 10px;
-    margin-top: 10px; padding: 9px 10px; border: 1px solid var(--border);
-    border-radius: 12px; background: var(--bg-secondary);
-  }
-  .selection-bar.active { display: flex; }
-  .selection-count { font-size: 12.5px; color: var(--text-2); }
-  .selection-actions { display: flex; align-items: center; gap: 8px; }
-  .mini-btn {
-    font-family: inherit; font-size: 12.5px; font-weight: 600;
-    border: none; background: transparent; color: var(--text-2); cursor: pointer;
-    padding: 4px 0;
-  }
-  .mini-btn:hover { color: var(--text); }
-  .mini-btn.primary { color: var(--accent); }
   .quiet-row { font-size: 12.5px; color: var(--text-3); padding: 2px 2px 0; }
+  .selection-helper { color: var(--text-2); font-size: 12.5px; margin-bottom: 8px; }
   .empty-state { padding: 2px 2px 0; color: var(--text-3); font-size: 12.5px; }
   .empty-title { color: var(--text-2); font-weight: 600; font-size: 13px; }
   .empty-copy { margin-top: 2px; color: var(--text-3); }
@@ -260,6 +245,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
 
 const FILE_ICON = '<svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
 const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
+const DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>';
 
 // ── Theme / height plumbing ──────────────────────────────────────────────
 function applyHostContext() {
@@ -316,7 +302,7 @@ function fileRow(f) {
     ${FILE_ICON}
     <span class="file-name">${esc(f.name)}</span>
     <span class="file-meta">${esc(f.meta)}</span>
-    ${f.url ? `<span class="file-open" data-open-url="${esc(f.url)}" title="Open file">${LINK_ICON}</span>` : ""}
+    ${f.url ? `<span class="file-open" data-open-url="${esc(f.url)}" title="Open file">${DOWNLOAD_ICON}</span>` : ""}
   </button>`;
 }
 function imageStrip(images) {
@@ -374,7 +360,7 @@ function render(task) {
         </div>`;
   if ((task.due_month && task.due_day) || (task.unit && task.unit.name)) {
     h += `<div class="due">
-            ${task.due_month && task.due_day ? `<div class="due-date${overdueUnsubmitted ? " overdue" : ""}">${esc(task.due_month)} ${esc(task.due_day)}</div>` : ""}
+            ${task.due_month && task.due_day ? `<div class="due-date">${esc(task.due_month)} ${esc(task.due_day)}</div>` : ""}
             ${task.due_time ? `<div class="due-time">${esc(task.due_time)}</div>` : ""}
             ${task.unit && task.unit.name ? `<div class="due-time">Unit: ${esc(task.unit.name)}</div>` : ""}
             ${status ? `<div class="due-time due-status">${esc(status)}</div>` : ""}
@@ -414,6 +400,9 @@ function render(task) {
   // ═══ Box 3: attachments · submission · discussion/resources ═══
   if (files.length || submittedRows.length || (Array.isArray(discussions) && discussions.length)) {
     h += `<div class="divider"></div>`;
+    if (selectableFiles.length) {
+      h += `<div class="selection-helper" id="file-helper">Select attachments to give ChatGPT context. Double-click an attachment to open it.</div>`;
+    }
     if (files.length) {
       h += `<div class="section-label">Attachments</div><div class="files">`;
       h += files.slice(0, 2).map(fileRow).join("");
@@ -440,15 +429,6 @@ function render(task) {
       if (hiddenDiscussionCount > 0) {
         h += `<button class="more-btn" id="discussions-more">Show discussion</button>`;
       }
-    }
-    if (selectableFiles.length) {
-      h += `<div class="selection-bar" id="selection-bar">
-              <div class="selection-count" id="selection-count">No attachments selected</div>
-              <div class="selection-actions">
-                <button class="mini-btn" id="clear-files" type="button">Clear</button>
-                <button class="mini-btn primary" id="ask-files" type="button">Ask ChatGPT</button>
-              </div>
-            </div>`;
     }
   }
 
@@ -491,13 +471,14 @@ function render(task) {
       });
     } catch (_) {}
   }
-  function updateSelectionBar(persist = true) {
-    const bar = document.getElementById("selection-bar");
-    const count = document.getElementById("selection-count");
-    if (!bar || !count) return;
+  function updateSelection(persist = true) {
     const n = selectedFiles.size;
-    bar.classList.toggle("active", n > 0);
-    count.textContent = n === 1 ? "1 attachment selected" : `${n} attachments selected`;
+    const helper = document.getElementById("file-helper");
+    if (helper) {
+      helper.textContent = n
+        ? `${n === 1 ? "1 attachment" : `${n} attachments`} selected. Use your next message to discuss the selected attachments. Double-click an attachment to open it.`
+        : "Select attachments to give ChatGPT context. Double-click an attachment to open it.";
+    }
     for (const row of card.querySelectorAll("[data-file-key]")) {
       const active = selectedFiles.has(row.dataset.fileKey);
       row.classList.toggle("selected", active);
@@ -519,25 +500,16 @@ function render(task) {
       const key = row.dataset.fileKey;
       if (selectedFiles.has(key)) selectedFiles.delete(key);
       else selectedFiles.add(key);
-      updateSelectionBar(true);
+      updateSelection(true);
+    });
+    row.addEventListener("dblclick", () => {
+      const f = selectableFiles.find((item) => item.key === row.dataset.fileKey);
+      if (!f?.url) return;
+      if (window.openai?.openExternal) window.openai.openExternal({ href: f.url });
+      else window.open(f.url, "_blank", "noopener");
     });
   });
-  document.getElementById("clear-files")?.addEventListener("click", () => {
-    selectedFiles.clear();
-    updateSelectionBar(true);
-  });
-  document.getElementById("ask-files")?.addEventListener("click", async () => {
-    const selected = selectedFileObjects();
-    if (!selected.length) return;
-    const list = selected.map((f, i) => `${i + 1}. ${f.name}${f.source ? ` (${f.source})` : ""}`).join("\n");
-    const prompt = `Look at this ManageBac task and the selected attachment(s), then help me understand what I need to do.\n\nTask: ${task.title}\nClass: ${task.class_name || "Unknown class"}\n\nSelected attachment(s):\n${list}`;
-
-    // Future real wiring: call a batched backend tool such as
-    // prepare_attachments_for_chatgpt with selected.map(({url,name,source}) => ...)
-    // before sending the follow-up, so ChatGPT receives extracted file content.
-    try { await window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {}
-  });
-  updateSelectionBar(false);
+  updateSelection(false);
 
   // ── Wire: per-section show more/less ──
   function wireProse(key, blockId, btnId, clampClass, actionId) {

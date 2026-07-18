@@ -101,16 +101,28 @@
   .rows { display: flex; flex-direction: column; }
   .row {
     display: block;
+    width: 100%;
     color: inherit;
     text-decoration: none;
     padding: 11px 0;
     border-bottom: 1px solid var(--border);
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 10px;
   }
   :root[data-display="fullscreen"] .row {
     padding: 13px 0;
   }
   .row:last-child { border-bottom: none; }
-  .row:hover .row-title { color: var(--accent); }
+  .row:hover .row-title, .row:focus-visible .row-title { color: var(--accent); }
+  .row:focus-visible { outline: none; background: rgba(2,133,255,.06); }
+  .row.selected { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); border-bottom-color: transparent; padding-left: 8px; padding-right: 8px; }
+  .row.selected .row-title { color: var(--accent); }
 
   .row-top {
     display: flex;
@@ -143,8 +155,8 @@
     min-width: 58px;
   }
   .due-date { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
-  .due-date.overdue { color: var(--red); }
   .due-time { font-size: 11.5px; color: var(--text-3); white-space: nowrap; margin-top: 1px; }
+  .helper { color: var(--text-2); font-size: 12.5px; margin-bottom: 12px; }
 
   .grades {
     color: var(--text-2);
@@ -217,6 +229,7 @@ const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-
 const EXPAND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
 
 let groupState = {};
+let selectedTasks = new Set();
 
 function applyHostContext() {
   const t = window.openai?.theme;
@@ -296,8 +309,10 @@ function row(task) {
   const grades = gradeText(task);
   const url = task.url || "#";
   const commentHint = task.teacher_comment ? `<div class="hint">Teacher feedback available</div>` : "";
+  const key = taskKey(task);
+  const selected = selectedTasks.has(key);
 
-  return `<a class="row" href="${esc(url)}" target="_blank" rel="noopener">
+  return `<button class="row${selected ? " selected" : ""}" type="button" data-task-key="${esc(key)}" data-url="${esc(url)}" aria-pressed="${selected ? "true" : "false"}">
     <div class="row-top">
       <div class="row-main">
         <div class="row-title">${esc(task.title || "Task")}</div>
@@ -306,11 +321,15 @@ function row(task) {
         ${commentHint}
       </div>
       <div class="due">
-        ${d.month && d.day ? `<div class="due-date${task.due_past ? " overdue" : ""}">${esc(d.month)} ${esc(d.day)}</div>` : ""}
+        ${d.month && d.day ? `<div class="due-date">${esc(d.month)} ${esc(d.day)}</div>` : ""}
         ${task.due_day_time || task.due_time ? `<div class="due-time">${esc(task.due_day_time || task.due_time)}</div>` : ""}
       </div>
     </div>
-  </a>`;
+  </button>`;
+}
+
+function taskKey(task) {
+  return String(task.id || task.task_id || `${task.title || "Task"}:${task.url || ""}:${task.date || task.due_month || ""}:${task.due_day || ""}`);
 }
 
 function group(title, tasks, key) {
@@ -327,7 +346,8 @@ function group(title, tasks, key) {
 }
 
 function renderTaskList(data) {
-  const tasks = (data.tasks || []).filter((t) => t && t.title);
+  const tasks = (data.tasks || []).filter((t) => t && t.title).map((t) => ({ ...t, key: taskKey(t) }));
+  selectedTasks = new Set([...selectedTasks].filter((key) => tasks.some((t) => t.key === key)));
   const upcoming = tasks.filter(isUpcoming);
   const past = tasks.filter((t) => !isUpcoming(t));
   const canExpand = tasks.length > 0;
@@ -347,6 +367,7 @@ function renderTaskList(data) {
     h += `<div class="divider"></div>${emptyState("No tasks found", "There are no tasks in this view right now.")}`;
   } else {
     h += `<div class="divider"></div>`;
+    h += `<div class="helper">Select tasks to give ChatGPT context. Double-click a task to open it.</div>`;
     h += group("Upcoming", upcoming, "upcoming");
     h += group("Past", past, "past");
   }
@@ -361,11 +382,54 @@ function renderTaskList(data) {
       ev.preventDefault();
       const key = btn.getAttribute("data-toggle");
       groupState[key] = !groupState[key];
-      try { window.openai?.setWidgetState?.({ groups: { ...groupState } }); } catch (_) {}
+      try { window.openai?.setWidgetState?.({ groups: { ...groupState }, selected_tasks: selectedTaskObjects(tasks) }); } catch (_) {}
       renderTaskList(data);
     });
   });
   card.querySelector("#expand")?.addEventListener("click", requestFullscreen);
+  function selectedTaskObjects(sourceTasks = tasks) {
+    return sourceTasks.filter((t) => selectedTasks.has(t.key)).map((t) => ({
+      title: t.title,
+      class_name: t.class_name,
+      date: t.date || [t.due_month, t.due_day].filter(Boolean).join(" "),
+      status: statusText(t),
+      url: t.url || "",
+    }));
+  }
+  function saveSelection() {
+    try { window.openai?.setWidgetState?.({ groups: { ...groupState }, selected_tasks: selectedTaskObjects() }); } catch (_) {}
+  }
+  function updateSelection(persist = true) {
+    const n = selectedTasks.size;
+    const helper = card.querySelector(".helper");
+    if (helper) {
+      helper.textContent = n
+        ? `${n === 1 ? "1 task" : `${n} tasks`} selected. Use your next message to discuss the selected tasks. Double-click a task to open it.`
+        : "Select tasks to give ChatGPT context. Double-click a task to open it.";
+    }
+    card.querySelectorAll("[data-task-key]").forEach((rowEl) => {
+      const active = selectedTasks.has(rowEl.dataset.taskKey);
+      rowEl.classList.toggle("selected", active);
+      rowEl.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    if (persist) saveSelection();
+    reportHeight();
+  }
+  card.querySelectorAll("[data-task-key]").forEach((rowEl) => {
+    rowEl.addEventListener("click", () => {
+      const key = rowEl.dataset.taskKey;
+      if (selectedTasks.has(key)) selectedTasks.delete(key);
+      else selectedTasks.add(key);
+      updateSelection(true);
+    });
+    rowEl.addEventListener("dblclick", () => {
+      const href = rowEl.dataset.url;
+      if (!href || href === "#") return;
+      if (window.openai?.openExternal) window.openai.openExternal({ href });
+      else window.open(href, "_blank", "noopener");
+    });
+  });
+  updateSelection(false);
   reportHeight();
 }
 

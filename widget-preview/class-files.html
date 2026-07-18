@@ -52,20 +52,7 @@
   }
   .file-open:hover { color:var(--text); background:var(--bg-secondary); }
   .file-open svg { width:14px; height:14px; stroke:currentColor; }
-  .selection-bar {
-    display:none; align-items:center; justify-content:space-between; gap:10px;
-    margin-top:12px; padding:9px 10px; border:1px solid var(--border);
-    border-radius:12px; background:var(--bg-secondary);
-  }
-  .selection-bar.active { display:flex; }
-  .selection-count { font-size:12.5px; color:var(--text-2); }
-  .selection-actions { display:flex; align-items:center; gap:8px; }
-  .mini-btn {
-    font-family:inherit; font-size:12.5px; font-weight:600;
-    border:none; background:transparent; color:var(--text-2); cursor:pointer; padding:4px 0;
-  }
-  .mini-btn:hover { color:var(--text); }
-  .mini-btn.primary { color:var(--accent); }
+  .selection-helper { color:var(--text-2); font-size:12.5px; margin:0 0 10px; }
   .actions { display:flex; gap:8px; margin-top:16px; }
   .btn { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; font-size:13.5px; font-weight:600; padding:9px 14px; border-radius:12px; border:1px solid var(--accent); background:var(--accent); color:#fff; text-decoration:none; }
   .btn svg { width:14px; height:14px; stroke:currentColor; }
@@ -86,6 +73,7 @@
 const card = document.getElementById("card");
 const FILE_ICON = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
 const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
+const DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>';
 const EXPAND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 let currentData = null;
@@ -132,7 +120,7 @@ function fileRow(file) {
       <span class="name">${esc(file.name || "File")}</span>
       ${meta.length ? `<span class="meta">${meta.join('<span class="sep">|</span>')}</span>` : ""}
     </span>
-    ${file.url ? `<span class="file-open" data-open-url="${esc(file.url)}" title="Open file">${LINK_ICON}</span>` : ""}
+    ${file.url ? `<span class="file-open" data-open-url="${esc(file.url)}" title="Open file">${DOWNLOAD_ICON}</span>` : ""}
   </button>`;
 }
 
@@ -156,17 +144,11 @@ function renderFiles(data, query = "") {
       ? emptyState("No matching files", "Try a different file name, folder, or teacher.")
       : emptyState("No files uploaded", "This class does not have resource files yet.");
   } else {
+    h += `<div class="selection-helper" id="file-helper">Select files to give ChatGPT context. Double-click a file to open it.</div>`;
     for (const [folder, items] of groups) {
       h += `<div class="section-label">${esc(folder)}</div>`;
       h += items.map(fileRow).join("");
     }
-    h += `<div class="selection-bar" id="selection-bar">
-            <div class="selection-count" id="selection-count">No files selected</div>
-            <div class="selection-actions">
-              <button class="mini-btn" id="clear-files" type="button">Clear</button>
-              <button class="mini-btn primary" id="ask-files" type="button">Ask ChatGPT</button>
-            </div>
-          </div>`;
   }
   if (data.url) h += `<div class="actions"><a class="btn" href="${esc(data.url)}" target="_blank" rel="noopener">${LINK_ICON} Open in ManageBac</a></div>`;
   card.innerHTML = h;
@@ -187,13 +169,14 @@ function renderFiles(data, query = "") {
     }));
     try { window.openai?.setWidgetState?.({ selected_class_files: selected }); } catch (_) {}
   }
-  function updateSelectionBar(persist = true) {
-    const bar = document.getElementById("selection-bar");
-    const count = document.getElementById("selection-count");
-    if (!bar || !count) return;
+  function updateSelection(persist = true) {
     const n = selectedFiles.size;
-    bar.classList.toggle("active", n > 0);
-    count.textContent = n === 1 ? "1 file selected" : `${n} files selected`;
+    const helper = document.getElementById("file-helper");
+    if (helper) {
+      helper.textContent = n
+        ? `${n === 1 ? "1 file" : `${n} files`} selected. Use your next message to discuss the selected files. Double-click a file to open it.`
+        : "Select files to give ChatGPT context. Double-click a file to open it.";
+    }
     card.querySelectorAll("[data-file-key]").forEach((row) => {
       const active = selectedFiles.has(row.dataset.fileKey);
       row.classList.toggle("selected", active);
@@ -215,24 +198,16 @@ function renderFiles(data, query = "") {
       const key = row.dataset.fileKey;
       if (selectedFiles.has(key)) selectedFiles.delete(key);
       else selectedFiles.add(key);
-      updateSelectionBar(true);
+      updateSelection(true);
+    });
+    row.addEventListener("dblclick", () => {
+      const f = files.find((item) => item.key === row.dataset.fileKey);
+      if (!f?.url) return;
+      if (window.openai?.openExternal) window.openai.openExternal({ href: f.url });
+      else window.open(f.url, "_blank", "noopener");
     });
   });
-  document.getElementById("clear-files")?.addEventListener("click", () => {
-    selectedFiles.clear();
-    updateSelectionBar(true);
-  });
-  document.getElementById("ask-files")?.addEventListener("click", () => {
-    const selected = selectedFileObjects();
-    if (!selected.length) return;
-    const list = selected.map((f, i) => {
-      const meta = [f.folder, f.size, f.uploaded_by && `by ${f.uploaded_by}`].filter(Boolean).join(", ");
-      return `${i + 1}. ${f.name}${meta ? ` (${meta})` : ""}`;
-    }).join("\n");
-    const prompt = `Use these selected ManageBac class files to help me answer my question or prepare for class.\n\nClass: ${data.class_name || "Unknown class"}\nSelected files:\n${list}`;
-    try { window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {}
-  });
-  updateSelectionBar(false);
+  updateSelection(false);
   reportHeight();
 }
 

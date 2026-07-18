@@ -109,21 +109,8 @@
     padding:9px 10px;
     border-bottom:1px solid var(--border);
     border-radius:0;
-    cursor:pointer;
-    transition:background .12s ease, color .12s ease;
   }
   .lesson:last-child { border-bottom:none; }
-  .lesson:hover, .lesson:focus-visible {
-    background:rgba(2,133,255,.06);
-    outline:none;
-  }
-  .lesson:hover .lesson-title, .lesson:focus-visible .lesson-title {
-    color:var(--accent);
-  }
-  .lesson.selected {
-    background:color-mix(in srgb, var(--accent) 8%, var(--bg));
-  }
-  .lesson.selected .lesson-title { color:var(--accent); }
   .lesson.current {
     background:transparent;
   }
@@ -156,20 +143,6 @@
   .btn { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; font-size:13.5px; font-weight:600; padding:9px 14px; border-radius:12px; border:1px solid var(--border); background:var(--bg); color:var(--text); text-decoration:none; }
   .btn:hover { background:var(--bg-secondary); }
   .btn svg { width:14px; height:14px; stroke:currentColor; }
-  .selection-bar {
-    display:none; align-items:center; justify-content:space-between; gap:10px;
-    margin-top:12px; padding:9px 10px; border:1px solid var(--border);
-    border-radius:12px; background:var(--bg-secondary);
-  }
-  .selection-bar.active { display:flex; }
-  .selection-count { font-size:12.5px; color:var(--text-2); }
-  .selection-actions { display:flex; align-items:center; gap:8px; }
-  .mini-btn {
-    font-family:inherit; font-size:12.5px; font-weight:600;
-    border:none; background:transparent; color:var(--text-2); cursor:pointer; padding:4px 0;
-  }
-  .mini-btn:hover { color:var(--text); }
-  .mini-btn.primary { color:var(--accent); }
   .empty, .empty-state { color:var(--text-3); font-size:13px; padding:16px 0 2px; }
   .empty-title { color:var(--text-2); font-weight:600; font-size:13.5px; }
   .empty-copy { margin-top:2px; color:var(--text-3); }
@@ -183,7 +156,6 @@ const card = document.getElementById("card");
 const LINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
 const EXPAND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-let selectedLessons = new Set();
 
 function applyHostContext() {
   const t = window.openai?.theme;
@@ -297,9 +269,7 @@ function weekGrid(slots, currentDay, options = {}) {
       const meta = [s.teacher, s.room].filter(Boolean).join(" | ");
       const time = [s.time, s.time_end].filter(Boolean).join(" - ");
       const isCurrent = s.current || (currentDay && s.day === currentDay);
-      const selected = selectedLessons.has(s.key);
-      h += `<div class="lesson${isCurrent ? " current" : ""}${selected ? " selected" : ""}" role="button" tabindex="0" aria-pressed="${selected ? "true" : "false"}"
-        data-slot-key="${esc(s.key)}" data-class="${esc(s.class_name || "Class")}" data-day="${esc(s.day)}" data-time="${esc(time)}" data-teacher="${esc(s.teacher)}" data-room="${esc(s.room)}">
+      h += `<div class="lesson${isCurrent ? " current" : ""}">
         ${time ? `<div class="lesson-time">${esc(time)}</div>` : ""}
         <div class="lesson-title">${esc(s.class_name || "Class")}</div>
         ${meta ? `<div class="lesson-meta">${esc(meta)}</div>` : ""}
@@ -313,7 +283,6 @@ function weekGrid(slots, currentDay, options = {}) {
 
 function renderTimetable(data) {
   const slots = (data.timetable || []).map(normalSlot).filter((s) => s.class_name || s.time).map((s, i) => ({ ...s, key: slotKey(s, i) }));
-  selectedLessons = new Set([...selectedLessons].filter((key) => slots.some((s) => s.key === key)));
   const current = data.current || {};
   const currentDay = current.day || current.raw_day || "";
   const explicitDays = (data.days || []).map((d) => d.label || d).filter(Boolean);
@@ -326,75 +295,10 @@ function renderTimetable(data) {
     h += emptyState("No classes scheduled", "There is no timetable data for this view.");
   } else {
     h += weekGrid(slots, currentDay, { hideSingleDayHeader: uniqueDays.length === 1, days: data.days || [] });
-    h += `<div class="selection-bar" id="selection-bar">
-            <div class="selection-count" id="selection-count">No classes selected</div>
-            <div class="selection-actions">
-              <button class="mini-btn" id="clear-lessons" type="button">Clear</button>
-              <button class="mini-btn primary" id="ask-lessons" type="button">Ask ChatGPT</button>
-            </div>
-          </div>`;
   }
   if (data.url) h += `<div class="actions"><a class="btn" href="${esc(data.url)}" target="_blank" rel="noopener">${LINK_ICON} Open in ManageBac</a></div>`;
   card.innerHTML = h;
   card.querySelector("#expand")?.addEventListener("click", requestFullscreen);
-  function selectedSlotObjects() {
-    return slots.filter((s) => selectedLessons.has(s.key));
-  }
-  function saveSelection() {
-    const selected = selectedSlotObjects().map((s) => ({
-      class_name: s.class_name,
-      day: s.day,
-      time: [s.time, s.time_end].filter(Boolean).join(" - "),
-      teacher: s.teacher,
-      room: s.room,
-    }));
-    try { window.openai?.setWidgetState?.({ selected_timetable_classes: selected }); } catch (_) {}
-  }
-  function updateSelectionBar(persist = true) {
-    const bar = document.getElementById("selection-bar");
-    const count = document.getElementById("selection-count");
-    if (!bar || !count) return;
-    const n = selectedLessons.size;
-    bar.classList.toggle("active", n > 0);
-    count.textContent = n === 1 ? "1 class selected" : `${n} classes selected`;
-    card.querySelectorAll("[data-slot-key]").forEach((row) => {
-      const active = selectedLessons.has(row.dataset.slotKey);
-      row.classList.toggle("selected", active);
-      row.setAttribute("aria-pressed", active ? "true" : "false");
-    });
-    if (persist) saveSelection();
-    reportHeight();
-  }
-  card.querySelectorAll(".lesson").forEach((lesson) => {
-    const toggleLesson = () => {
-      const key = lesson.dataset.slotKey;
-      if (selectedLessons.has(key)) selectedLessons.delete(key);
-      else selectedLessons.add(key);
-      updateSelectionBar(true);
-    };
-    lesson.addEventListener("click", toggleLesson);
-    lesson.addEventListener("keydown", (ev) => {
-      if (ev.key !== "Enter" && ev.key !== " ") return;
-      ev.preventDefault();
-      toggleLesson();
-    });
-  });
-  document.getElementById("clear-lessons")?.addEventListener("click", () => {
-    selectedLessons.clear();
-    updateSelectionBar(true);
-  });
-  document.getElementById("ask-lessons")?.addEventListener("click", () => {
-    const selected = selectedSlotObjects();
-    if (!selected.length) return;
-    const list = selected.map((s, i) => {
-      const time = [s.time, s.time_end].filter(Boolean).join(" - ");
-      const meta = [s.day, time, s.teacher && `teacher ${s.teacher}`, s.room && `room ${s.room}`].filter(Boolean).join(", ");
-      return `${i + 1}. ${s.class_name || "Class"}${meta ? ` (${meta})` : ""}`;
-    }).join("\n");
-    const prompt = `Use these selected ManageBac timetable classes to help me plan or answer my question.\n\nSelected classes:\n${list}\n\nYou can suggest a study plan, identify likely tasks to check, or help me prepare for these classes.`;
-    try { window.openai?.sendFollowUpMessage?.({ prompt }); } catch (_) {}
-  });
-  updateSelectionBar(false);
   reportHeight();
 }
 
