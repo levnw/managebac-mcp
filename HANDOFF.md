@@ -117,8 +117,8 @@ Data (`~/.managebac_mcp/*.db`, `secret.key`) is never touched by a code deploy.
 
 ### Health checks
 ```bash
-curl https://managebac.822538.xyz/                 # 200 = up
-curl -o/dev/null -w '%{http_code}' .../admin/users # 401 = healthy (auth required), 500/502 = broken
+curl https://managebac.822538.xyz/                                          # 200 = up
+curl https://managebac.822538.xyz/.well-known/oauth-protected-resource      # OAuth discovery JSON = healthy
 ```
 
 ---
@@ -161,12 +161,14 @@ Notes:
 
 ---
 
-## 6. Admin panel (`managebac_mcp/admin_panel/index.html`)
+## 6. Operator management (CLI)
 
-Web SPA served at `/admin`, talks to the `/admin/*` API (Bearer admin session
-token). Handles operator login, invite codes, user list (pause/resume, delete,
-regenerate, view password, edit ManageBac credentials with "test login"),
-per-user + broadcast messaging, activity, and the audit log.
+There is **no admin panel** — it was removed 2026-07-19; the server exposes only
+the MCP connector + OAuth endpoints. Operator tasks are CLI commands:
+`managebac-mcp newcode` (create invite code), `codes` (list), `delcode` (revoke),
+`users` (list enrolled), `deluser <id>` (remove + sign out). The backend data
+layer (`admin.py`: invite codes, messages, audit) is kept intact so a panel can
+be rebuilt on it later.
 
 ---
 

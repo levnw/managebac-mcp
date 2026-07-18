@@ -92,21 +92,23 @@ https://managebac.822538.xyz/mcp
 
 ChatGPT → **Settings → Connectors → Add custom connector** → paste that URL →
 create → click **Sign in**. New students enter their school URL, email, password,
-and a one-time invite code (generate codes in the admin panel); returning
-students just log in. (Requires a ChatGPT plan with custom connectors enabled.)
+and a one-time invite code (see below); returning students just log in.
+(Requires a ChatGPT plan with custom connectors enabled.)
 
 ---
 
-## Managing users
+## Managing users + invite codes (CLI)
 
 ```bash
 # in /Users/server/managebac-mcp on the Mac
-.venv/bin/managebac-mcp users          # list enrolled users
-.venv/bin/managebac-mcp deluser <id>   # remove a user + their cached data
+.venv/bin/managebac-mcp newcode -n "for Alex"   # generate a one-time invite code
+.venv/bin/managebac-mcp codes                    # list codes (used/unused)
+.venv/bin/managebac-mcp users                    # list enrolled users
+.venv/bin/managebac-mcp deluser <id>             # remove a user + cache + sign them out
 ```
 
-Or use the admin panel at `https://managebac.822538.xyz/admin` (invite codes,
-pause/resume, messaging).
+(There is no web admin panel — it was removed; the server exposes only the MCP
+connector and OAuth endpoints. Operator tasks are CLI-only for now.)
 
 ## Where data lives on the server
 

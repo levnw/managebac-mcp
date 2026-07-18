@@ -304,12 +304,11 @@ def submit(
 def set_admin_cmd(
     username: str = typer.Option(..., "--username", "-u", help="Admin username"),
 ):
-    """Set (or reset) the admin login used by the admin app."""
+    """Set (or reset) admin login credentials (for a future admin panel)."""
     from . import admin as _admin
     password = typer.prompt("Admin password", hide_input=True, confirmation_prompt=True)
     _admin.set_admin(username, password)
     rprint(f"[green]✓[/green] Admin credentials set for [bold]{username}[/bold].")
-    rprint("[dim]Use these in the admin app to log in.[/dim]")
 
 
 @app.command(hidden=True)
@@ -336,7 +335,7 @@ def serve(
     \b
     Everyone adds the same connector URL ({public}/mcp); ChatGPT shows a Sign-in
     popup where the student logs in with their ManageBac account (OAuth 2.1).
-    New users need a one-time invite code (generate one in the admin panel).
+    New users need a one-time invite code (generate one with `managebac-mcp newcode`).
     Point a Cloudflare Tunnel (or any reverse proxy) at this port.
 
     \b
@@ -415,20 +414,64 @@ def list_users_cmd():
 
 @app.command()
 def deluser(user_id: str = typer.Argument(help="User ID to delete (from `managebac-mcp users`)")):
-    """Remove an enrolled user and all their cached data."""
-    from . import users as _users, cache as _cache
+    """Remove an enrolled user, their cached data, and their OAuth sessions."""
+    from . import users as _users, cache as _cache, oauth as _oauth
     from .context import set_current_user
     u = next((x for x in _users.list_users() if x["id"] == user_id), None)
     if not u:
         rprint(f"[red]No user with ID {user_id}[/red]"); raise typer.Exit(1)
     if not typer.confirm(f"Delete {u['email']} and all their cached data?"):
         raise typer.Exit(0)
-    # Clear their cache rows, then the user record
-    full = _users.get_user_by_token(_users.get_user_by_email(u["mb_url"], u["email"]).token)
+    # Clear their cache rows, then the user record, then sign them out everywhere.
+    full = _users.get_user_by_id(user_id)
     set_current_user(full)
     _cache.clear_user()
     _users.delete_user(user_id)
+    _oauth.revoke_user_tokens(user_id)
     rprint(f"[green]✓[/green] Deleted {u['email']}")
+
+
+# ---------------------------------------------------------------------------
+# codes — manage invite codes from the terminal (the admin panel is gone)
+# ---------------------------------------------------------------------------
+
+@app.command(name="newcode")
+def new_code(note: str = typer.Option("", "--note", "-n", help="Optional label for who it's for")):
+    """Generate a one-time invite code (needed for a new student's first sign-in)."""
+    from . import admin as _admin
+    result = _admin.create_code(note)
+    rprint(f"[green]✓[/green] Invite code: [bold cyan]{result['code']}[/bold cyan]"
+           + (f"  [dim]({note})[/dim]" if note else ""))
+    rprint("[dim]Give it to the student — they enter it once, on their first OAuth sign-in.[/dim]")
+
+
+@app.command(name="codes")
+def list_codes_cmd():
+    """List invite codes and whether each has been used."""
+    from . import admin as _admin
+    import datetime as _dt
+    rows = _admin.list_codes()
+    if not rows:
+        rprint("[dim]No invite codes yet. Create one with `managebac-mcp newcode`.[/dim]")
+        return
+    table = Table(title="Invite Codes", show_lines=True)
+    table.add_column("Code", style="cyan")
+    table.add_column("Note")
+    table.add_column("Used by")
+    table.add_column("Created")
+    for c in rows:
+        created = _dt.datetime.fromtimestamp(c["created_at"]).strftime("%Y-%m-%d") if c.get("created_at") else ""
+        used = c.get("used_email") if c.get("used") else "[green]unused[/green]"
+        table.add_row(c["code"], c.get("note") or "", used or "used", created)
+    console.print(table)
+
+
+@app.command(name="delcode")
+def del_code(code: str = typer.Argument(help="Invite code to revoke")):
+    """Revoke an unused invite code."""
+    from . import admin as _admin
+    _admin.delete_code(code)
+    rprint(f"[green]✓[/green] Revoked {code}")
 
 
 if __name__ == "__main__":
