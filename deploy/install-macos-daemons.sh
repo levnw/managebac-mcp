@@ -12,7 +12,6 @@ fi
 
 TARGET_USER="server"
 TUID="$(id -u "$TARGET_USER")"
-SIGNUP_CODE="5f9f8cef"
 MCP_BIN="/Users/server/managebac-mcp/.venv/bin/managebac-mcp"
 CF_BIN="/opt/homebrew/bin/cloudflared"
 CF_CONFIG="/Users/server/.cloudflared/config.yml"
@@ -41,7 +40,6 @@ cat > /Library/LaunchDaemons/com.managebac.mcp.plist <<PLIST
   <key>WorkingDirectory</key><string>/Users/server/managebac-mcp</string>
   <key>EnvironmentVariables</key><dict>
     <key>HOME</key><string>/Users/server</string>
-    <key>MANAGEBAC_SIGNUP_CODE</key><string>$SIGNUP_CODE</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

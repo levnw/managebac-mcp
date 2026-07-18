@@ -334,26 +334,26 @@ def serve(
     Run the multi-user HTTP server so remote clients (ChatGPT) can connect.
 
     \b
-    Each user enrolls their own ManageBac account at /enroll and gets a private
-    connector URL. Point a Cloudflare Tunnel (or any reverse proxy) at this port.
+    Everyone adds the same connector URL ({public}/mcp); ChatGPT shows a Sign-in
+    popup where the student logs in with their ManageBac account (OAuth 2.1).
+    New users need a one-time invite code (generate one in the admin panel).
+    Point a Cloudflare Tunnel (or any reverse proxy) at this port.
 
     \b
       managebac-mcp serve --host 0.0.0.0 --port 8000 \\
         --public-url https://managebac.yourdomain.com
     """
-    from . import config, http_server
+    from . import http_server
 
     base = (public_url or f"http://{host}:{port}").rstrip("/")
-    invite = "[yellow]required[/yellow]" if config.SIGNUP_CODE else "[dim]not set (anyone can enroll)[/dim]"
 
     rprint(Panel.fit(
         f"[bold]ManageBac MCP — multi-user HTTP server[/bold]\n\n"
-        f"  Listening on:  [cyan]http://{host}:{port}[/cyan]\n"
-        f"  Invite code:   {invite}\n\n"
-        f"[bold]Send friends here to connect their account:[/bold]\n"
-        f"  [cyan]{base}/enroll[/cyan]\n\n"
-        f"[dim]Each user gets their own private connector URL after enrolling.\n"
-        f"Press Ctrl+C to stop.[/dim]",
+        f"  Listening on:  [cyan]http://{host}:{port}[/cyan]\n\n"
+        f"[bold]Everyone adds this one connector in ChatGPT:[/bold]\n"
+        f"  [cyan]{base}/mcp[/cyan]\n\n"
+        f"[dim]ChatGPT shows a Sign-in popup; students log in with their\n"
+        f"ManageBac account (new users need an invite code). Press Ctrl+C to stop.[/dim]",
         border_style="blue",
     ))
 

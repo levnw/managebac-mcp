@@ -1,136 +1,116 @@
 # Deploying the ManageBac MCP server
 
-This sets up the multi-user server on a Linux server and exposes it at
-**https://managebac.822538.xyz** through a Cloudflare Tunnel. Your friends then
-enroll at `/enroll` and connect from ChatGPT.
+Production runs on a **headless macOS** box (user `server`) with two launchd
+LaunchDaemons — the MCP server and a Cloudflare Tunnel — exposing it at
+**https://managebac.822538.xyz**. Students add one connector in ChatGPT and sign
+in with their ManageBac account (OAuth 2.1).
 
-Assumes a Debian/Ubuntu server with `systemd`. If you're on something else, the
-commands are similar — tell me your OS and I'll adjust.
+> This describes the real setup. (There is a Linux/systemd variant too, but it is
+> not what production uses.)
 
 ---
 
 ## Overview
 
 ```
-ChatGPT  ──HTTPS──>  Cloudflare  ──tunnel──>  cloudflared (on your server)
-                                                    │
-                                                    └─> localhost:8000  (managebac-mcp serve)
+ChatGPT  ──HTTPS──>  Cloudflare  ──tunnel "genesis"──>  cloudflared (on the Mac)
+                                                              │
+                                                              └─> 127.0.0.1:8000  (managebac-mcp serve)
 ```
 
-The MCP server only listens on `localhost` — it's never exposed to the internet
-directly. Cloudflare reaches it through the tunnel, so there are no inbound
-ports to open on the server's firewall.
+The MCP server only listens on `127.0.0.1` — never exposed to the internet
+directly. Cloudflare reaches it through the tunnel, so there are no inbound ports
+to open.
 
 ---
 
-## 1. Get the code onto the server
+## Access
+
+The server Mac is reached over **Tailscale SSH**:
 
 ```bash
-sudo mkdir -p /opt/managebac-mcp
-sudo chown "$USER" /opt/managebac-mcp
-git clone -b multi-user https://github.com/levnw/managebac-mcp /opt/managebac-mcp
-cd /opt/managebac-mcp
+ssh server@100.77.121.118          # first connect each session may need a browser re-auth
 ```
 
-## 2. Install Python deps with uv
+Repo lives at `/Users/server/managebac-mcp` (branch `multi-user`). `uv` is at
+`/Users/server/.local/bin/uv` (not on PATH).
+
+## First-time install
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh      # if uv isn't installed
-cd /opt/managebac-mcp
-uv sync
+# on the Mac, as the `server` user
+cd ~ && git clone -b multi-user https://github.com/levnw/managebac-mcp
+cd managebac-mcp && ~/.local/bin/uv sync
 ```
 
-Quick check it runs (Ctrl+C to stop):
+Then install the two LaunchDaemons (starts them at boot, no desktop login
+needed) and disable sleep:
 
 ```bash
-.venv/bin/managebac-mcp serve --host 127.0.0.1 --port 8000
+sudo bash deploy/install-macos-daemons.sh
 ```
 
-## 3. Run the server as a service
+This writes `/Library/LaunchDaemons/com.managebac.{mcp,cloudflared}.plist`,
+bootstraps them into the system domain, and sets `pmset` so the Mac never sleeps
+(a sleeping Mac drops the tunnel). The MCP daemon runs:
+
+```
+managebac-mcp serve --host 127.0.0.1 --port 8000 --public-url https://managebac.822538.xyz
+```
+
+`--public-url` is **required** — the OAuth discovery metadata is built from it.
+
+## Deploy an update
 
 ```bash
-# Create a dedicated user to run it
-sudo useradd -r -s /usr/sbin/nologin mbmcp || true
-sudo chown -R mbmcp /opt/managebac-mcp
-
-# (Optional but recommended) require an invite code to enroll:
-#   edit deploy/managebac-mcp.service and uncomment the Environment line
-sudo cp deploy/managebac-mcp.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now managebac-mcp
-sudo systemctl status managebac-mcp        # should be "active (running)"
+ssh server@100.77.121.118 \
+  "cd /Users/server/managebac-mcp && git pull --ff-only origin multi-user && \
+   .venv/bin/uv sync && launchctl kickstart -k system/com.managebac.mcp"
 ```
 
-## 4. Install cloudflared
+(If the daemons are running as per-user LaunchAgents in `gui/502` rather than
+system daemons, use `launchctl kickstart -k gui/502/com.managebac.mcp`.)
+
+## Health checks
 
 ```bash
-# Debian/Ubuntu
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
-sudo dpkg -i cloudflared.deb
+curl https://managebac.822538.xyz/        # "ManageBac MCP server is running…"
+curl https://managebac.822538.xyz/.well-known/oauth-protected-resource   # OAuth discovery JSON
 ```
 
-## 5. Log in to Cloudflare (this step is YOURS)
-
-```bash
-cloudflared tunnel login
-```
-
-This opens a browser. Log into your Cloudflare account and pick the
-**822538.xyz** zone. This is the one step that can't be automated — it
-authorizes your account.
-
-## 6. Create the tunnel + DNS + service
-
-```bash
-sudo bash deploy/setup-tunnel.sh
-```
-
-This creates a tunnel named `managebac`, points `managebac.822538.xyz` at it,
-writes `/etc/cloudflared/config.yml`, and starts cloudflared as a service.
-
-## 7. Test it
-
-```bash
-curl https://managebac.822538.xyz/
-# -> "ManageBac MCP server is running. Visit /enroll to connect an account."
-```
-
-Open `https://managebac.822538.xyz/enroll` in a browser and connect your own
-ManageBac account — you'll get your personal connector URL.
+Logs: `/tmp/managebac-mcp.log`, `/tmp/cloudflared.log`.
 
 ---
 
 ## Connecting from ChatGPT
 
-In ChatGPT → **Settings → Connectors → Add custom connector**, paste the URL the
-enroll page gave you:
+Everyone adds the **same** connector — no per-user URL:
 
 ```
-https://managebac.822538.xyz/mcp?key=YOUR_TOKEN
+https://managebac.822538.xyz/mcp
 ```
 
-(Requires a ChatGPT plan with developer mode / custom connectors enabled.)
+ChatGPT → **Settings → Connectors → Add custom connector** → paste that URL →
+create → click **Sign in**. New students enter their school URL, email, password,
+and a one-time invite code (generate codes in the admin panel); returning
+students just log in. (Requires a ChatGPT plan with custom connectors enabled.)
 
 ---
-
-## Updating later
-
-```bash
-cd /opt/managebac-mcp
-git pull
-uv sync
-sudo systemctl restart managebac-mcp
-```
 
 ## Managing users
 
 ```bash
-sudo -u mbmcp /opt/managebac-mcp/.venv/bin/managebac-mcp users        # list
-sudo -u mbmcp /opt/managebac-mcp/.venv/bin/managebac-mcp deluser <id> # remove
+# in /Users/server/managebac-mcp on the Mac
+.venv/bin/managebac-mcp users          # list enrolled users
+.venv/bin/managebac-mcp deluser <id>   # remove a user + their cached data
 ```
+
+Or use the admin panel at `https://managebac.822538.xyz/admin` (invite codes,
+pause/resume, messaging).
 
 ## Where data lives on the server
 
-Everything is under the `mbmcp` user's home (`~/.managebac_mcp/`):
-`users.db` (encrypted credentials), `secret.key` (encryption key — back this up
-separately and keep it private), and `cache.db`.
+Under `/Users/server/.managebac_mcp/`: `users.db` (encrypted credentials),
+`oauth.db` (access/refresh tokens), `admin.db` (invite codes, admin sessions),
+`secret.key` (encryption key — back this up separately and keep it private), and
+`cache.db`.

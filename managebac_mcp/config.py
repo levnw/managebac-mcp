@@ -19,10 +19,6 @@ BASE_URL = os.environ.get("MANAGEBAC_URL", "https://es.managebac.com")
 EMAIL = os.environ.get("MANAGEBAC_EMAIL", "")
 PASSWORD = os.environ.get("MANAGEBAC_PASSWORD", "")
 
-# Optional invite code for the self-service /enroll page. If set, new users
-# must enter it to enroll — stops strangers using your server as a free proxy.
-SIGNUP_CODE = os.environ.get("MANAGEBAC_SIGNUP_CODE", "")
-
 DATA_DIR = Path.home() / ".managebac_mcp"
 SESSION_FILE = DATA_DIR / "session.json"
 CACHE_DB = DATA_DIR / "cache.db"
