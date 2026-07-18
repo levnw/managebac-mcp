@@ -26,8 +26,10 @@ ENROLL_INSTRUCTIONS = (
     "- NEVER ask for or accept their ManageBac password in chat. The `enroll` tool "
     "returns a private link; tell the student to open it and type their password there. "
     "Their password must only ever be entered on that page, never sent to you.\n"
-    "- After they finish on that page they get a personal connector link to add as a "
-    "second connector. From then on they use that one, not this enroll connector."
+    "- After they finish on that page they add the main connector (…/mcp) and sign in "
+    "via the OAuth popup. From then on they use that one, not this enroll connector. "
+    "(NOTE: this in-chat enroll flow is deprecated — the /mcp connector's own sign-in "
+    "popup can enroll new users directly.)"
 )
 
 enroll_server = Server("managebac-enroll", instructions=ENROLL_INSTRUCTIONS)

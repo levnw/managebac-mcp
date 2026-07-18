@@ -1,9 +1,10 @@
 """
 Multi-user store: credentials (encrypted), tokens, and per-user session cookies.
 
-Each user is identified by a secret token (the `?key=` in their connector URL).
-Passwords are encrypted at rest with a Fernet key stored separately on disk.
-Session cookies are stored per-user so no two users ever share a session.
+Each user carries an internal secret token (a legacy identifier the admin panel
+lists; HTTP auth is OAuth — see oauth.py). Passwords are encrypted at rest with
+a Fernet key stored separately on disk. Session cookies are stored per-user so
+no two users ever share a session.
 
 Storage lives in ~/.managebac_mcp/users.db (separate from the response cache).
 """

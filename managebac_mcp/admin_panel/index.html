@@ -964,7 +964,7 @@ async function openUser(userId) {
   document.getElementById('dtEnrolled').textContent = fmtDateFull(u.created_at);
   document.getElementById('dtLastSeen').textContent = fmtRelative(u.last_active);
   document.getElementById('dtStatus').innerHTML = statusBadge(u);
-  document.getElementById('dtConnector').textContent = `${window.location.origin}/mcp?key=${u.token ? u.token.slice(0, 6) + '••••••' : '—'}`;
+  document.getElementById('dtConnector').textContent = `${window.location.origin}/mcp`;
   document.getElementById('dtTotalCalls').textContent = u.request_count ?? '—';
 
   // Delete label

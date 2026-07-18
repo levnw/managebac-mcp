@@ -1599,6 +1599,11 @@ async def list_tools() -> list[types.Tool]:
     }
     for _t in _tools:
         _t.outputSchema = _passthrough_schema if _t.name in _own_sc_tools else _result_schema
+        # Declare OAuth on every tool (merged so widget _meta keys like
+        # openai/outputTemplate survive). Together with the 401 WWW-Authenticate
+        # challenge on /mcp, this is what makes ChatGPT show its Sign-in UI.
+        _t.meta = {**(_t.meta or {}),
+                   "securitySchemes": [{"type": "oauth2", "scopes": ["managebac"]}]}
 
     return _tools
 

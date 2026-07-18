@@ -159,9 +159,10 @@ code. (Returning users can re-enroll to update their password without a code.)
 
 ### 4. The student connects — two ways
 
-Both paths end the same way: the student gets a private connector URL
-(`…/mcp?key=THEIR_OWN_TOKEN`) to add in ChatGPT → Settings → Connectors → custom
-MCP connector. The enroll pages are styled to look like the school's own
+Both paths end the same way: the student adds the shared connector URL
+(`https://…/mcp`) in ChatGPT → Settings → Connectors → custom MCP connector, and
+ChatGPT shows a **Sign in** popup (OAuth 2.1 at `/authorize` + `/token`) where
+they log in with their ManageBac account. The enroll pages are styled to look like the school's own
 ManageBac login and **auto-brand per school** — the logo and name are pulled live
 from that school's ManageBac login page, so a new school needs zero setup.
 

@@ -243,7 +243,8 @@ files 1h, journal 30m, units 24h, file_content 1h.
   ManageBac. Refresh fixtures via `tests/save_fixtures.py` (needs live login).
 - **Measuring payload sizes:** `cache.db.request_log` stores every response;
   `SELECT tool, length(response) FROM request_log ...` shows real token costs.
-  You can also POST a JSON-RPC `tools/call` to `localhost:8000/mcp?key=<token>`
+  You can also POST a JSON-RPC `tools/call` to `localhost:8000/mcp` with an
+  OAuth Bearer access token (auth is OAuth 2.1 now — no more `?key=`)
   and measure the SSE `data:` text length.
 - **Live in ChatGPT:** connector under `+` menu → managebac. Good test prompts:
   "list my Digital Design tasks with submission status", "predict my MYP grades
