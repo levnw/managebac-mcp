@@ -101,6 +101,8 @@
   .rows { display: flex; flex-direction: column; }
   .row {
     display: block;
+    position: relative;
+    isolation: isolate;
     width: 100%;
     color: inherit;
     text-decoration: none;
@@ -115,16 +117,38 @@
     cursor: pointer;
     border-radius: 10px;
   }
+  .row::before {
+    content: "";
+    position: absolute;
+    inset: 2px -8px;
+    border-radius: 10px;
+    background: transparent;
+    pointer-events: none;
+    z-index: 0;
+  }
   :root[data-display="fullscreen"] .row {
     padding: 13px 0;
   }
   .row:last-child { border-bottom: none; }
   .row:hover .row-title, .row:focus-visible .row-title { color: var(--accent); }
   .row:focus-visible { outline: none; background: rgba(2,133,255,.06); }
-  .row.selected { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); border-bottom-color: transparent; padding-left: 8px; padding-right: 8px; }
+  .row.selected { border-bottom-color: transparent; }
+  .row.selected::before { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+  .row.selected + .row.selected::before {
+    top: -1px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+  .row.selected:has(+ .row.selected)::before {
+    bottom: -1px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
   .row.selected .row-title { color: var(--accent); }
 
   .row-top {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -316,7 +340,7 @@ function row(task) {
     <div class="row-top">
       <div class="row-main">
         <div class="row-title">${esc(task.title || "Task")}</div>
-        ${meta.length ? `<div class="meta">${meta.join('<span class="sep">|</span>')}</div>` : ""}
+        ${meta.length ? `<div class="meta">${meta.join(" · ")}</div>` : ""}
         ${grades ? `<div class="grades">Grades ${grades}</div>` : ""}
         ${commentHint}
       </div>
@@ -400,13 +424,6 @@ function renderTaskList(data) {
     try { window.openai?.setWidgetState?.({ groups: { ...groupState }, selected_tasks: selectedTaskObjects() }); } catch (_) {}
   }
   function updateSelection(persist = true) {
-    const n = selectedTasks.size;
-    const helper = card.querySelector(".helper");
-    if (helper) {
-      helper.textContent = n
-        ? `${n === 1 ? "1 task" : `${n} tasks`} selected. Use your next message to discuss the selected tasks. Double-click a task to open it.`
-        : "Select tasks to give ChatGPT context. Double-click a task to open it.";
-    }
     card.querySelectorAll("[data-task-key]").forEach((rowEl) => {
       const active = selectedTasks.has(rowEl.dataset.taskKey);
       rowEl.classList.toggle("selected", active);

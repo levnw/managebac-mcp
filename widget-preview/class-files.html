@@ -12,7 +12,7 @@
   html, body { background:transparent; }
   body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--text); -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.45; }
   .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; max-width:560px; margin:0 auto; }
-  :root[data-display="fullscreen"] .card { width:min(100%, calc(100vw - 32px)); max-width:960px; margin:16px auto calc(96px + env(safe-area-inset-bottom, 0px)); }
+  :root[data-display="fullscreen"] .card { width:min(100%, calc(100vw - 32px)); max-width:1040px; margin:16px auto calc(96px + env(safe-area-inset-bottom, 0px)); }
   .head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
   .title { font-size:16px; font-weight:600; line-height:1.3; }
   .subtitle { color:var(--text-2); font-size:13px; margin-top:2px; }
@@ -27,28 +27,32 @@
   .section-label { font-size:11.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin:12px 0 2px; }
   .section-label:first-of-type { margin-top:0; }
   .file {
+    position:relative; isolation:isolate;
     width:100%; display:flex; align-items:center; gap:10px; color:inherit; text-decoration:none;
-    padding:9px 8px; border:0; border-bottom:1px solid var(--border); border-radius:10px; background:transparent;
+    padding:9px 0; border:0; border-bottom:1px solid var(--border); border-radius:10px; background:transparent;
     font:inherit; text-align:left; cursor:pointer;
+  }
+  .file::before {
+    content:""; position:absolute; inset:2px -8px; border-radius:10px;
+    background:transparent; pointer-events:none; z-index:0;
   }
   .file:last-child { border-bottom:none; }
   .file:hover .name, .file:focus-visible .name { color:var(--accent); }
-  .file:focus-visible { outline:none; background:rgba(2,133,255,.06); }
-  .file.selected {
-    background:color-mix(in srgb, var(--accent) 8%, var(--bg)); border-bottom-color:transparent;
-  }
-  .file.selected + .file.selected { border-top-left-radius:0; border-top-right-radius:0; }
-  .file.selected:has(+ .file.selected) { border-bottom-left-radius:0; border-bottom-right-radius:0; }
+  .file:focus-visible { outline:none; }
+  .file:focus-visible::before { background:rgba(2,133,255,.06); }
+  .file.selected { border-bottom-color:transparent; }
+  .file.selected::before { background:color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+  .file.selected + .file.selected::before { top:-1px; border-top-left-radius:0; border-top-right-radius:0; }
+  .file.selected:has(+ .file.selected)::before { bottom:-1px; border-bottom-left-radius:0; border-bottom-right-radius:0; }
   .file.selected .name { color:var(--accent); }
-  .icon { width:18px; height:18px; color:var(--text-3); flex-shrink:0; }
-  .main { display:block; flex:1 1 auto; min-width:0; overflow:hidden; }
+  .icon { position:relative; z-index:1; width:18px; height:18px; color:var(--text-3); flex-shrink:0; }
+  .main { position:relative; z-index:1; display:block; flex:1 1 auto; min-width:0; overflow:hidden; }
   .name { display:block; max-width:100%; font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:color .12s ease; }
   .meta { display:flex; flex-wrap:wrap; gap:5px; color:var(--text-2); font-size:12px; margin-top:1px; }
-  .sep { color:var(--text-3); margin:0 2px; }
   .file-open {
     display:inline-flex; align-items:center; justify-content:center;
     width:26px; height:26px; border-radius:8px; border:none; background:transparent;
-    color:var(--text-3); cursor:pointer; flex-shrink:0;
+    color:var(--text-3); cursor:pointer; flex-shrink:0; position:relative; z-index:1;
   }
   .file-open:hover { color:var(--text); background:var(--bg-secondary); }
   .file-open svg { width:14px; height:14px; stroke:currentColor; }
@@ -60,7 +64,7 @@
   .empty-title { color:var(--text-2); font-weight:600; font-size:13.5px; }
   .empty-copy { margin-top:2px; color:var(--text-3); }
   @media (max-width:419px) {
-    .file { gap:7px; padding-left:6px; padding-right:6px; }
+    .file { gap:7px; }
     .icon { width:16px; height:16px; }
     .file-open { width:24px; height:24px; }
   }
@@ -118,7 +122,7 @@ function fileRow(file) {
     ${FILE_ICON}
     <span class="main">
       <span class="name">${esc(file.name || "File")}</span>
-      ${meta.length ? `<span class="meta">${meta.join('<span class="sep">|</span>')}</span>` : ""}
+      ${meta.length ? `<span class="meta">${meta.join(" · ")}</span>` : ""}
     </span>
     ${file.url ? `<span class="file-open" data-open-url="${esc(file.url)}" title="Open file">${DOWNLOAD_ICON}</span>` : ""}
   </button>`;
@@ -173,9 +177,7 @@ function renderFiles(data, query = "") {
     const n = selectedFiles.size;
     const helper = document.getElementById("file-helper");
     if (helper) {
-      helper.textContent = n
-        ? `${n === 1 ? "1 file" : `${n} files`} selected. Use your next message to discuss the selected files. Double-click a file to open it.`
-        : "Select files to give ChatGPT context. Double-click a file to open it.";
+      helper.textContent = "Select files to give ChatGPT context. Double-click a file to open it.";
     }
     card.querySelectorAll("[data-file-key]").forEach((row) => {
       const active = selectedFiles.has(row.dataset.fileKey);

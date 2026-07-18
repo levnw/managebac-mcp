@@ -26,7 +26,7 @@
     color:var(--text); -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.45;
   }
   .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; max-width:560px; margin:0 auto; }
-  :root[data-display="fullscreen"] .card { width:min(100%, calc(100vw - 32px)); max-width:960px; margin:16px auto calc(96px + env(safe-area-inset-bottom, 0px)); }
+  :root[data-display="fullscreen"] .card { width:min(100%, calc(100vw - 32px)); max-width:1040px; margin:16px auto calc(96px + env(safe-area-inset-bottom, 0px)); }
   .head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
   .title { font-size:16px; font-weight:600; line-height:1.3; }
   .subtitle { color:var(--text-2); font-size:13px; margin-top:2px; }
@@ -296,7 +296,7 @@ function renderRead(data) {
   const classes = (data.classes || []).filter(Boolean);
   const single = classes.length === 1;
   const fullscreen = document.documentElement.dataset.display === "fullscreen";
-  let h = header(data, classes.length);
+  let h = header(data, classes.length, classes.length > 1);
   h += `<div class="divider"></div>`;
   if (!classes.length) {
     h += emptyState("No grades available", "ManageBac has not returned any class grades yet.");
@@ -316,10 +316,10 @@ function renderRead(data) {
   reportHeight();
 }
 
-function header(data, count) {
+function header(data, count, canExpand = true) {
   return `<div class="head"><div><div class="title">Grades</div>${data.scope ? `<div class="subtitle">${esc(data.scope)}</div>` : ""}</div>
     <div class="head-side"><div class="score-head"><div class="count">${count} ${count === 1 ? "class" : "classes"}</div><div class="grade-label">Final grade</div></div>
-    <button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button></div></div>`;
+    ${canExpand ? `<button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button>` : ""}</div></div>`;
 }
 
 // ── EDIT MODE ─────────────────────────────────────────────────────────────
@@ -371,7 +371,7 @@ function summaryInner(value, was, isOverall) {
 
 function renderEdit() {
   const st = editState;
-  let h = header(st.data, (st.data.classes || []).filter(Boolean).length);
+  let h = header(st.data, (st.data.classes || []).filter(Boolean).length, false);
   h += `<div class="divider"></div>`;
 
   if (st.mode === "single") {

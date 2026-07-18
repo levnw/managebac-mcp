@@ -25,7 +25,6 @@
   .divider { height:1px; background:var(--border); margin:14px -16px; }
   .section-label { font-size:11.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px; }
   .meta { display:flex; flex-wrap:wrap; gap:5px; color:var(--text-2); font-size:12.5px; margin-top:2px; }
-  .sep { color:var(--text-3); margin:0 2px; }
   .week-wrap { overflow-x:auto; margin:0 -4px; padding:0 4px 2px; }
   .week-board {
     display:grid;
@@ -228,7 +227,7 @@ function slotRow(s, currentDay) {
     <div class="time">${esc(time || s.period || "")}</div>
     <div class="main">
       <div class="class">${esc(s.class_name || "Class")}</div>
-      ${meta.length ? `<div class="meta">${meta.join('<span class="sep">|</span>')}</div>` : ""}
+      ${meta.length ? `<div class="meta">${meta.join(" · ")}</div>` : ""}
       ${s.task_count ? `<div class="tasks">${esc(s.task_count)} ManageBac ${s.task_count === 1 ? "task" : "tasks"} linked to this class</div>` : ""}
     </div>
   </div>`;
@@ -266,7 +265,7 @@ function weekGrid(slots, currentDay, options = {}) {
       h += `<div class="empty" style="padding:10px 0;color:var(--text-3);font-size:12.5px">No classes</div>`;
     }
     for (const s of rows) {
-      const meta = [s.teacher, s.room].filter(Boolean).join(" | ");
+      const meta = [s.teacher, s.room].filter(Boolean).join(" · ");
       const time = [s.time, s.time_end].filter(Boolean).join(" - ");
       const isCurrent = s.current || (currentDay && s.day === currentDay);
       h += `<div class="lesson${isCurrent ? " current" : ""}">

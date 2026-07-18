@@ -67,7 +67,7 @@
   }
   :root[data-display="fullscreen"] .card {
     width: min(100%, calc(100vw - 32px));
-    max-width: 960px;
+    max-width: 1040px;
     margin: 16px auto calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
@@ -472,13 +472,6 @@ function render(task) {
     } catch (_) {}
   }
   function updateSelection(persist = true) {
-    const n = selectedFiles.size;
-    const helper = document.getElementById("file-helper");
-    if (helper) {
-      helper.textContent = n
-        ? `${n === 1 ? "1 attachment" : `${n} attachments`} selected. Use your next message to discuss the selected attachments. Double-click an attachment to open it.`
-        : "Select attachments to give ChatGPT context. Double-click an attachment to open it.";
-    }
     for (const row of card.querySelectorAll("[data-file-key]")) {
       const active = selectedFiles.has(row.dataset.fileKey);
       row.classList.toggle("selected", active);
