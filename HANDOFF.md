@@ -46,7 +46,7 @@ School in use: European School (Georgia), `https://es.managebac.com`, IB MYP
 | **Server repo** | `/Users/server/managebac-mcp` (branch `multi-user`) |
 | **Public URL** | `https://managebac.822538.xyz` (Cloudflare Tunnel → localhost:8000) |
 | **Data dir (server)** | `/Users/server/.managebac_mcp/` |
-| **Admin app (SwiftUI)** | `Server manage/` (macOS + iOS, talks to `/admin/*` API) |
+| **Admin panel** | `managebac_mcp/admin_panel/index.html`, served at `/admin` (talks to the `/admin/*` API) |
 
 ⚠️ **`deploy/DEPLOY.md` is WRONG about the OS.** It describes Debian/systemd.
 The real production server is **macOS (Darwin arm64)** running services via
@@ -64,7 +64,7 @@ ChatGPT / Claude  ──HTTPS──>  Cloudflare  ──tunnel "genesis"──> 
                                                                             │
                                                                             └─> es.managebac.com (scrape, per-user session)
 
-Server Manage app  ──HTTPS──>  same /admin/* endpoints (Bearer admin token)
+Admin panel (/admin) ──HTTPS──>  same /admin/* endpoints (Bearer admin token)
 ```
 
 - The MCP server listens only on `127.0.0.1:8000`; Cloudflare reaches it via the
@@ -161,20 +161,12 @@ Notes:
 
 ---
 
-## 6. SwiftUI admin app (`Server manage/`)
+## 6. Admin panel (`managebac_mcp/admin_panel/index.html`)
 
-macOS/iOS app for the operator. Talks to the `/admin/*` API.
-- `APIClient.swift` — `Session` (keychain-stored admin token) + `API` (all calls,
-  incl. `updateCredentials`).
-- `Models.swift` — `AdminUser`, `InviteCode`, `ActivityItem`, etc.
-- `UsersView.swift` — user list + `UserDetailView` (pause/resume, regenerate
-  link, note, **edit ManageBac email/password with "Save & test login"**, remove,
-  activity).
-- `CodesView.swift`, `ActivityView.swift`, `OverviewView.swift`, `LoginView.swift`,
-  `RootView.swift`, `Theme.swift`, `Keychain.swift`.
-- Default server URL baked in: `https://managebac.822538.xyz`.
-- ⚠️ Xcode project tracks a `UserInterfaceState.xcuserstate` (UI junk) — do NOT
-  commit it.
+Web SPA served at `/admin`, talks to the `/admin/*` API (Bearer admin session
+token). Handles operator login, invite codes, user list (pause/resume, delete,
+regenerate, view password, edit ManageBac credentials with "test login"),
+per-user + broadcast messaging, activity, and the audit log.
 
 ---
 

@@ -38,8 +38,8 @@ school LMS — no official API exists, everything is done by parsing rendered HT
 BeautifulSoup4) and exposes it as tools to ChatGPT (via Apps SDK widgets) and Claude Desktop. It
 started as the developer's own tool for tracking their IB MYP grades at a Georgian international
 school, and has grown into a small multi-tenant product: other students enroll their own
-ManageBac login and get an isolated, encrypted connector URL. An admin panel (web + a native
-SwiftUI macOS/iOS app) lets the operator manage users, invite codes, and messaging.
+ManageBac login and get an isolated, encrypted connector URL. A web admin panel lets the
+operator manage users, invite codes, and messaging.
 
 ## 3. Architecture snapshot
 
