@@ -66,7 +66,8 @@
     margin: 0 auto;
   }
   :root[data-display="fullscreen"] .card {
-    max-width: 720px;
+    width: min(100%, calc(100vw - 32px));
+    max-width: 960px;
     margin: 16px auto calc(96px + env(safe-area-inset-bottom, 0px));
   }
 
@@ -411,7 +412,7 @@ function render(task) {
   }
 
   // ═══ Box 3: attachments · submission · discussion/resources ═══
-  if (files.length || submitted !== null || discussions !== null) {
+  if (files.length || submittedRows.length || (Array.isArray(discussions) && discussions.length)) {
     h += `<div class="divider"></div>`;
     if (files.length) {
       h += `<div class="section-label">Attachments</div><div class="files">`;
@@ -420,8 +421,6 @@ function render(task) {
       if (hiddenAttachmentCount > 0) {
         h += `<button class="more-btn" id="attachments-more">+ ${hiddenAttachmentCount} more</button>`;
       }
-    } else {
-      h += `<div class="section-label">Attachments</div>${emptyState("No attachments", "This task does not include any attached files.")}`;
     }
     if (submitted && submitted.length) {
       h += `<div class="section-label sub-label">Your submission</div><div class="files">` +
@@ -431,9 +430,6 @@ function render(task) {
       if (hiddenSubmissionCount > 0) {
         h += `<button class="more-btn" id="submissions-more">+ ${hiddenSubmissionCount} more</button>`;
       }
-    } else if (submitted !== null && submitted.length === 0) {
-      h += `<div class="section-label sub-label">Your submission</div>
-            ${emptyState(task.due_past ? "No submission uploaded" : "Nothing submitted yet", task.due_past ? "ManageBac did not find a submitted file for this deadline." : "A submission box exists, but no file has been uploaded.")}`;
     }
     if (Array.isArray(discussions) && discussions.length) {
       h += `<div class="section-label sub-label">Discussion</div><div id="disc-extra" style="display:none">` +
@@ -444,8 +440,6 @@ function render(task) {
       if (hiddenDiscussionCount > 0) {
         h += `<button class="more-btn" id="discussions-more">Show discussion</button>`;
       }
-    } else if (Array.isArray(discussions)) {
-      h += `<div class="section-label sub-label">Discussion</div>${emptyState("No discussion posts yet", "Comments will appear here when the class or teacher adds them.")}`;
     }
     if (selectableFiles.length) {
       h += `<div class="selection-bar" id="selection-bar">
