@@ -72,48 +72,6 @@ server = Server("managebac", instructions=SERVER_INSTRUCTIONS)
 WIDGET_MIME = "text/html+skybridge"  # official Python examples
 WIDGET_MIME_ALT = "text/html;profile=mcp-app"  # troubleshooting guide
 
-_TEST_WIDGET_URI = "ui://widget/test.html"
-_TEST_WIDGET_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>UI Debug</title>
-  <style>
-    body { background: transparent; color: #0f172a; font-family: monospace; font-size: 12px; margin: 0; padding: 12px; }
-    .row { margin-bottom: 8px; }
-    .label { font-weight: bold; color: #64748b; }
-    pre { background: #f1f5f9; padding: 8px; border-radius: 6px; white-space: pre-wrap; word-break: break-all; margin: 4px 0 0; }
-    .msg { background: #e0f2fe; border-left: 3px solid #0284c7; padding: 6px 8px; margin: 4px 0; border-radius: 0 6px 6px 0; }
-  </style>
-</head>
-<body>
-  <div class="row"><span class="label">window.openai exists:</span> <span id="exists">?</span></div>
-  <div class="row"><span class="label">toolOutput:</span><pre id="output">checking...</pre></div>
-  <div class="row"><span class="label">toolInput:</span><pre id="input">checking...</pre></div>
-  <div class="row"><span class="label">globals:</span><pre id="globals">checking...</pre></div>
-  <div class="row"><span class="label">postMessages received:</span></div>
-  <div id="msgs"></div>
-  <script>
-    document.getElementById('exists').textContent = (typeof window.openai !== 'undefined') ? 'YES' : 'NO';
-    document.getElementById('output').textContent = JSON.stringify(window.openai?.toolOutput, null, 2);
-    document.getElementById('input').textContent = JSON.stringify(window.openai?.toolInput, null, 2);
-    document.getElementById('globals').textContent = JSON.stringify(window.openai?.globals, null, 2);
-
-    window.addEventListener('message', ev => {
-      const d = document.createElement('div');
-      d.className = 'msg';
-      d.textContent = JSON.stringify(ev.data);
-      document.getElementById('msgs').appendChild(d);
-    });
-
-    window.addEventListener('openai:set_globals', ev => {
-      document.getElementById('globals').textContent = JSON.stringify(ev.detail?.globals, null, 2);
-    });
-  </script>
-</body>
-</html>"""
-
 _TASK_DETAIL_URI = "ui://widget/task-detail-v10.html"
 _TASK_DETAIL_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -448,10 +406,9 @@ _CLASS_LIST_URI = "ui://widget/class-list-v3.html"
 _CLASS_LIST_PATH = Path(__file__).parent.parent / "widget-preview" / "class-list.html"
 _CLASS_LIST_HTML: str = _CLASS_LIST_PATH.read_text(encoding="utf-8")
 
-# Static widgets (test widget + task card stub registered so ChatGPT
-# sees a widget for get_task_detail in list_resources).
+# Static widgets registered so ChatGPT sees a widget for each show_* tool
+# in list_resources.
 _STATIC_WIDGETS = {
-    _TEST_WIDGET_URI: {"html": _TEST_WIDGET_HTML, "title": "Test Widget"},
     _TASK_DETAIL_URI: {"html": _TASK_CARD_HTML, "title": "Task Detail"},
     _CLASS_FILES_URI: {"html": _CLASS_FILES_HTML, "title": "Class Files"},
     _GRADES_URI: {"html": _GRADES_HTML, "title": "Grades"},
@@ -944,7 +901,6 @@ def _widget_meta(uri: str, invoking: str, invoked: str) -> dict:
         "openai/widgetAccessible": True,
     }
 
-_TEST_META = _widget_meta(_TEST_WIDGET_URI, "Loading test widget...", "Test widget loaded")
 # Static task meta used only in the tool *definition* so ChatGPT knows the tool has a widget.
 # Actual CallToolResult uses a per-task URI from _make_task_widget().
 _TASK_META_STATIC = _widget_meta(_TASK_DETAIL_URI, "Loading task...", "Task loaded")
@@ -957,9 +913,7 @@ _CLASS_LIST_META_STATIC = _widget_meta(_CLASS_LIST_URI, "Loading classes...", "C
 
 def _resource_meta(uri: str) -> dict:
     """Full _meta for a widget resource (list + read), including the image CSP."""
-    if uri == _TEST_WIDGET_URI:
-        invoking, invoked = "Loading test widget...", "Test widget loaded"
-    elif uri == _CLASS_FILES_URI:
+    if uri == _CLASS_FILES_URI:
         invoking, invoked = "Loading files...", "Files loaded"
     elif uri == _GRADES_URI:
         invoking, invoked = "Loading grades...", "Grades loaded"
@@ -1566,16 +1520,6 @@ async def list_tools() -> list[types.Tool]:
             },
             annotations=_RO_ANNOTATIONS,
         ),
-        types.Tool(
-            name="test_ui",
-            description=(
-                "TEST TOOL: Simple UI test to verify the iframe infrastructure is working. "
-                "Call this to see if ChatGPT can render embedded UI components."
-            ),
-            inputSchema={"type": "object", "properties": {}, "required": []},
-            _meta=_TEST_META,
-            annotations=_RO_ANNOTATIONS,
-        ),
     ]
 
     # Advertise an outputSchema on every tool so ChatGPT stops warning that results
@@ -1595,7 +1539,7 @@ async def list_tools() -> list[types.Tool]:
     _passthrough_schema = {"type": "object", "additionalProperties": True}
     _own_sc_tools = {
         "show_classes", "show_timetable", "show_upcoming", "show_task_detail",
-        "show_tasks", "show_files", "show_grades", "test_ui",
+        "show_tasks", "show_files", "show_grades",
     }
     for _t in _tools:
         _t.outputSchema = _passthrough_schema if _t.name in _own_sc_tools else _result_schema
@@ -2420,16 +2364,6 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
                 result = {"error": "Task not found", "tool": name}
             else:
                 result = task
-
-        elif name == "test_ui":
-            sc = {"message": "UI infrastructure test", "status": "ok", "timestamp": time.time()}
-            duration_ms = int((time.monotonic() - t0) * 1000)
-            cache.log_request(name, arguments, sc, source="mcp", duration_ms=duration_ms)
-            return types.CallToolResult(
-                content=[types.TextContent(type="text", text="Test widget rendered.")],
-                structuredContent=sc,
-                _meta=_TEST_META,
-            )
 
         else:
             result = {"error": f"Unknown tool: {name}", "tool": name}
