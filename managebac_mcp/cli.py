@@ -305,7 +305,7 @@ def set_admin_cmd(
     username: str = typer.Option(..., "--username", "-u", help="Admin username"),
 ):
     """Set (or reset) admin login credentials (for a future admin panel)."""
-    from . import admin as _admin
+    from . import backoffice as _admin
     password = typer.prompt("Admin password", hide_input=True, confirmation_prompt=True)
     _admin.set_admin(username, password)
     rprint(f"[green]✓[/green] Admin credentials set for [bold]{username}[/bold].")
@@ -438,7 +438,7 @@ def deluser(user_id: str = typer.Argument(help="User ID to delete (from `manageb
 @app.command(name="newcode")
 def new_code(note: str = typer.Option("", "--note", "-n", help="Optional label for who it's for")):
     """Generate a one-time invite code (needed for a new student's first sign-in)."""
-    from . import admin as _admin
+    from . import backoffice as _admin
     result = _admin.create_code(note)
     rprint(f"[green]✓[/green] Invite code: [bold cyan]{result['code']}[/bold cyan]"
            + (f"  [dim]({note})[/dim]" if note else ""))
@@ -448,7 +448,7 @@ def new_code(note: str = typer.Option("", "--note", "-n", help="Optional label f
 @app.command(name="codes")
 def list_codes_cmd():
     """List invite codes and whether each has been used."""
-    from . import admin as _admin
+    from . import backoffice as _admin
     import datetime as _dt
     rows = _admin.list_codes()
     if not rows:
@@ -469,7 +469,7 @@ def list_codes_cmd():
 @app.command(name="delcode")
 def del_code(code: str = typer.Argument(help="Invite code to revoke")):
     """Revoke an unused invite code."""
-    from . import admin as _admin
+    from . import backoffice as _admin
     _admin.delete_code(code)
     rprint(f"[green]✓[/green] Revoked {code}")
 

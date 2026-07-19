@@ -278,7 +278,7 @@ managebac_mcp/
 ├── oauth.py         # OAuth 2.1 authorization server + token store (oauth.db)
 ├── branding.py      # Per-school logo + name, pulled live from the school's login page
 ├── users.py         # Multi-user store: encrypted credentials, session cookies
-├── admin.py         # Operator login, invite codes, messaging, audit log
+├── backoffice.py    # Operator data: invite codes, messaging, audit log (admin.db)
 ├── context.py       # Request-scoped per-user context (fail-closed isolation)
 └── cli.py           # managebac-mcp CLI (setup, install, peek, submit, serve, cache-view)
 

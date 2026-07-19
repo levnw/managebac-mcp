@@ -22,7 +22,7 @@ from starlette.types import Scope, Receive, Send
 
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 
-from . import users, config, admin, branding, oauth
+from . import users, config, backoffice, branding, oauth
 from .context import set_current_user, reset_user
 from .server import server, set_server_public_url
 
@@ -226,7 +226,7 @@ async def _create_and_verify(mb_url, email, password, invite, existing):
 
     # Login succeeded — now consume the one-time code (atomic; guards races).
     if not existing:
-        if not admin.redeem_code(invite, user.id, email):
+        if not backoffice.redeem_code(invite, user.id, email):
             users.delete_user(user.id)
             return None, "That invite code was just used. Ask for a new one."
 
@@ -268,7 +268,7 @@ async def _handle_enroll_post(request):
     if not existing:
         if not invite:
             return HTMLResponse(_enroll_form("An invite code is required to connect.", code=invite, brand=brand), status_code=403)
-        if not admin.code_unused(invite):
+        if not backoffice.code_unused(invite):
             return HTMLResponse(_enroll_form("That invite code is invalid or already used.", code=invite, brand=brand), status_code=403)
 
     user, error = await _create_and_verify(mb_url, email, password, invite, existing)
@@ -467,7 +467,7 @@ async def _handle_authorize_post(request):
     if not existing:
         if not invite:
             return retry("An invite code is required for first-time sign-in.", 403)
-        if not admin.code_unused(invite):
+        if not backoffice.code_unused(invite):
             return retry("That invite code is invalid or already used.", 403)
 
     user, error = await _create_and_verify(mb_url, email, password, invite, existing)

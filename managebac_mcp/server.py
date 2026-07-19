@@ -2080,7 +2080,7 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
 
     # ── Pre-flight checks (run before ANY tool logic) ──────────────────────
     from .context import get_current_user
-    from . import users as _users, admin as _admin
+    from . import users as _users, backoffice as _admin
     _u = get_current_user()
     if _u and _u.id != "local":
         # 1. Paused account — intercept every call

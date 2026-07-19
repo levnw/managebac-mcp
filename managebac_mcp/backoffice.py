@@ -1,7 +1,11 @@
 """
-Admin store: the operator's login, session tokens, and one-time invite codes.
+Back-office / operator data layer: one-time invite codes (which gate every new
+student's OAuth sign-in), operator messages (surfaced by the tool intercept),
+an audit log, and dormant admin-login credentials for a future admin panel.
 
-Kept in its own SQLite db (~/.managebac_mcp/admin.db) separate from user data.
+There is no admin panel UI anymore — this is just the data these operator
+features read/write. The DB file is still named `admin.db` (kept for
+backwards-compat with already-deployed data, which holds live invite codes).
 Passwords are salted + PBKDF2-hashed; sessions are random bearer tokens.
 """
 import hashlib

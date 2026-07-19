@@ -132,7 +132,7 @@ curl https://managebac.822538.xyz/.well-known/oauth-protected-resource      # OA
 | `scraper.py` | All HTML parsing + fetch functions (`fetch_classes`, `fetch_tasks`, `fetch_grades`, `fetch_upcoming`, `fetch_task_detail`, `fetch_units`, `fetch_files`, `fetch_journal`, `fetch_file_readable`, `tag_search`, `find_task`, `submit_task_file`, `prewarm`). Pure `parse_*` funcs are unit-tested against fixtures. |
 | `auth.py` | Per-user login/session. `login()`, `authed_get()` (transparent re-login + raises `ManageBacError` on persistent login redirect), request throttle semaphore (4), per-user login lock. |
 | `users.py` | User store (`users.db`): encrypted credentials (Fernet), tokens, per-user session cookies. CRUD incl. `update_email`/`update_password`, `set_enabled`, `regenerate_token`. |
-| `admin.py` | Admin store (`admin.db`): admin login (PBKDF2), session tokens, one-time invite codes. |
+| `backoffice.py` | Operator data layer (`admin.db`, name kept for compat): one-time invite codes (gate OAuth sign-up), operator messages, audit log, dormant admin login (PBKDF2). Renamed from `admin.py` (there's no admin panel anymore). |
 | `cache.py` | Per-user response cache (`cache.db`) with TTLs + the request log (used by admin activity views). |
 | `context.py` | `contextvar` user isolation (`set_current_user`/`require_user`) + `ManageBacError` (human-readable failure reason). |
 | `config.py` | Env/paths + **`config.connect()`** = self-closing sqlite connection (WAL + busy_timeout). **All `_connect()`s use this.** |
@@ -167,7 +167,7 @@ There is **no admin panel** — it was removed 2026-07-19; the server exposes on
 the MCP connector + OAuth endpoints. Operator tasks are CLI commands:
 `managebac-mcp newcode` (create invite code), `codes` (list), `delcode` (revoke),
 `users` (list enrolled), `deluser <id>` (remove + sign out). The backend data
-layer (`admin.py`: invite codes, messages, audit) is kept intact so a panel can
+layer (`backoffice.py`: invite codes, messages, audit) is kept intact so a panel can
 be rebuilt on it later.
 
 ---
