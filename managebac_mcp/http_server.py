@@ -204,28 +204,40 @@ async def _create_and_verify(mb_url, email, password, invite, existing):
     (user, None) on success or (None, error_message) on failure. Used by both
     the web /enroll form and the OAuth /authorize sign-in.
     """
+    # Verify the submitted credentials FIRST, before persisting anything. For a
+    # returning user we test against a TRANSIENT (non-persisted) User carrying
+    # the submitted password — so a failed login by an unauthenticated caller
+    # who knows someone's email+mb_url can't overwrite that user's stored
+    # password or silently re-enable an admin-paused account. New users are
+    # created here (and rolled back on failure) since they have no prior state.
+    from .context import User
     if existing:
-        users.update_password(existing.id, password)
-        users.set_enabled(existing.id, True)            # re-enrolling re-enables
-        user = users.get_user_by_id(existing.id)        # reload with new password
+        candidate = User(id=existing.id, token=existing.token, label=existing.label,
+                         mb_url=existing.mb_url, email=existing.email, password=password)
     else:
-        user = users.create_user(label=email, mb_url=mb_url, email=email, password=password)
+        candidate = users.create_user(label=email, mb_url=mb_url, email=email, password=password)
 
-    # Verify the credentials by attempting a real login (scoped to this user).
     from .auth import get_client, login
-    ctx = set_current_user(user)
+    ctx = set_current_user(candidate)
     try:
         async with await get_client() as client:
             await login(client)
     except Exception:
         if not existing:
-            users.delete_user(user.id)
+            users.delete_user(candidate.id)
         return None, "Could not log in to ManageBac — check the URL, email, and password."
     finally:
         reset_user(ctx)
 
-    # Login succeeded — now consume the one-time code (atomic; guards races).
-    if not existing:
+    # Login succeeded — now it's safe to persist. For a returning user, apply
+    # the (possibly new) password and re-enable. For a new user, consume the
+    # one-time invite code (atomic; guards races).
+    if existing:
+        users.update_password(existing.id, password)
+        users.set_enabled(existing.id, True)            # re-enrolling re-enables
+        user = users.get_user_by_id(existing.id)        # reload with new password
+    else:
+        user = candidate
         if not backoffice.redeem_code(invite, user.id, email):
             users.delete_user(user.id)
             return None, "That invite code was just used. Ask for a new one."

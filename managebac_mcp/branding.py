@@ -9,8 +9,9 @@ ManageBac URL and the enroll pages brand themselves.
 """
 import time
 
-import httpx
 from bs4 import BeautifulSoup
+
+from . import netguard
 
 _UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -47,10 +48,10 @@ async def get_branding(mb_url: str) -> dict:
 
     brand = dict(_DEFAULT)
     try:
-        async with httpx.AsyncClient(
-            follow_redirects=True, timeout=10, headers={"User-Agent": _UA}
-        ) as client:
-            resp = await client.get(base + "/login")
+        # SSRF guard: `base` comes from an unauthenticated request, so refuse
+        # to fetch internal / link-local / loopback hosts (netguard also
+        # re-validates any redirect hop).
+        resp = await netguard.safe_get(base + "/login", headers={"User-Agent": _UA}, timeout=10)
         soup = BeautifulSoup(resp.text, "html.parser")
         img = soup.select_one(".school-logo img")
         if img and img.get("src"):

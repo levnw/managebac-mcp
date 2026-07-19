@@ -29,9 +29,7 @@ import time
 from collections import deque
 from urllib.parse import urlparse
 
-import httpx
-
-from . import config, users
+from . import config, netguard, users
 from .config import DATA_DIR
 
 OAUTH_DB = DATA_DIR / "oauth.db"
@@ -199,10 +197,13 @@ async def resolve_client(client_id: str) -> dict | None:
 
     doc = None
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-            resp = await client.get(client_id, headers={"Accept": "application/json"})
-            if resp.status_code == 200 and len(resp.content) <= CIMD_MAX_BYTES:
-                doc = resp.json()
+        # SSRF guard: client_id is an attacker-supplied URL. netguard rejects
+        # non-public hosts and re-validates redirect hops (an https CIMD doc
+        # must stay https), so this fetch can't be aimed at internal addresses.
+        resp = await netguard.safe_get(client_id, require_https=True,
+                                       headers={"Accept": "application/json"}, timeout=10)
+        if resp.status_code == 200 and len(resp.content) <= CIMD_MAX_BYTES:
+            doc = resp.json()
     except Exception:
         doc = None
 
