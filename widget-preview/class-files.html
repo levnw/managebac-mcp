@@ -11,48 +11,41 @@
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body { background:transparent; }
   body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--text); -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.45; }
-  .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; max-width:560px; margin:0 auto; }
+  .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; width:min(100%, 560px); max-width:560px; margin:0 auto; }
+  @media (max-width:419px) { :root:not([data-display="fullscreen"]) .card { width:calc(100% - 24px); border-radius:16px; } }
   :root[data-display="fullscreen"] .card { width:min(100%, calc(100vw - 32px)); max-width:1040px; margin:16px auto calc(96px + env(safe-area-inset-bottom, 0px)); }
   .head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
   .title { font-size:16px; font-weight:600; line-height:1.3; }
   .subtitle { color:var(--text-2); font-size:13px; margin-top:2px; }
   .head-side { display:flex; align-items:flex-start; gap:8px; flex-shrink:0; }
-  .count { color:var(--text-3); font-size:12px; white-space:nowrap; margin-top:2px; text-align:right; }
+  .count { display:none; }
   .icon-btn { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text-2); cursor:pointer; }
   .icon-btn:hover { background:var(--bg-secondary); color:var(--text); }
   .icon-btn svg { width:14px; height:14px; stroke:currentColor; }
   :root[data-display="fullscreen"] #expand { display:none; }
   .divider { height:1px; background:var(--border); margin:14px -16px; }
-  .search { width:100%; border:1px solid var(--border); background:var(--bg-secondary); color:var(--text); border-radius:12px; padding:9px 11px; font:inherit; font-size:13px; outline:none; margin-bottom:8px; }
-  .section-label { font-size:11.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin:12px 0 2px; }
-  .section-label:first-of-type { margin-top:0; }
+  .section-label {
+    font-size:11.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em;
+    margin:14px -16px 8px; padding:12px 16px 0; border-top:1px solid var(--border);
+  }
+  .selection-helper + .section-label { margin-top:0; }
+  .file + .file { margin-top:6px; }
   .file {
-    position:relative; isolation:isolate;
-    width:100%; display:flex; align-items:center; gap:10px; color:inherit; text-decoration:none;
-    padding:9px 0; border:0; border-bottom:1px solid var(--border); border-radius:10px; background:transparent;
+    width:100%; min-height:34px; display:flex; align-items:center; gap:8px; color:inherit; text-decoration:none;
+    padding:6px 9px; border:1px solid var(--border); border-radius:10px; background:var(--bg);
     font:inherit; text-align:left; cursor:pointer;
   }
-  .file::before {
-    content:""; position:absolute; inset:2px -8px; border-radius:10px;
-    background:transparent; pointer-events:none; z-index:0;
-  }
-  .file:last-child { border-bottom:none; }
+  .file:hover { background:var(--bg-secondary); }
   .file:hover .name, .file:focus-visible .name { color:var(--accent); }
-  .file:focus-visible { outline:none; }
-  .file:focus-visible::before { background:rgba(2,133,255,.06); }
-  .file.selected { border-bottom-color:transparent; }
-  .file.selected::before { background:color-mix(in srgb, var(--accent) 8%, var(--bg)); }
-  .file.selected + .file.selected::before { top:-1px; border-top-left-radius:0; border-top-right-radius:0; }
-  .file.selected:has(+ .file.selected)::before { bottom:-1px; border-bottom-left-radius:0; border-bottom-right-radius:0; }
+  .file:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .file.selected .name { color:var(--accent); }
-  .icon { position:relative; z-index:1; width:18px; height:18px; color:var(--text-3); flex-shrink:0; }
-  .main { position:relative; z-index:1; display:block; flex:1 1 auto; min-width:0; overflow:hidden; }
-  .name { display:block; max-width:100%; font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:color .12s ease; }
-  .meta { display:flex; flex-wrap:wrap; gap:5px; color:var(--text-2); font-size:12px; margin-top:1px; }
+  .icon { width:15px; height:15px; color:var(--text-3); flex-shrink:0; }
+  .name { flex:1; min-width:0; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:color .12s ease; }
+  .meta { color:var(--text-3); font-size:11.5px; white-space:nowrap; flex-shrink:0; }
   .file-open {
     display:inline-flex; align-items:center; justify-content:center;
     width:26px; height:26px; border-radius:8px; border:none; background:transparent;
-    color:var(--text-3); cursor:pointer; flex-shrink:0; position:relative; z-index:1;
+    color:var(--text-3); cursor:pointer; flex-shrink:0;
   }
   .file-open:hover { color:var(--text); background:var(--bg-secondary); }
   .file-open svg { width:14px; height:14px; stroke:currentColor; }
@@ -63,15 +56,19 @@
   .empty, .empty-state { color:var(--text-3); font-size:13px; padding:16px 0 2px; }
   .empty-title { color:var(--text-2); font-weight:600; font-size:13.5px; }
   .empty-copy { margin-top:2px; color:var(--text-3); }
+  .loading-row { min-height:46px; display:flex; align-items:center; gap:10px; color:var(--text-3); font-size:13px; }
+  .loading-dot { width:16px; height:16px; border-radius:50%; border:2px solid var(--border); border-top-color:var(--accent); animation:spin .8s linear infinite; flex-shrink:0; }
+  @keyframes spin { to { transform:rotate(360deg); } }
   @media (max-width:419px) {
     .file { gap:7px; }
     .icon { width:16px; height:16px; }
+    .meta { display:none; }
     .file-open { width:24px; height:24px; }
   }
 </style>
 </head>
 <body>
-<div class="card" id="card"><div class="empty">Loading files...</div></div>
+<div class="card" id="card"><div class="loading-row"><span class="loading-dot"></span><span>Loading files...</span></div></div>
 <script>
 "use strict";
 const card = document.getElementById("card");
@@ -120,10 +117,8 @@ function fileRow(file) {
   const selected = selectedFiles.has(file.key);
   return `<button class="file${selected ? " selected" : ""}" type="button" data-file-key="${esc(file.key)}" data-search="${esc(search)}" aria-pressed="${selected ? "true" : "false"}">
     ${FILE_ICON}
-    <span class="main">
-      <span class="name">${esc(file.name || "File")}</span>
-      ${meta.length ? `<span class="meta">${meta.join(" · ")}</span>` : ""}
-    </span>
+    <span class="name">${esc(file.name || "File")}</span>
+    ${meta.length ? `<span class="meta">${meta.join(" · ")}</span>` : ""}
     ${file.url ? `<span class="file-open" data-open-url="${esc(file.url)}" title="Open file">${DOWNLOAD_ICON}</span>` : ""}
   </button>`;
 }
@@ -140,9 +135,8 @@ function renderFiles(data, query = "") {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(f);
   }
-  let h = `<div class="head"><div><div class="title">Files</div>${data.class_name ? `<div class="subtitle">${esc(data.class_name)}</div>` : ""}</div><div class="head-side"><div class="count">${files.length} ${files.length === 1 ? "file" : "files"}</div><button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button></div></div>`;
+  let h = `<div class="head"><div><div class="title">Files</div>${data.class_name ? `<div class="subtitle">${esc(data.class_name)}</div>` : ""}</div><div class="head-side"><button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button></div></div>`;
   h += `<div class="divider"></div>`;
-  h += `<input class="search" id="file-search" placeholder="Search files" value="${esc(query)}">`;
   if (!visible.length) {
     h += files.length
       ? emptyState("No matching files", "Try a different file name, folder, or teacher.")
@@ -156,8 +150,6 @@ function renderFiles(data, query = "") {
   }
   if (data.url) h += `<div class="actions"><a class="btn" href="${esc(data.url)}" target="_blank" rel="noopener">${LINK_ICON} Open in ManageBac</a></div>`;
   card.innerHTML = h;
-  const input = document.getElementById("file-search");
-  input?.addEventListener("input", () => renderFiles(currentData, input.value));
   card.querySelector("#expand")?.addEventListener("click", requestFullscreen);
   function selectedFileObjects() {
     return files.filter((f) => selectedFiles.has(f.key));

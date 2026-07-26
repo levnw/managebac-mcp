@@ -25,13 +25,13 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     color:var(--text); -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.45;
   }
-  .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; max-width:560px; margin:0 auto; }
+  .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; width:min(100%, 560px); max-width:560px; margin:0 auto; }
+  @media (max-width:419px) { :root:not([data-display="fullscreen"]) .card { width:calc(100% - 24px); border-radius:16px; } }
   :root[data-display="fullscreen"] .card { width:min(100%, calc(100vw - 32px)); max-width:1040px; margin:16px auto calc(96px + env(safe-area-inset-bottom, 0px)); }
   .head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
   .title { font-size:16px; font-weight:600; line-height:1.3; }
   .subtitle { color:var(--text-2); font-size:13px; margin-top:2px; }
   .head-side { display:flex; align-items:flex-start; gap:8px; flex-shrink:0; }
-  .score-head { text-align:right; }
   .count { color:var(--text-3); font-size:12px; white-space:nowrap; margin-top:2px; text-align:right; }
   .grade-label { color:var(--text-3); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; margin-top:3px; }
   .icon-btn { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text-2); cursor:pointer; }
@@ -39,11 +39,14 @@
   .icon-btn svg { width:14px; height:14px; stroke:currentColor; }
   :root[data-display="fullscreen"] #expand { display:none; }
   :root[data-display="fullscreen"] .grade-label { display:none; }
-  .divider { height:1px; background:var(--border); margin:14px -16px; }
+  .divider { height:1px; background:var(--border); margin:14px -16px 0; }
+  :root[data-display="fullscreen"] .divider { margin-bottom:0; }
   .section-label { font-size:11.5px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px; }
   .class-row { padding:12px 0; border-bottom:1px solid var(--border); }
+  .divider + .class-row { padding-top:12px; }
   .class-row:last-child { border-bottom:none; }
-  .class-name { font-size:14px; font-weight:600; line-height:1.3; min-width:0; }
+  .class-name { font-size:14px; font-weight:600; line-height:1.3; min-width:0; overflow-wrap:anywhere; }
+  .class-teacher { color:var(--text-2); font-size:12.5px; margin-top:2px; }
   .hint { color:var(--text-3); font-size:12px; margin-top:8px; }
   .actions { display:flex; gap:8px; margin-top:16px; }
   .btn { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; font-size:13.5px; font-weight:600; padding:9px 14px; border-radius:12px; cursor:pointer; border:1px solid var(--border); background:var(--bg); color:var(--text); text-decoration:none; }
@@ -54,6 +57,9 @@
   .empty, .empty-state { color:var(--text-3); font-size:13px; padding:16px 0 2px; }
   .empty-title { color:var(--text-2); font-weight:600; font-size:13.5px; }
   .empty-copy { margin-top:2px; color:var(--text-3); }
+  .loading-row { min-height:46px; display:flex; align-items:center; gap:10px; color:var(--text-3); font-size:13px; }
+  .loading-dot { width:16px; height:16px; border-radius:50%; border:2px solid var(--border); border-top-color:var(--accent); animation:spin .8s linear infinite; flex-shrink:0; }
+  @keyframes spin { to { transform:rotate(360deg); } }
 
   /* Final grade (emphasised) */
   .final { text-align:right; flex-shrink:0; line-height:1; }
@@ -65,28 +71,28 @@
   .crit-inline b { color:var(--text); font-weight:600; }
   .crit-inline .sep { color:var(--text-3); margin:0 5px; }
 
-  .row-a { display:flex; align-items:center; gap:14px; }
-  .row-a .grow { flex:1; min-width:0; }
+  .row-a { display:grid; grid-template-columns:minmax(0, 1fr) 42px; align-items:center; gap:14px; }
+  .row-a .grow { min-width:0; }
   .row-a .class-name { margin-bottom:3px; }
-  @media (max-width:439px) { .row-a { flex-wrap:wrap; } .row-a .final { order:2; margin-left:auto; } }
 
   .row-b .class-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .single-class-grade { padding-bottom:2px; }
   .grade-bar { position:relative; height:8px; border-radius:999px; background:var(--track); overflow:hidden; margin:9px 0 8px; }
   .grade-bar-fill { position:absolute; left:0; top:0; bottom:0; border-radius:999px; background:var(--accent); }
 
   /* Report-card fullscreen view */
-  .report { border-top:1px solid var(--border); }
+  .report { border-top:none; }
   .report-head, .report-row {
     display:grid;
     grid-template-columns:minmax(0, 1fr) 210px 70px;
     gap:14px;
-    align-items:start;
+    align-items:center;
   }
   .report-head {
     color:var(--text-2);
     font-size:12px;
     font-weight:600;
-    padding:0 0 8px;
+    padding:10px 0;
     border-bottom:1px solid var(--border);
   }
   .report-row { padding:12px 0; border-bottom:1px solid var(--border); }
@@ -159,7 +165,7 @@
 </style>
 </head>
 <body>
-<div class="card" id="card"><div class="empty">Loading grades...</div></div>
+<div class="card" id="card"><div class="loading-row"><span class="loading-dot"></span><span>Loading grades...</span></div></div>
 <script>
 "use strict";
 const card = document.getElementById("card");
@@ -260,7 +266,7 @@ function classRowDetail(cls) {
   const level = finalGrade(latestScores(cls.criteria));
   const present = CRIT.filter((k) => cls.criteria?.[k] && typeof cls.criteria[k].latest === "number");
   const bars = present.map((k) => barRow(k, cls.criteria[k].latest, cls.criteria[k].best)).join("");
-  return `<div class="class-row row-b"><div class="class-top"><div class="class-name">${esc(cls.class_name || "Class")}</div>${finalGradeEl(level)}</div>
+  return `<div class="class-row row-b single-class-grade"><div class="class-top"><div><div class="class-name">${esc(cls.class_name || "Class")}</div>${cls.teacher ? `<div class="class-teacher">${esc(cls.teacher)}</div>` : ""}</div>${finalGradeEl(level)}</div>
     ${present.length ? `<div class="crit-list">${bars}</div>` : `<div class="crit-inline">No criterion scores have been posted yet</div>`}</div>`;
 }
 
@@ -303,9 +309,8 @@ function renderRead(data) {
   } else if (fullscreen) {
     h += reportView(classes);
   } else if (single) {
-    h += `<div class="section-label">Class</div>` + classRowInline(classes[0]);
+    h += `<div class="section-label">Criterion scores</div>` + classRowDetail(classes[0]);
   } else {
-    h += `<div class="section-label">Classes</div>`;
     h += classes.map(classRowInline).join("");
   }
   h += `<div class="actions">
@@ -317,9 +322,8 @@ function renderRead(data) {
 }
 
 function header(data, count, canExpand = true) {
-  return `<div class="head"><div><div class="title">Grades</div>${data.scope ? `<div class="subtitle">${esc(data.scope)}</div>` : ""}</div>
-    <div class="head-side"><div class="score-head"><div class="count">${count} ${count === 1 ? "class" : "classes"}</div><div class="grade-label">Final grade</div></div>
-    ${canExpand ? `<button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button>` : ""}</div></div>`;
+  return `<div class="head"><div><div class="title">Grades</div></div>
+    <div class="head-side">${canExpand ? `<button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button>` : ""}</div></div>`;
 }
 
 // ── EDIT MODE ─────────────────────────────────────────────────────────────

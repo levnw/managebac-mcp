@@ -1431,7 +1431,10 @@ async def list_tools() -> list[types.Tool]:
             name="show_grades",
             description=(
                 "Render a visual grades widget with class final grades and IB criterion scores. "
-                "Use this when the student asks to see grades visually. "
+                "Use this when the student asks to see grades visually. If the student asks for "
+                "one subject's grades, strands, criteria, or criterion bars (for example Digital "
+                "Design criteria), pass that class_id so the widget renders the single-class "
+                "criterion breakdown inline. Omit class_id only for an all-classes grade list. "
                 "For advice/reasoning about grades without a widget, call get_grades instead."
             ),
             inputSchema={

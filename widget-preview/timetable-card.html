@@ -11,13 +11,15 @@
   * { box-sizing:border-box; margin:0; padding:0; }
   html, body { background:transparent; }
   body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--text); -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.45; }
-  .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; max-width:560px; margin:0 auto; }
+  .card { background:var(--bg); border:1px solid var(--border); border-radius:18px; padding:16px; width:min(100%, 560px); max-width:560px; margin:0 auto; }
+  @media (max-width:419px) { :root:not([data-display="fullscreen"]) .card { width:calc(100% - 24px); border-radius:16px; } }
   :root[data-display="fullscreen"] .card { width:min(100%, calc(100vw - 32px)); max-width:1100px; margin:16px auto calc(96px + env(safe-area-inset-bottom, 0px)); }
   .head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
   .title { font-size:16px; font-weight:600; line-height:1.3; }
   .subtitle { color:var(--text-2); font-size:13px; margin-top:2px; }
   .head-side { display:flex; align-items:flex-start; gap:8px; flex-shrink:0; }
   .count { color:var(--text-3); font-size:12px; white-space:nowrap; margin-top:2px; text-align:right; }
+  .head-date { color:var(--text-2); font-size:13px; white-space:nowrap; margin-top:2px; text-align:right; }
   .icon-btn { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text-2); cursor:pointer; }
   .icon-btn:hover { background:var(--bg-secondary); color:var(--text); }
   .icon-btn svg { width:14px; height:14px; stroke:currentColor; }
@@ -139,16 +141,19 @@
     white-space:nowrap;
   }
   .actions { display:flex; gap:8px; margin-top:16px; }
-  .btn { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; font-size:13.5px; font-weight:600; padding:9px 14px; border-radius:12px; border:1px solid var(--border); background:var(--bg); color:var(--text); text-decoration:none; }
-  .btn:hover { background:var(--bg-secondary); }
+  .btn { flex:1; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; font-size:13.5px; font-weight:600; padding:9px 14px; border-radius:12px; border:1px solid var(--accent); background:var(--accent); color:#fff; text-decoration:none; }
+  .btn:hover { background:#0270DB; border-color:#0270DB; }
   .btn svg { width:14px; height:14px; stroke:currentColor; }
   .empty, .empty-state { color:var(--text-3); font-size:13px; padding:16px 0 2px; }
   .empty-title { color:var(--text-2); font-weight:600; font-size:13.5px; }
   .empty-copy { margin-top:2px; color:var(--text-3); }
+  .loading-row { min-height:46px; display:flex; align-items:center; gap:10px; color:var(--text-3); font-size:13px; }
+  .loading-dot { width:16px; height:16px; border-radius:50%; border:2px solid var(--border); border-top-color:var(--accent); animation:spin .8s linear infinite; flex-shrink:0; }
+  @keyframes spin { to { transform:rotate(360deg); } }
 </style>
 </head>
 <body>
-<div class="card" id="card"><div class="empty">Loading timetable...</div></div>
+<div class="card" id="card"><div class="loading-row"><span class="loading-dot"></span><span>Loading timetable...</span></div></div>
 <script>
 "use strict";
 const card = document.getElementById("card");
@@ -191,7 +196,6 @@ function normalSlot(s) {
     class_name: s.class_name ?? s.c ?? "",
     teacher: s.teacher ?? s.tr ?? "",
     room: s.room ?? s.r ?? "",
-    task_count: s.task_count ?? s.n ?? 0,
     current: !!s.current,
   };
 }
@@ -228,7 +232,6 @@ function slotRow(s, currentDay) {
     <div class="main">
       <div class="class">${esc(s.class_name || "Class")}</div>
       ${meta.length ? `<div class="meta">${meta.join(" · ")}</div>` : ""}
-      ${s.task_count ? `<div class="tasks">${esc(s.task_count)} ManageBac ${s.task_count === 1 ? "task" : "tasks"} linked to this class</div>` : ""}
     </div>
   </div>`;
 }
@@ -288,7 +291,7 @@ function renderTimetable(data) {
   const uniqueDays = explicitDays.length ? explicitDays : [...new Set(slots.map((s) => s.day || "Today"))];
   const headerSubtitle = [current.weekday, current.date].filter(Boolean).join(", ");
   const canExpand = uniqueDays.length > 1;
-  let h = `<div class="head"><div><div class="title">Timetable</div>${headerSubtitle ? `<div class="subtitle">${esc(headerSubtitle)}</div>` : ""}</div><div class="head-side"><div class="count">${slots.length} ${slots.length === 1 ? "class" : "classes"}</div>${canExpand ? `<button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button>` : ""}</div></div>`;
+  let h = `<div class="head"><div><div class="title">Timetable</div></div><div class="head-side">${headerSubtitle ? `<div class="head-date">${esc(headerSubtitle)}</div>` : ""}${canExpand ? `<button class="icon-btn" id="expand" type="button" aria-label="Open fullscreen">${EXPAND_ICON}</button>` : ""}</div></div>`;
   h += `<div class="divider"></div>`;
   if (!slots.length && !uniqueDays.length) {
     h += emptyState("No classes scheduled", "There is no timetable data for this view.");

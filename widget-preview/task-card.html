@@ -62,8 +62,15 @@
     border: 1px solid var(--border);
     border-radius: 18px;
     padding: 16px;
+    width: min(100%, 560px);
     max-width: 560px;
     margin: 0 auto;
+  }
+  @media (max-width: 419px) {
+    :root:not([data-display="fullscreen"]) .card {
+      width: calc(100% - 24px);
+      border-radius: 16px;
+    }
   }
   :root[data-display="fullscreen"] .card {
     width: min(100%, calc(100vw - 32px));
@@ -169,10 +176,7 @@
     text-align: left; cursor: pointer;
   }
   .file:hover { background: var(--bg-secondary); }
-  .file.selected {
-    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
-  }
+  .file.selected .file-name { color: var(--accent); }
   .file-icon { width: 15px; height: 15px; stroke: var(--text-3); flex-shrink: 0; }
   .file-name { font-size: 13px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file-meta { font-size: 11.5px; color: var(--text-3); flex-shrink: 0; }
@@ -215,19 +219,14 @@
   .btn svg { width: 14px; height: 14px; stroke: currentColor; }
 
   /* ── Loading ──────────────────────────────────────────────────────────── */
-  .loading { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 0; }
-  .ring {
-    width: 22px; height: 22px; border-radius: 50%;
-    border: 2.5px solid var(--bg-tertiary); border-top-color: var(--accent);
-    animation: spin .8s linear infinite;
-  }
+  .loading-row { min-height: 46px; display: flex; align-items: center; gap: 10px; color: var(--text-3); font-size: 13px; }
+  .loading-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--bg-tertiary); border-top-color: var(--accent); animation: spin .8s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { font-size: 13px; color: var(--text-3); }
 </style>
 </head>
 <body>
 <div class="card" id="card">
-  <div class="loading"><div class="ring"></div><div class="loading-text">Loading task…</div></div>
+  <div class="loading-row"><span class="loading-dot"></span><span>Loading task...</span></div>
 </div>
 
 <script>
