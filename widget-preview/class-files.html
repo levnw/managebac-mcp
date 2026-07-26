@@ -206,17 +206,43 @@ function renderFiles(data, query = "") {
 }
 
 applyHostContext();
-const live = window.openai?.toolOutput;
-if (live && Array.isArray(live.files)) renderFiles(live);
+function dataCandidates(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  return [
+    payload,
+    payload.structuredContent,
+    payload.toolOutput,
+    payload.toolOutput?.structuredContent,
+    payload.params,
+    payload.params?.structuredContent,
+    payload.params?.toolOutput,
+    payload.params?.toolOutput?.structuredContent,
+    payload.result,
+    payload.result?.structuredContent,
+    payload.detail,
+    payload.detail?.globals,
+    payload.detail?.globals?.toolOutput,
+    payload.detail?.globals?.toolOutput?.structuredContent,
+  ].filter(Boolean);
+}
+function tryRenderFiles(payload) {
+  for (const d of dataCandidates(payload)) {
+    if (Array.isArray(d.files)) {
+      renderFiles(d);
+      return true;
+    }
+  }
+  return false;
+}
+tryRenderFiles(window.openai?.toolOutput);
 window.addEventListener("message", (ev) => {
   if (ev.source !== window.parent) return;
-  const d = ev.data?.params?.structuredContent;
-  if (d && Array.isArray(d.files)) renderFiles(d);
+  tryRenderFiles(ev.data);
 }, { passive:true });
 window.addEventListener("openai:set_globals", (ev) => {
   applyHostContext();
-  const d = ev.detail?.globals?.toolOutput ?? window.openai?.toolOutput;
-  if (d && Array.isArray(d.files)) renderFiles(d);
+  tryRenderFiles(ev.detail);
+  tryRenderFiles(window.openai?.toolOutput);
 }, { passive:true });
 // Safety net: ChatGPT draws the widget frame from the tool template even when
 // the call errors or the payload is dropped — never spin forever. If nothing

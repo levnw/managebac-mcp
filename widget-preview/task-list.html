@@ -456,18 +456,45 @@ try {
 } catch (_) {}
 
 const live = window.openai?.toolOutput;
-if (live && live.tasks) renderTaskList(live);
+function dataCandidates(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  return [
+    payload,
+    payload.structuredContent,
+    payload.toolOutput,
+    payload.toolOutput?.structuredContent,
+    payload.params,
+    payload.params?.structuredContent,
+    payload.params?.toolOutput,
+    payload.params?.toolOutput?.structuredContent,
+    payload.result,
+    payload.result?.structuredContent,
+    payload.detail,
+    payload.detail?.globals,
+    payload.detail?.globals?.toolOutput,
+    payload.detail?.globals?.toolOutput?.structuredContent,
+  ].filter(Boolean);
+}
+function tryRenderTaskList(payload) {
+  for (const d of dataCandidates(payload)) {
+    if (Array.isArray(d.tasks)) {
+      renderTaskList(d);
+      return true;
+    }
+  }
+  return false;
+}
+tryRenderTaskList(live);
 
 window.addEventListener("message", (ev) => {
   if (ev.source !== window.parent) return;
-  const d = ev.data?.params?.structuredContent;
-  if (d && d.tasks) renderTaskList(d);
+  tryRenderTaskList(ev.data);
 }, { passive: true });
 
 window.addEventListener("openai:set_globals", (ev) => {
   applyHostContext();
-  const d = ev.detail?.globals?.toolOutput ?? window.openai?.toolOutput;
-  if (d && d.tasks) renderTaskList(d);
+  tryRenderTaskList(ev.detail);
+  tryRenderTaskList(window.openai?.toolOutput);
 }, { passive: true });
 
 window.renderTaskList = renderTaskList;
