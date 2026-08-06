@@ -2,12 +2,14 @@ import asyncio
 import hashlib
 import json
 import os
+import subprocess
 import sys
 from collections import OrderedDict
 from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
 import time
+from urllib.parse import urlparse
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp import types
@@ -48,6 +50,9 @@ SERVER_INSTRUCTIONS = (
     "to inspect attachments, use the widget attachment-selection flow rather than an MCP file-reading tool.\n"
     "- Use `get_*` tools when you need data for reasoning or text answers; they do not render widgets. "
     "Use `show_*` tools only when the student asks to see a visual card/list/table/widget.\n"
+    "- For debugging blank widgets, stale deployments, login/session problems, or unexpected empty data, "
+    "use runtime_info, check_session, or debug_snapshot before guessing. These diagnostics summarize "
+    "runtime/page shape only and do not expose cookies, passwords, tokens, or full page HTML.\n"
     "- After calling a `show_*` tool, do not repeat the widget's rows/details in prose. Give at most "
     "a one-sentence orientation or summary, because the widget is already the visual answer.\n"
     "- Data is cached for speed (tasks ~10 min, classes/units longer). If the student asks "
@@ -1109,6 +1114,64 @@ async def list_tools() -> list[types.Tool]:
             annotations=_LOCAL_MUTATION_ANNOTATIONS,
         ),
         types.Tool(
+            name="runtime_info",
+            description=(
+                "Debug only. Returns safe runtime diagnostics for this MCP server: process/repo "
+                "identity, widget URIs, current user presence with sensitive fields redacted, and "
+                "cache row summaries. Use this to check whether ChatGPT/server/GitHub are seeing "
+                "the expected deployed code. Does not return cookies, tokens, passwords, or cached "
+                "student data."
+            ),
+            inputSchema={"type": "object", "properties": {}, "required": []},
+            annotations=_RO_ANNOTATIONS,
+        ),
+        types.Tool(
+            name="check_session",
+            description=(
+                "Debug only. Checks whether the current user's ManageBac session can load a page, "
+                "normally /student/classes/my, and returns status/final URL/title/timing plus "
+                "small page-shape indicators. It may refresh the local session cookie like normal "
+                "read tools, but it never changes ManageBac data."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Optional ManageBac path to check, default /student/classes/my. Same-origin URLs are accepted.",
+                    }
+                },
+                "required": [],
+            },
+            annotations=_RO_ANNOTATIONS,
+        ),
+        types.Tool(
+            name="debug_snapshot",
+            description=(
+                "Debug only. Fetches a ManageBac page for the current user and returns a compact "
+                "sanitized snapshot: requested/final URL, status, title, text preview, link samples, "
+                "and selector counts. Use this to diagnose scraper breakage or unexpected blank "
+                "widgets. It intentionally never returns full HTML or secrets."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Optional ManageBac path to inspect, default /student/classes/my. Same-origin URLs are accepted.",
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "minimum": 200,
+                        "maximum": 4000,
+                        "description": "Maximum characters of compact text preview to return. Default 1200.",
+                    },
+                },
+                "required": [],
+            },
+            annotations=_RO_ANNOTATIONS,
+        ),
+        types.Tool(
             name="get_upcoming",
             description=(
                 "THE authoritative list of upcoming (or overdue) tasks across ALL classes at once, "
@@ -2062,6 +2125,254 @@ async def _task_detail_widget_sc(d_cid, d_tid, detail):
     ))
 
 
+def _debug_git(args: list[str]) -> str | None:
+    try:
+        root = Path(__file__).resolve().parents[1]
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            timeout=2,
+            check=False,
+        )
+        value = completed.stdout.strip()
+        return value or None
+    except Exception:
+        return None
+
+
+def _debug_redact(value: str | None) -> str:
+    if not value:
+        return ""
+    value = str(value)
+    if "@" in value:
+        name, domain = value.split("@", 1)
+        return f"{name[:2]}***@{domain}"
+    if len(value) <= 4:
+        return "***"
+    return f"{value[:2]}***{value[-1:]}"
+
+
+def _debug_user_info() -> dict:
+    from .context import get_current_user
+    from . import users
+
+    user = get_current_user()
+    if user is None:
+        return {"present": False}
+
+    try:
+        cookies = users.load_cookies(user.id)
+    except Exception:
+        cookies = {}
+
+    return {
+        "present": True,
+        "user_id_prefix": str(user.id)[:8],
+        "label": _debug_redact(user.label),
+        "managebac_base_url": user.mb_url,
+        "cookie_count": len(cookies),
+        "cookie_names": sorted(cookies.keys()),
+    }
+
+
+def _debug_cache_summary() -> dict:
+    try:
+        entries = cache.get_cache_entries()
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    rows = []
+    for entry in entries:
+        try:
+            approx_bytes = len(json.dumps(entry.get("data"), ensure_ascii=False, default=str))
+        except Exception:
+            approx_bytes = None
+        rows.append({
+            "key": entry.get("key"),
+            "expires_in_s": entry.get("expires_in_s"),
+            "expired": entry.get("expired"),
+            "approx_bytes": approx_bytes,
+        })
+    return {"ok": True, "count": len(rows), "entries": rows}
+
+
+def _runtime_info() -> dict:
+    root = Path(__file__).resolve().parents[1]
+    return {
+        "server": "managebac",
+        "time": {
+            "epoch": int(time.time()),
+            "local_iso": datetime.now().isoformat(timespec="seconds"),
+            "utc_iso": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        },
+        "process": {
+            "pid": os.getpid(),
+            "python": sys.version.split()[0],
+            "executable": sys.executable,
+            "cwd": os.getcwd(),
+        },
+        "repo": {
+            "root": str(root),
+            "branch": _debug_git(["rev-parse", "--abbrev-ref", "HEAD"]),
+            "commit": _debug_git(["rev-parse", "--short", "HEAD"]),
+            "dirty": bool(_debug_git(["status", "--porcelain"])),
+        },
+        "widgets": {
+            "task_detail": _TASK_DETAIL_URI,
+            "task_list": _TASK_LIST_URI,
+            "class_files": _CLASS_FILES_URI,
+            "grades": _GRADES_URI,
+            "timetable": _TIMETABLE_URI,
+            "class_list": _CLASS_LIST_URI,
+        },
+        "current_user": _debug_user_info(),
+        "cache": _debug_cache_summary(),
+    }
+
+
+def _debug_normalize_path(path: str | None) -> str:
+    user = require_user()
+    value = (path or "/student/classes/my").strip() or "/student/classes/my"
+    parsed = urlparse(value)
+    if parsed.scheme or parsed.netloc:
+        base = urlparse(user.mb_url)
+        if parsed.scheme not in ("http", "https") or parsed.netloc != base.netloc:
+            raise ValueError("debug paths must be same-origin ManageBac URLs")
+        value = parsed.path or "/"
+        if parsed.query:
+            value += "?" + parsed.query
+    if not value.startswith("/"):
+        value = "/" + value
+    return value
+
+
+def _debug_title(html: str) -> str:
+    parser = HTMLParser()
+    try:
+        from bs4 import BeautifulSoup
+        title = BeautifulSoup(html or "", "lxml").find("title")
+        if title:
+            return parser.unescape(title.get_text(" ", strip=True)) if hasattr(parser, "unescape") else title.get_text(" ", strip=True)
+    except Exception:
+        pass
+    return ""
+
+
+def _debug_compact_text(text: str, max_chars: int = 1200) -> str:
+    compact = " ".join((text or "").split())
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max(0, max_chars - 1)].rstrip() + "…"
+
+
+def _debug_page_markers(html: str, final_url: str) -> dict:
+    lower = (html or "").lower()
+    return {
+        "login_like": "/login" in final_url or "sign in" in lower or "password" in lower and "login" in lower,
+        "cloudflare_like": "cloudflare" in lower or "cf-ray" in lower,
+        "classes_links": lower.count("/student/classes/"),
+        "task_links": lower.count("/core_tasks/"),
+        "file_links": lower.count("/files/") + lower.count("download"),
+        "timetable_mentions": lower.count("timetable") + lower.count("schedule"),
+    }
+
+
+async def _check_session(path: str | None = None) -> dict:
+    from .auth import authed_get, get_client
+
+    started = time.monotonic()
+    try:
+        normalized = _debug_normalize_path(path)
+        user = require_user()
+        async with await get_client() as client:
+            cookie_count_before = len(client.cookies)
+            response = await authed_get(client, normalized)
+            text = response.text or ""
+            final_url = str(response.url)
+            class_count = None
+            if "/student/classes" in normalized:
+                try:
+                    from .scraper import parse_classes
+                    class_count = len(parse_classes(text))
+                except Exception:
+                    class_count = None
+            return {
+                "ok": 200 <= response.status_code < 400 and not _debug_page_markers(text, final_url)["login_like"],
+                "requested_path": normalized,
+                "managebac_base_url": user.mb_url,
+                "status_code": response.status_code,
+                "final_url": final_url,
+                "title": _debug_title(text),
+                "elapsed_ms": int((time.monotonic() - started) * 1000),
+                "html_bytes": len(response.content or b""),
+                "cookie_count_before": cookie_count_before,
+                "cookie_count_after": len(client.cookies),
+                "class_count": class_count,
+                "markers": _debug_page_markers(text, final_url),
+            }
+    except Exception as e:
+        return {
+            "ok": False,
+            "error_type": type(e).__name__,
+            "error": str(e),
+            "elapsed_ms": int((time.monotonic() - started) * 1000),
+        }
+
+
+async def _debug_snapshot(path: str | None = None, max_chars: int | None = None) -> dict:
+    from .auth import authed_get, get_client
+    from bs4 import BeautifulSoup
+
+    started = time.monotonic()
+    try:
+        normalized = _debug_normalize_path(path)
+        limit = max(200, min(int(max_chars or 1200), 4000))
+        async with await get_client() as client:
+            response = await authed_get(client, normalized)
+        html = response.text or ""
+        final_url = str(response.url)
+        soup = BeautifulSoup(html, "lxml")
+
+        selector_counts = {
+            "class_links": len(soup.select('a[href*="/student/classes/"]')),
+            "task_links": len(soup.select('a[href*="/core_tasks/"]')),
+            "file_links": len(soup.select('a[href*="/files/"], a[href*="download"]')),
+            "forms": len(soup.select("form")),
+            "tables": len(soup.select("table")),
+            "calendar_or_timetable": len(soup.select('[class*="timetable"], [class*="calendar"], [id*="timetable"], [id*="calendar"]')),
+        }
+        links = []
+        for a in soup.select("a[href]")[:20]:
+            href = (a.get("href") or "").strip()
+            label = _debug_compact_text(a.get_text(" ", strip=True), 120)
+            if href or label:
+                links.append({"text": label, "href": href[:300]})
+
+        body_text = soup.get_text(" ", strip=True)
+        return {
+            "ok": 200 <= response.status_code < 400 and not _debug_page_markers(html, final_url)["login_like"],
+            "requested_path": normalized,
+            "status_code": response.status_code,
+            "final_url": final_url,
+            "title": _debug_title(html),
+            "elapsed_ms": int((time.monotonic() - started) * 1000),
+            "html_bytes": len(response.content or b""),
+            "markers": _debug_page_markers(html, final_url),
+            "selector_counts": selector_counts,
+            "text_preview": _debug_compact_text(body_text, limit),
+            "links_sample": links,
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "error_type": type(e).__name__,
+            "error": str(e),
+            "elapsed_ms": int((time.monotonic() - started) * 1000),
+        }
+
+
 _PAUSED_PROMPT = """\
 📢 Notice from your administrator: Your ManageBac account has been suspended. \
 None of the tools are available right now — tasks, grades, timetable, files, \
@@ -2163,6 +2474,15 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent | type
             cache.clear_user()
             result = {"status": "refreshed",
                       "message": "Cleared cached data. Re-call the data tool now to get live results from ManageBac."}
+
+        elif name == "runtime_info":
+            result = _runtime_info()
+
+        elif name == "check_session":
+            result = await _check_session(arguments.get("path"))
+
+        elif name == "debug_snapshot":
+            result = await _debug_snapshot(arguments.get("path"), arguments.get("max_chars"))
 
         elif name in ("get_upcoming", "show_upcoming"):
             view = arguments.get("view", "upcoming")
