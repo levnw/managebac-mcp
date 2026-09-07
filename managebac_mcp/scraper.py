@@ -263,30 +263,30 @@ async def fetch_classes() -> list[dict]:
         if cached:
             return cached
 
-    import asyncio as _asyncio
+        import asyncio as _asyncio
 
-    async with await get_client() as client:
-        # authed_get already re-logs-in transparently on a /login redirect.
-        r = await authed_get(client, "/student/classes/my")
-        result = parse_classes(r.text)
+        async with await get_client() as client:
+            # authed_get already re-logs-in transparently on a /login redirect.
+            r = await authed_get(client, "/student/classes/my")
+            result = parse_classes(r.text)
 
-        # Never cache an empty parse — return it so the NEXT call retries fresh
-        # instead of serving stale-empty until the TTL expires.
-        if not result:
-            return []
+            # Never cache an empty parse — return it so the NEXT call retries fresh
+            # instead of serving stale-empty until the TTL expires.
+            if not result:
+                return []
 
-        # Check each class's journal tab concurrently (the request semaphore in
-        # auth.py caps real parallelism). Sequentially this was ~18 round-trips,
-        # slow enough to hit the connector's timeout.
-        pages = await _asyncio.gather(
-            *[authed_get(client, f"/student/classes/{c['id']}") for c in result]
-        )
+            # Check each class's journal tab concurrently (the request semaphore in
+            # auth.py caps real parallelism). Sequentially this was ~18 round-trips,
+            # slow enough to hit the connector's timeout.
+            pages = await _asyncio.gather(
+                *[authed_get(client, f"/student/classes/{c['id']}") for c in result]
+            )
 
-    for cls, r2 in zip(result, pages):
-        cls["has_journal"] = "learner_portfolio" in r2.text
+        for cls, r2 in zip(result, pages):
+            cls["has_journal"] = "learner_portfolio" in r2.text
 
-    cache.set("get_classes", result, "get_classes")
-    return result
+        cache.set("get_classes", result, "get_classes")
+        return result
 
 
 # ---------------------------------------------------------------------------

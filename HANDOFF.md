@@ -222,10 +222,11 @@ files 1h, journal 30m, units 24h, file_content 1h.
    link the human must click. SSH hangs/timeouts are usually this (or the Mac
    asleep). Filter the `# Tailscale...` / `# Authentication...` comment lines out
    of script output.
-2. **ManageBac rate-limits logins.** Many rapid logins (heavy testing, many cold
-   fetches/restarts) cause ManageBac to **block logins from the server IP** for a
-   while → tools return the `ManageBacError` login-redirect message even with
-   correct credentials. It clears on its own; back off and wait.
+2. **ManageBac locks accounts after repeated failed sign-ins.** A rejected login
+   can return HTTP 200 at `/sessions` with the login form again, including a
+   temporary-lock alert after five failures. `auth.py` detects that page and
+   pauses automatic retries for five minutes. Stop testing, unlock/reset the
+   ManageBac account, then update the enrolled credentials before retrying.
 3. **Cold-fetch latency:** `get_grades`/`tag_search`/cross-class calls fan out to
    all ~18 classes; on a cold cache that's ~45s (throttled to 4 concurrent). Warm
    cache is instant. If a connector times out, this is why.

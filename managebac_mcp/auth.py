@@ -3,6 +3,9 @@ Per-user authentication. Every client/session is bound to the current user
 from the request context — there is no shared/global session in this build.
 """
 import asyncio
+import time
+from urllib.parse import urlparse
+
 import httpx
 from bs4 import BeautifulSoup
 
@@ -15,6 +18,12 @@ from .context import require_user, ManageBacError
 # logins invalidate each other and some requests get the login page back
 # (which parses to an empty list and then gets cached). Serializing fixes it.
 _login_locks: dict[str, asyncio.Lock] = {}
+
+# A rejected login must not be retried on every tool call. ManageBac locks an
+# account after a small number of consecutive failures, so remember the last
+# rejection briefly and fail closed until the operator/student fixes it.
+_LOGIN_FAILURE_COOLDOWN = 5 * 60
+_login_failures: dict[str, tuple[float, str]] = {}
 
 
 def _login_lock(user_id: str) -> asyncio.Lock:
@@ -37,6 +46,44 @@ async def _throttled_get(client: httpx.AsyncClient, path: str) -> httpx.Response
         return await client.get(path)
 
 
+def _remember_login_failure(user_id: str, reason: str) -> None:
+    _login_failures[user_id] = (time.monotonic(), reason)
+
+
+def _recent_login_failure(user_id: str) -> str | None:
+    failure = _login_failures.get(user_id)
+    if failure is None:
+        return None
+    failed_at, reason = failure
+    if time.monotonic() - failed_at < _LOGIN_FAILURE_COOLDOWN:
+        return reason
+    _login_failures.pop(user_id, None)
+    return None
+
+
+def _login_rejection_reason(response: httpx.Response) -> str | None:
+    """Recognize ManageBac's HTTP-200 login rejection page safely."""
+    soup = BeautifulSoup(response.text or "", "lxml")
+    text = " ".join(soup.get_text(" ", strip=True).lower().split())
+    path = urlparse(str(response.url)).path.rstrip("/") or "/"
+    has_login_form = bool(
+        soup.select_one('form[action*="/sessions"] input[name="password"]')
+    )
+
+    if "temporarily locked" in text or "consecutive failed login" in text:
+        return (
+            "ManageBac says this account is temporarily locked after repeated "
+            "failed sign-ins. Stop retrying, unlock or reset the ManageBac "
+            "password, then update the enrolled credentials."
+        )
+    if response.status_code in (401, 403) or path in ("/login", "/sessions") or has_login_form:
+        return (
+            "ManageBac rejected the stored credentials. Stop retrying and "
+            "update the enrolled password before trying again."
+        )
+    return None
+
+
 async def login(client: httpx.AsyncClient) -> None:
     """Log the CURRENT user into ManageBac and persist their cookies."""
     user = require_user()
@@ -47,9 +94,17 @@ async def login(client: httpx.AsyncClient) -> None:
 
     # Get CSRF token
     r = await client.get(f"{user.mb_url}/login")
+    if r.status_code >= 400:
+        reason = f"ManageBac login page returned HTTP {r.status_code}; sign-in was not attempted."
+        _remember_login_failure(user.id, reason)
+        raise ManageBacError(reason)
     soup = BeautifulSoup(r.text, "lxml")
     csrf = soup.find("meta", {"name": "csrf-token"})
     token = csrf["content"] if csrf else ""
+    if not token:
+        reason = "ManageBac login page did not contain the expected CSRF token; sign-in was not attempted."
+        _remember_login_failure(user.id, reason)
+        raise ManageBacError(reason)
 
     # POST login — form posts to /sessions with plain field names
     r = await client.post(
@@ -63,12 +118,12 @@ async def login(client: httpx.AsyncClient) -> None:
         follow_redirects=True,
     )
 
-    if "/login" in str(r.url):
-        raise ManageBacError(
-            f"ManageBac login failed for {user.label}. The email or password is "
-            f"likely wrong (or was changed on ManageBac). Re-enroll to update it."
-        )
+    rejection = _login_rejection_reason(r)
+    if rejection:
+        _remember_login_failure(user.id, rejection)
+        raise ManageBacError(rejection)
 
+    _login_failures.pop(user.id, None)
     users.save_cookies(user.id, dict(client.cookies))
 
 
@@ -125,16 +180,21 @@ async def authed_get(client: httpx.AsyncClient, path: str) -> httpx.Response:
                 return r
         except httpx.TooManyRedirects:
             pass
+        recent_failure = _recent_login_failure(user.id)
+        if recent_failure:
+            raise ManageBacError(recent_failure)
         # Still bad — do a real login (clears cookies, signs in, saves).
         await login(client)
-    r = await _throttled_get(client, path)
-    # If we STILL land on the login page after a fresh login, the session can't
-    # be authenticated. Raise with a reason instead of returning the login HTML,
-    # which would otherwise parse to an empty result and get cached as "no data".
-    if "/login" in str(r.url) or r.status_code == 401:
-        raise ManageBacError(
-            f"ManageBac kept redirecting {path} to the login page even after a "
-            f"fresh sign-in for {user.label} — the session could not be "
-            f"authenticated (wrong credentials, or ManageBac is blocking the login)."
-        )
-    return r
+        # Validate the new session before releasing the per-user login lock. A
+        # waiting request can then reuse the persisted cookies instead of racing
+        # another login against this one.
+        r = await _throttled_get(client, path)
+        if "/login" in str(r.url) or r.status_code == 401:
+            reason = (
+                "ManageBac accepted the sign-in request but did not create a usable "
+                "session. Automatic login retries are paused for 5 minutes; verify "
+                "the account in a browser, then update the enrolled credentials if needed."
+            )
+            _remember_login_failure(user.id, reason)
+            raise ManageBacError(reason)
+        return r
