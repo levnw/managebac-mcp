@@ -9,7 +9,7 @@ class NoArguments(BaseModel):
 
 
 def definition(name, model, description, properties, required=None, *, title, invoking, invoked,
-               limits='50 pages, 1000 records', max_bytes=MAX_RESULT_BYTES, timeout=TIMEOUT_SECONDS):
+               limits='50 pages, 1000 records', max_bytes=MAX_RESULT_BYTES, timeout=TIMEOUT_SECONDS, meta=None):
     """One definition style for every tool: strict input, closed output, read-only hints.
 
     `invoking`/`invoked` are ChatGPT's short status lines (at most 64 characters).
@@ -26,7 +26,7 @@ def definition(name, model, description, properties, required=None, *, title, in
                               'additionalProperties': False},
                 annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False,
                                             idempotentHint=True, openWorldHint=True),
-                _meta={'openai/toolInvocation/invoking': invoking, 'openai/toolInvocation/invoked': invoked})
+                _meta={'openai/toolInvocation/invoking': invoking, 'openai/toolInvocation/invoked': invoked, **(meta or {})})
 
 
 STRING = {'type': 'string'}

@@ -2,9 +2,15 @@
 
 No public endpoint or authentication bypass is created by this module.
 """
+from pathlib import Path
 from mcp.server.lowlevel import Server
-from mcp.types import CallToolResult, TextContent
+from mcp.server.lowlevel.helper_types import ReadResourceContents
+from mcp.types import CallToolResult, Resource, TextContent
 from .catalogue import definitions, TOOLS
+from .files import WIDGET_URI
+
+WIDGET_MIME = 'text/html;profile=mcp-app'
+WIDGET_HTML = Path(__file__).with_name('files_widget.html')
 
 def create_server(call_tool):
     """`call_tool(name, arguments)` runs a tool for the authenticated account."""
@@ -30,6 +36,19 @@ def create_server(call_tool):
     async def list_tools():
         return definitions()
 
+    @server.list_resources()
+    async def list_resources():
+        return [Resource(uri=WIDGET_URI, name='files-card', title='ManageBac files', mimeType=WIDGET_MIME,
+                         description='Lists files and lets the student add them to the chat.')]
+
+    @server.read_resource()
+    async def read_resource(uri):
+        if str(uri) != WIDGET_URI:
+            raise ValueError('Unknown resource')
+        # No network access: the card talks only to this server through the host.
+        return [ReadResourceContents(content=WIDGET_HTML.read_text(), mime_type=WIDGET_MIME,
+                                     meta={'ui': {'prefersBorder': True, 'csp': {'connectDomains': [], 'resourceDomains': []}}})]
+
     @server.call_tool()
     async def call_tool_handler(name, arguments):
         if name not in TOOLS:
@@ -39,6 +58,8 @@ def create_server(call_tool):
         if 'error' in payload:
             error = payload['error']
             return CallToolResult(content=[TextContent(type='text', text=f"{error['code']}: {error['message']}")], isError=True)
-        return CallToolResult(content=[], structuredContent=payload)
+        hidden = payload.get('_meta')   # widget-only (file bytes); never in structuredContent
+        visible = {k: v for k, v in payload.items() if k != '_meta'}
+        return CallToolResult(content=[], structuredContent=visible, **({'_meta': hidden} if hidden else {}))
 
     return server

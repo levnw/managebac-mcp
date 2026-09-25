@@ -33,6 +33,7 @@ Tools work in layers: list first, then open what you picked.
 | | detail | `open`: up to 10 `{class_id, task_id}` | Markdown instructions, media, tables, teacher resources, submission, assessment, feedback; per-task errors |
 | `get_files` | class | `class_id`, optional `folder_id`, `recursive`, `date_from`, `date_to` | The class Files section: files and folders |
 | | task | `class_id`, `task_id`, optional `date_from`, `date_to` | Every file attached to one task, labelled `description`, `teacher_resource` or `submission` (your own uploads), with `posted_date` |
+| | open | `class_id` + `task_id` or `folder_id`, `open`: up to 5 `file_id`s | Downloads those files for the **files card**, whose *Add to chat* button hands each one to ChatGPT's own file upload |
 | `get_timetable` | | none | The displayed week (classes, merged periods, Homeroom-style notes) |
 
 Dates: ManageBac shows a task's due month and day without a year, so `due_date`
@@ -40,7 +41,17 @@ uses the year closest to today. Files use their real dates (last modified for
 class files, posted or uploaded for task files). With a date filter, anything
 without a readable date is returned in `undated`, never silently dropped.
 
-A deeper files layer that returns a file's contents does not exist yet.
+### Adding files to the chat
+
+`get_files` shows a files card in ChatGPT (MCP Apps resource
+`ui://managebac/files-v1.html`). *Add to chat* downloads the file through the
+signed-in tool call (`open` layer) and passes it, unconverted, to
+`window.openai.uploadFile`, so it becomes an ordinary ChatGPT file. The bytes
+travel only in widget-only `_meta`; the model sees name, type, size and status.
+Downloads are resolved against the task or folder page the student named, are
+HTTPS-only to ManageBac or its storage (S3, CloudFront), strip school cookies
+from any other host, and are capped at 10 MB per file and 15 MB per call.
+Developer reports never store file bytes.
 
 ### Retired tools
 

@@ -1,0 +1,173 @@
+<!-- ManageBac files card: lists files from get_files and adds chosen ones to the chat.
+     It has no network access of its own: file bytes arrive through the host from
+     get_files (open layer) in widget-only _meta, then go to window.openai.uploadFile. -->
+<style>
+  :root { --bg: #ffffff; --ink: #1a2421; --muted: #5a6964; --line: #dce3e0; --accent: #0e6b61;
+          --accent-ink: #ffffff; --ok: #0e6b61; --bad: #a83b2a; color-scheme: light; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #18201e; --ink: #e3ece9; --muted: #97a7a2; --line: #2a3532; --accent: #5cc0b1;
+    --accent-ink: #0d1614; --ok: #5cc0b1; --bad: #ee8a77; color-scheme: dark; } }
+  :root[data-theme="dark"] { --bg: #18201e; --ink: #e3ece9; --muted: #97a7a2; --line: #2a3532;
+    --accent: #5cc0b1; --accent-ink: #0d1614; --ok: #5cc0b1; --bad: #ee8a77; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .card { padding: 12px 14px; display: grid; gap: 8px; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .head h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  .head a { color: var(--muted); font-size: 12px; }
+  ul { list-style: none; margin: 0; padding: 0; display: grid; }
+  li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center;
+       padding: 8px 0; border-top: 1px solid var(--line); }
+  li:first-child { border-top: 0; }
+  .name { font-weight: 500; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .status { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+  .status.ok { color: var(--ok); } .status.bad { color: var(--bad); }
+  button { font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 6px; cursor: pointer;
+           border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+  button.quiet { background: transparent; color: var(--accent); }
+  button:disabled { opacity: .55; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .note { color: var(--muted); font-size: 12px; margin: 0; }
+</style>
+<div class="card" id="app"><p class="note">Loading files…</p></div>
+<script>
+(() => {
+  const app = document.getElementById('app');
+  const SOURCE = { description: 'In the instructions', teacher_resource: 'From your teacher', submission: 'Your submission' };
+  const cache = new Map();          // file_id -> {name, mime_type, data}
+  const state = new Map();          // file_id -> {text, tone}
+  const attached = [];              // {name, fileId, mime}
+  let output = null;
+
+  // MCP Apps bridge (postMessage JSON-RPC), used when window.openai is absent.
+  let nextId = 1; const pending = new Map();
+  function request(method, params) {
+    const id = nextId++;
+    window.parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
+    return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+  }
+  window.addEventListener('message', (event) => {
+    if (event.source !== window.parent) return;
+    const m = event.data;
+    if (!m || m.jsonrpc !== '2.0') return;
+    if (m.id !== undefined && pending.has(m.id)) {
+      const p = pending.get(m.id); pending.delete(m.id);
+      m.error ? p.reject(m.error) : p.resolve(m.result); return;
+    }
+    if (m.method === 'ui/notifications/tool-result') accept(m.params);
+  }, { passive: true });
+
+  const hiddenMeta = (r) => r?._meta || r?.meta || r?.mcp_tool_result?._meta || r?.call_tool_result?._meta || null;
+  function remember(meta) { for (const f of (meta?.['managebac/files'] || [])) cache.set(f.file_id, f); }
+  function accept(result) {
+    if (!result) return;
+    output = result.structuredContent || result.toolOutput || output;
+    remember(hiddenMeta(result));
+    render();
+  }
+  function fromOpenAI() {
+    const oa = window.openai; if (!oa) return;
+    if (oa.theme) document.documentElement.dataset.theme = oa.theme;
+    if (oa.toolOutput) output = oa.toolOutput;
+    remember(hiddenMeta(oa.toolResponseMetadata));
+    render();
+  }
+  window.addEventListener('openai:set_globals', fromOpenAI, { passive: true });
+
+  async function callTool(name, args) {
+    if (window.openai?.callTool) return window.openai.callTool(name, args);
+    return request('tools/call', { name, arguments: args });
+  }
+
+  function scope() {
+    const s = { class_id: output.class_id };
+    if (output.task_id) s.task_id = output.task_id;
+    else if (output.folder_id) s.folder_id = output.folder_id;
+    return s;
+  }
+
+  async function addToChat(file) {
+    const set = (text, tone) => { state.set(file.file_id, { text, tone }); render(); };
+    try {
+      if (!window.openai?.uploadFile) { set('Adding files to the chat is available in ChatGPT only.', 'bad'); return; }
+      let item = cache.get(file.file_id);
+      if (!item) {
+        set('Downloading from ManageBac…');
+        const result = await callTool('get_files', { ...scope(), open: [file.file_id] });
+        remember(hiddenMeta(result));
+        item = cache.get(file.file_id);
+        if (!item) {
+          const opened = (result?.structuredContent || result)?.files?.[0];
+          set(opened?.error?.message || 'The file could not be downloaded.', 'bad'); return;
+        }
+      }
+      set('Adding to the chat…');
+      const bytes = Uint8Array.from(atob(item.data), (c) => c.charCodeAt(0));
+      const upload = new File([bytes], item.name, { type: item.mime_type });
+      const { fileId } = await window.openai.uploadFile(upload, { library: true });
+      attached.push({ name: item.name, fileId, mime: item.mime_type });
+      // Tell the model what was added; images are also passed for viewing.
+      await window.openai.setWidgetState?.({
+        modelContent: { added_to_chat: attached.map((a) => ({ name: a.name, chatgpt_file_id: a.fileId })) },
+        imageIds: attached.filter((a) => a.mime.startsWith('image/')).map((a) => a.fileId),
+      });
+      set('Added to the chat and your ChatGPT files.', 'ok');
+    } catch (error) {
+      set('Could not add this file: ' + (error?.message || 'unknown error') + '.', 'bad');
+    }
+  }
+
+  function ask(name) {
+    window.openai?.sendFollowUpMessage?.({ prompt: `I added "${name}" from ManageBac. Please read it and help me with it.` });
+  }
+
+  function el(tag, props = {}, text) {
+    const node = document.createElement(tag);
+    Object.assign(node, props);
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function render() {
+    app.replaceChildren();
+    if (!output) { app.append(el('p', { className: 'note' }, 'Loading files…')); return; }
+    const files = (output.files || []).filter((f) => f.file_id || f.url);
+    const head = el('div', { className: 'head' });
+    head.append(el('h1', {}, output.task_id ? 'Task files' : 'Class files'));
+    if (output.url) head.append(el('a', { href: output.url, target: '_blank', rel: 'noopener' }, 'Open in ManageBac'));
+    app.append(head);
+    if (!files.length) { app.append(el('p', { className: 'note' }, 'No files here.')); return; }
+    const list = el('ul');
+    for (const file of files) {
+      const row = el('li');
+      const info = el('div');
+      info.append(el('div', { className: 'name' }, file.name || 'Unnamed file'));
+      const bits = [SOURCE[file.source], file.posted_date || (file.updated_at || '').slice(0, 10),
+                    file.size_display || (file.size_bytes ? Math.round(file.size_bytes / 1024) + ' KB' : '')].filter(Boolean);
+      if (file.status === 'error') bits.push(file.error?.message || 'Unavailable');
+      if (bits.length) info.append(el('div', { className: 'meta' }, bits.join(' · ')));
+      row.append(info);
+      const downloadable = file.file_id && file.kind !== 'preview' && file.status !== 'error';
+      if (downloadable) {
+        const done = attached.find((a) => a.name === (cache.get(file.file_id)?.name || file.name));
+        const button = done ? el('button', { className: 'quiet', onclick: () => ask(done.name) }, 'Ask ChatGPT about it')
+                            : el('button', { onclick: () => addToChat(file) }, 'Add to chat');
+        const busy = state.get(file.file_id)?.text?.endsWith('…');
+        button.disabled = Boolean(busy);
+        row.append(button);
+      } else if (file.url) {
+        row.append(el('a', { href: file.url, target: '_blank', rel: 'noopener', className: 'meta' }, 'Open'));
+      }
+      const status = state.get(file.file_id);
+      if (status) row.append(el('div', { className: 'status ' + (status.tone || '') }, status.text));
+      list.append(row);
+    }
+    app.append(list);
+    window.openai?.notifyIntrinsicHeight?.(document.body.scrollHeight);
+  }
+
+  fromOpenAI();
+})();
+</script>

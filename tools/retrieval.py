@@ -22,7 +22,9 @@ async def execute(model, arguments, operation, *, max_bytes=None, timeout=None):
     try:
         args = model.model_validate(arguments)
         result = await asyncio.wait_for(operation(args), timeout)
-        if len(json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode()) > max_bytes:
+        # Widget-only _meta (e.g. file bytes for the files card) never reaches the model.
+        visible = {k: v for k, v in result.items() if k != '_meta'}
+        if len(json.dumps(visible, ensure_ascii=False, separators=(',', ':')).encode()) > max_bytes:
             raise FlowError('result_too_large', f'The response exceeds {size_label(max_bytes)}. Select a smaller scope; no data was silently truncated.')
         event('retrieval.complete')
         return result

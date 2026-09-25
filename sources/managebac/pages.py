@@ -161,3 +161,59 @@ def verify_identity(soup, origin: str, path: str):
         p = urlsplit(urljoin(origin, link['href']))
         if school_origin(p.geturl()) != origin or p.path != path:
             raise FlowError('identity_mismatch', 'The returned page belongs to a different entity.')
+
+
+MAX_FILE_BYTES = 10_000_000
+# ManageBac serves files from the school host and hands signed links to its storage.
+FILE_HOSTS = re.compile(r'(?:[a-z0-9-]+\.)*(?:managebac\.(?:com|cn)|amazonaws\.com|cloudfront\.net)')
+FILE_ERRORS = {401: ('session_expired', 'Sign in again to download this file.'),
+               403: ('file_link_expired', 'The file link was refused (it may have expired). Open the file again.'),
+               404: ('not_found', 'The file was not found; it may have been removed.'),
+               429: ('rate_limited', 'ManageBac is limiting requests. Wait before retrying.')}
+
+
+async def fetch_file(client, origin: str, url: str) -> tuple[bytes, str]:
+    """Download one school file already found on an authorised page. Returns (bytes, content type).
+
+    Follows at most three redirects, HTTPS only, to ManageBac or its storage hosts.
+    School cookies go only to the school's own host; they are stripped from every other request.
+    """
+    for _ in range(4):
+        p = urlsplit(url)
+        if p.scheme != 'https' or p.username or p.password or not FILE_HOSTS.fullmatch(p.hostname or ''):
+            raise FlowError('unsupported_file_host', 'The file is stored somewhere this connector does not download from.')
+        event('file.request')
+        request = client.build_request('GET', url, headers={'Accept': '*/*', 'Referer': origin + '/student'})
+        if f'https://{p.hostname}' != origin:
+            # Storage hosts get no school cookies and no referrer, whatever the jar holds.
+            request.headers.pop('cookie', None); request.headers.pop('referer', None)
+        response = await client.send(request, stream=True, follow_redirects=False)
+        try:
+            event('file.response', status=response.status_code)
+            if response.is_redirect:
+                target = urljoin(url, response.headers.get('location', ''))
+                if urlsplit(target).path in ('/login', '/sessions'):
+                    raise FlowError('session_expired', 'ManageBac asked to sign in before sending the file.')
+                url = target
+                continue
+            if response.status_code in FILE_ERRORS:
+                raise FlowError(*FILE_ERRORS[response.status_code])
+            if response.status_code != 200:
+                raise FlowError('upstream_unavailable', 'The file could not be downloaded right now.')
+            content_type = response.headers.get('content-type', '').split(';')[0].strip().lower()
+            declared = response.headers.get('content-length', '')
+            if declared.isdecimal() and int(declared) > MAX_FILE_BYTES:
+                raise FlowError('file_too_large', 'The file is larger than 10 MB; open it in ManageBac instead.')
+            parts, size = [], 0
+            async for part in response.aiter_bytes():
+                size += len(part)
+                if size > MAX_FILE_BYTES:
+                    raise FlowError('file_too_large', 'The file is larger than 10 MB; open it in ManageBac instead.')
+                parts.append(part)
+        finally:
+            await response.aclose()
+        data = b''.join(parts)
+        if content_type in ('text/html', 'application/xhtml+xml') and b'type="password"' in data[:200_000]:
+            raise FlowError('session_expired', 'ManageBac returned a sign-in page instead of the file.')
+        return data, content_type or 'application/octet-stream'
+    raise FlowError('redirect_loop', 'The file download redirected too many times.')

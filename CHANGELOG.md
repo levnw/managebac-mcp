@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.6.0 — 2026-09-25
+
+### Added
+- `get_files` **open layer**: `open` with up to 5 `file_id`s from a task or a
+  class folder downloads those files with the student's session. The model sees
+  each file's name, type, size and ready/error status; the bytes travel only in
+  widget-only `_meta`.
+- **Files card** (`ui://managebac/files-v1.html`, `text/html;profile=mcp-app`):
+  shown with `get_files` results. *Add to chat* passes the file unconverted to
+  ChatGPT's `window.openai.uploadFile` (also saved to the ChatGPT file library),
+  records it in widget state for the model, and offers *Ask ChatGPT about it*.
+  No network access of its own; outside ChatGPT it says adding is unavailable.
+- Guarded downloader: redirects (≤3) only to ManageBac, S3 or CloudFront over
+  HTTPS; cookies and referrer stripped for any host but the school's; 10 MB per
+  file, 15 MB per call; expired links and sign-in pages are explicit errors.
+
+### Not yet verified
+- In ChatGPT itself: that the card renders, that `uploadFile` accepts the file,
+  and whether the model reads an added PDF or document without the student
+  attaching it again. Images are documented to reach the model via widget state.
+
+### Verified
+- 245 automated tests, including cookie stripping on storage redirects and that
+  reports never contain file bytes.
+
 ## 2.5.0 — 2026-09-25
 
 ### Added
