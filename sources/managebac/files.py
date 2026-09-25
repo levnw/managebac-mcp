@@ -5,6 +5,7 @@ from urllib.parse import urlsplit, urljoin
 from onboarding.transport import FlowError, school_origin
 from .pages import document, text, next_page, verify_identity, count_heading, outermost
 from .rich_text import RichText
+from diagnostics import layout_evidence
 
 
 def file_info(raw: str) -> dict:
@@ -92,6 +93,17 @@ def parse_page(html: str, origin: str, class_id: str, folder_id: str | None, cur
     empty = scope.select_one('.empty-state, .no-results, .blank-slate')
     total = count_heading(scope, 'Files')
     if not files and not folders and total != 0 and not (empty and re.search(r'\bno files\b', text(empty), re.I)):
+        # Structure only (and interface text when nothing file-like is present), so an
+        # unrecognised Files page can be supported from evidence rather than guessed.
+        file_like = scope.select_one('[data-ec3-info], tr.file, a[href*="/uploads/"], a[href*="/attachments/"]')
+        layout_evidence(
+            headings=[text(h) for h in scope.select('h1,h2,h3,h4') if text(h)],
+            main_children=['.'.join([c.name, *c.get('class', [])]) for c in scope.find_all(recursive=False)],
+            candidate_rows=[f'{selector}={len(scope.select(selector))}' for selector in
+                            ('[data-ec3-info]', 'tr.file', '.file', 'a[href*="/files/folder/"]', 'a[href*="/uploads/"]')],
+            interface_text=[] if file_like else [text(scope.select_one('section.f-layout-main__content') or scope)[:300]],
+            text_classes=list(dict.fromkeys('.'.join([n.name, *n.get('class', [])]) for n in scope.select('*')
+                if n.find(string=True, recursive=False) and n.find(string=True, recursive=False).strip()))[-12:])
         raise FlowError('layout_changed', 'The file listing or an explicit empty state was not recognized.')
     if len(files) + len(folders) > 200:
         raise FlowError('page_too_large', 'The file page exceeds 200 entries.')

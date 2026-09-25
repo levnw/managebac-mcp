@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.6.1 — 2026-09-25
+
+### Fixed (from the first live v2.6 session)
+- Task `status` read the "HL" level badge instead of the status in Higher Level
+  classes, so status filters missed them. Status now comes from the status badge
+  (`.badge[data-bs-title] .badge-label`); HL/SL is a new `level` field.
+- Task labels ("Formative", "Classwork") were never read, so `tags` was empty
+  and the tag filter had nothing to match. They now come from the task's own
+  `.label-and-due` strip (unit labels elsewhere on the page are excluded).
+
+### Added
+- Developer-mode structure evidence when a class Files page is not recognised
+  (6 of 13 live classes; likely classes without files), to support it from
+  evidence rather than a guess.
+
+### Live-verified (25 Sep, 19:05–19:08 UTC)
+- `due_date` on all 32 tasks across 10 classes; the three empty MYP classes
+  return no tasks without errors.
+- Class Files on 7 classes (1–16 files each).
+- `open`: a 6.4 MB PowerPoint downloaded and delivered to the card in 2.9 s; a
+  textbook over 10 MB was refused cleanly.
+
+246 automated tests.
+
 ## 2.6.0 — 2026-09-25
 
 ### Added

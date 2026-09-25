@@ -14,11 +14,13 @@ def task_link(href, origin: str, class_id: str):
     return match[1], origin + p.path
 
 
+LEVELS = {'HL', 'SL', 'HL/SL', 'SL/HL'}
+
+
 def metadata(scope) -> dict:
     """Read dedicated fields; never infer status/grades from title or prose."""
     output = {}
-    fields = {'due_display': '.due-date, .task-due-date', 'status': '.task-status, .badge-label',
-              'assessment_type': '.task-type, .assessment-type'}
+    fields = {'due_display': '.due-date, .task-due-date', 'assessment_type': '.task-type, .assessment-type'}
     for field, selector in fields.items():
         value = text(scope.select_one(selector))
         if value: output[field] = value
@@ -30,7 +32,16 @@ def metadata(scope) -> dict:
     if badge is not None:
         month, day = text(badge.select_one('.month')), text(badge.select_one('.day'))
         if month and day: output['due_month_day'] = f'{month} {day}'
-    tags = list(dict.fromkeys(text(n) for n in scope.select('.task-tags .tag, .tags .tag, [data-task-tag]') if text(n)))
+    # Live evidence (25 Sep): a row can carry a level badge ("HL") and a status badge
+    # (<span class="badge" data-bs-title="Waiting"><span class="badge-label">Pending</span>).
+    badges = [text(n) for n in scope.select('.task-status, .badge[data-bs-title] .badge-label, .badge-label') if text(n)]
+    levels = [b for b in dict.fromkeys(badges) if b.upper() in LEVELS]
+    statuses = [b for b in dict.fromkeys(badges) if b.upper() not in LEVELS]
+    if statuses: output['status'] = statuses[0]
+    if levels: output['level'] = levels[0]
+    # The task's own labels ("Formative", "Classwork") sit in .label-and-due; unit labels elsewhere do not count.
+    tags = list(dict.fromkeys(text(n) for n in scope.select(
+        '.task-tags .tag, .tags .tag, [data-task-tag], .label-and-due .labels-set .label') if text(n)))
     if tags: output['tags'] = tags
     # Preserve source labels/values without guessing a year, timezone or scale.
     labels = {}

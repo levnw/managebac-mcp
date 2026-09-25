@@ -96,3 +96,24 @@ async def test_task_files_have_posted_dates_including_submissions():
     assert [(f['source'], f['kind']) for f in mine['files']] == [('submission', 'file'), ('submission', 'preview')]
     assert [u['name'] for u in mine['undated']] == ['Lab instructions.pdf']   # instructions file has no date
     validate(mine, TOOLS['get_files'].DEFINITION.outputSchema)
+
+
+REAL_ROW = ('<main><h2>Tasks (1)</h2><div class="fusion-card-item">'
+            '<a href="/student/classes/10/core_tasks/1">Lab work "Catalase"</a>'
+            '<span class="badge"><span class="badge-label">HL</span></span>'
+            '<div class="label-and-due"><div class="labels-set">'
+            '<div class="label">Formative</div><div class="label">Classwork</div>'
+            '<span class="badge color-box-gray" data-bs-title="Waiting"><span class="badge-label">Pending</span></span>'
+            '<span class="due-date"><div class="due regular">Thursday at 12:30 PM</div></span></div></div>'
+            '<div class="date-badge"><div class="month">Sep</div><div class="day">24</div></div></div></main>')
+
+
+async def test_live_row_markup_gives_status_level_and_labels():
+    """Live (25 Sep 19:07 UTC): status came out as "HL" and labels were never read."""
+    result = await call('get_tasks', {'class_ids': ['10']}, {LIST: REAL_ROW})
+    [task] = result['tasks']
+    assert task['status'] == 'Pending' and task['level'] == 'HL'
+    assert task['tags'] == ['Formative', 'Classwork'] and task['due_date'] == '2026-09-24'
+    assert [t['id'] for t in (await call('get_tasks', {'class_ids': ['10'], 'status': 'pending'}, {LIST: REAL_ROW}))['tasks']] == ['1']
+    assert [t['id'] for t in (await call('get_tasks', {'class_ids': ['10'], 'tag': 'formative'}, {LIST: REAL_ROW}))['tasks']] == ['1']
+    validate(result, TOOLS['get_tasks'].DEFINITION.outputSchema)

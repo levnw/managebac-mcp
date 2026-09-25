@@ -103,7 +103,7 @@ class TaskView:
 
 def compact_task(task):
     view = TaskView(task.get('assets', []))
-    result = {k:task[k] for k in ('id','class_id','title','url','status','assessment_type','tags','fields') if k in task}
+    result = {k:task[k] for k in ('id','class_id','title','url','status','level','assessment_type','tags','fields') if k in task}
     if task.get('due_source') or task.get('due_display'):
         result['due'] = task.get('due_source') or task['due_display']
     description = view.content(task['description'])
