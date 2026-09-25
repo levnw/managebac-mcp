@@ -16,12 +16,6 @@ MAX_PAGES = 50
 # sessions when page requests presented a different User-Agent from sign-in.
 
 
-def identifier(value: str) -> str:
-    if not isinstance(value, str) or not re.fullmatch(r'[0-9]{1,20}', value):
-        raise FlowError('invalid_arguments', 'Use the numeric ManageBac ID returned by a list tool.')
-    return value
-
-
 def destination(origin: str, path: str) -> str:
     parsed = urlsplit(path)
     allowed = (re.fullmatch(r'/student/classes/[0-9]{1,20}/[A-Za-z0-9_/-]+', parsed.path)

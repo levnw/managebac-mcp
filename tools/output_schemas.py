@@ -24,7 +24,6 @@ CONTENT = {'text': S, 'media': array(MEDIA), 'tables': array(TABLE)}
 FIELDS = {'type': 'object', 'additionalProperties': S}
 TASK_FIELDS = {'id': ID, 'title': S, 'url': URL, 'due_display': S, 'due_source': S,
                'status': S, 'assessment_type': S, 'tags': array(S), 'fields': FIELDS}
-TASK = obj(TASK_FIELDS, ('id', 'title', 'url'))
 TASK_IN_CLASS = obj({**TASK_FIELDS, 'class_id': ID}, ('id', 'class_id', 'title', 'url'))
 SLOT = obj({'day_display': S, 'period': S, 'period_end': S, 'class_name': S, 'class_id': ID,
             'time_display': S, 'details': array(S)}, ('day_display', 'period', 'class_name'))

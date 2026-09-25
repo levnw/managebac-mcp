@@ -97,4 +97,4 @@ lives outside this repository. It imports an approved copy of `diagnostics.py`,
 - `docs/V2_DESIGN_PRINCIPLES.md`, `docs/MODEL_ORIENTATION.md` — design rules
 - `docs/ARCHITECTURE_REVIEW_2026-09-25.md` — the latest architecture review
 - `docs/BACKLOG.md` — ideas not yet built
-- `docs/history/` — superseded design notes kept for their reasoning
+- Superseded design notes were removed in 2.3.1; they remain at tag `v2.3.0` under `docs/history/`

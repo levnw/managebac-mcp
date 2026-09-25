@@ -1,15 +1,11 @@
 """Common contracts, not a second dispatcher or a second source of truth."""
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from mcp.types import Tool, ToolAnnotations
 from .retrieval import MAX_RESULT_BYTES, TIMEOUT_SECONDS, size_label
 
 
 class NoArguments(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
-
-
-class ClassArguments(NoArguments):
-    class_id: str = Field(pattern=r'^[0-9]{1,20}$', description='ID returned by get_classes.')
 
 
 def definition(name, model, description, properties, required=None, *, title, invoking, invoked,

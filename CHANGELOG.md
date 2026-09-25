@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.3.1 — 2026-09-25
+
+### Removed
+- Code orphaned by the tool retirements: `tools/content_output.py`,
+  `ClassArguments`, the unused `TASK` schema and `pages.identifier()`.
+- `docs/history/` (14 superseded design notes). They remain at tag `v2.3.0`.
+
+No behaviour change. 214 automated tests.
+
 ## 2.3.0 — 2026-09-25
 
 ### Changed (breaking for callers of get_tasks)
