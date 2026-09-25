@@ -33,8 +33,6 @@ UNIT = obj({'id': ID, 'class_id': ID, 'url': URL, 'fields': FIELDS,
 SLOT = obj({'day_display': S, 'period': S, 'period_end': S, 'class_name': S, 'class_id': ID,
             'time_display': S, 'details': array(S)}, ('day_display', 'period', 'class_name'))
 NOTE = obj({'day_display': S, 'period': S, 'period_end': S, 'text': S}, ('day_display', 'period', 'text'))
-ASSESSMENT = obj({**TASK_FIELDS, 'assessment': obj(CONTENT), 'feedback': obj(CONTENT)},
-                 ('id', 'title', 'url', 'assessment'))
 
 CLASS = obj({'id': ID, 'name': S, 'url': URL}, ('id', 'name', 'url'))
 CONTENT_OBJECT = obj(CONTENT, ('text',))

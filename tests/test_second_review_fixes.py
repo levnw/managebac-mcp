@@ -56,12 +56,6 @@ async def test_inner_task_id_must_match_the_link():
     assert result['error']['code'] == 'identity_mismatch'
 
 
-async def test_grade_in_nested_card_is_reported_once():
-    grade = '<div class="assessment-criteria"><table><tr><td>A</td><td>6 / 8</td></tr></table></div>'
-    result = await call('get_grades', {'class_id': '10'}, {ROOT + '/core_tasks': NESTED.format(extra=grade)})
-    assert [task['id'] for task in result['assessments']] == ['11']
-
-
 async def test_double_period_class_is_one_slot_with_end_period():
     html = timetable([f'<tr><th>1</th><td rowspan="2">{ITEM.format(id=5, name="Maths")}</td><td></td></tr>',
                       f'<tr><th>2</th><td>{ITEM.format(id=6, name="Art")}</td></tr>',

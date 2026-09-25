@@ -10,24 +10,6 @@ from tools.session import ToolSession
 from test_new_catalogue import call, ORIGIN, ROOT, TASK, TIMETABLE, CASES
 
 
-@pytest.mark.parametrize('status', ['', 'Pending', 'Not Submitted', 'Submitted', 'Not Assessed Yet'])
-async def test_mixed_graded_and_ungraded_tasks(status):
-    ungraded = '<div class="fusion-card-item"><a href="/student/classes/10/core_tasks/12">Practice</a>'
-    if status: ungraded += f'<span class="task-status">{status}</span>'
-    html = TASK.replace('Tasks (1)', 'Tasks (2)').replace('</main>', ungraded + '</div></main>')
-    result = await call('get_grades', {'class_id':'10'}, {ROOT+'/core_tasks':html})
-    assert [task['id'] for task in result['assessments']] == ['11']
-    validate(result, TOOLS['get_grades'].DEFINITION.outputSchema)
-
-
-@pytest.mark.parametrize('markup', ['<div data-grade="6">6</div>', '<div class="grade">A: 6</div>',
-                                    '<div class="assessment-criteria"></div>'])
-async def test_unreadable_assessment_still_errors(markup):
-    html = '<main><h2>Tasks (1)</h2><div class="fusion-card-item"><a href="/student/classes/10/core_tasks/11">Lab</a>' + markup + '</div></main>'
-    result = await call('get_grades', {'class_id':'10'}, {ROOT+'/core_tasks':html})
-    assert 'error' in result and 'assessments' not in result
-
-
 async def test_lunch_note_preserved_beside_classes():
     html = TIMETABLE.replace('</tbody>', '<tr><th>Break</th><td>Lunch break</td></tr></tbody>')
     result = await call('get_timetable', {}, {'/student/timetables':html})

@@ -43,3 +43,17 @@ Relevant starting points:
 - Latest live check in this conversation: stored European School session returned HTTP 200 at /student/classes/my and parsed 15 classes; the service class-fetch operation also returned 15. Screenshot: /Users/server/Desktop/managebac-evidence/classes-response.png.
 - Full current ChatGPT/Dia user-facing verification remains outstanding. The signup protected-data verification requirement (MB-04) is not complete merely because login-error handling was improved.
 - Preserve all enrolled users, databases, credentials, OAuth data, and tunnel files; no deletion or rotation without explicit confirmation.
+
+## Grades and predictions (added 2026-09-25)
+
+`get_grades` was retired in v2.2.0. The owner wants ChatGPT to show grades and
+help predict outcomes per class, which needs more than bare scores:
+- per task: assessment type (formative/summative), criteria or scale (DP 1–7,
+  MYP A–D), score and maximum, date, and the teacher's feedback;
+- per class: the full set of graded tasks, so trends are visible;
+- a clear source for each number and no invented averages or official grades.
+
+Start from real graded pages on the current (DP) account, not from the retired
+selectors. Until then, `get_classes` → `get_tasks` → `get_task` gives per-task
+assessment and feedback.
+

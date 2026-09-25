@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.2.0 — 2026-09-25
+
+### Retired
+- `get_grades`, with its page reader (`sources/managebac/grades.py`), schema and
+  tests. It listed bare assessment blocks from a class task list, which is not
+  enough detail to show grades meaningfully or support predictions, and it only
+  recognised exact MYP-era class names, so unrecognised grade markup could be
+  reported as "no published grades". The code remains at tag `v2.1.0`. A task's
+  own assessment and teacher feedback are still returned by `get_task`. A
+  redesigned grades capability is on the backlog. The connector now exposes nine
+  tools.
+
+### Verified
+- 243 automated tests.
+
 ## 2.1.0 — 2026-09-25
 
 ### Retired

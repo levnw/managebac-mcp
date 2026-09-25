@@ -16,8 +16,7 @@ CASES = [
     ('get_unit', {'class_id': '10', 'unit_id': '7'}, '/student/classes/10/units/7/popup', 'unit'),
     ('get_timetable', {}, '/student/timetables', 'timetable'),
     ('get_upcoming', {}, '/student/tasks_and_deadlines?view=upcoming', 'upcoming'),
-    ('search_tasks', {'class_ids': ['10'], 'tag': 'Homework'}, '/student/classes/10/core_tasks', 'grades'),
-    ('get_grades', {'class_id': '10'}, '/student/classes/10/core_tasks', 'grades'),
+    ('search_tasks', {'class_ids': ['10'], 'tag': 'Homework'}, '/student/classes/10/core_tasks', 'task_list'),
 ]
 
 

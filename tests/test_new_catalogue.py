@@ -16,7 +16,7 @@ def fixture(name):
     return (Path(__file__).parent / 'fixtures/catalogue' / (name + '.html')).read_text()
 
 UNIT, TIMETABLE, UPCOMING, TASK = [fixture(name) for name in
-    ('units', 'timetable', 'upcoming', 'grades')]
+    ('units', 'timetable', 'upcoming', 'task_list')]
 
 CASES = [
     ('get_units', {'class_id': '10'}, ROOT + '/units', UNIT, 'units'),
@@ -25,7 +25,6 @@ CASES = [
     ('get_timetable', {}, '/student/timetables', TIMETABLE, 'slots'),
     ('get_upcoming', {}, '/student/tasks_and_deadlines?view=upcoming', UPCOMING, 'tasks'),
     ('search_tasks', {'class_ids': ['10'], 'tag': 'Homework'}, ROOT + '/core_tasks', TASK, 'tasks'),
-    ('get_grades', {'class_id': '10'}, ROOT + '/core_tasks', TASK, 'assessments'),
 ]
 
 
@@ -117,13 +116,7 @@ async def test_user_agent_consistent_and_report_all_tools(tmp_path):
 def test_catalogue_has_one_tool_per_capability():
     assert set(TOOLS) == {'get_classes', 'get_tasks', 'get_task', 'get_class_files', 'get_units',
                           'get_unit', 'get_timetable',
-                          'get_upcoming', 'search_tasks', 'get_grades'}
-
-
-async def test_grade_absence_is_no_published_grade_on_this_page():
-    html = '<main><h2>Tasks (1)</h2><div class="fusion-card-item"><a href="/student/classes/10/core_tasks/11">Lab</a></div></main>'
-    result = await call('get_grades', {'class_id': '10'}, {ROOT + '/core_tasks': html})
-    assert result['assessments'] == []
+                          'get_upcoming', 'search_tasks'}
 
 
 async def test_redirect_does_not_discard_verified_account_session():

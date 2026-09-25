@@ -2,7 +2,7 @@
 
 A read-only connector that lets ChatGPT (and other MCP clients such as Claude)
 read a student's own ManageBac portal: classes, tasks, task details, class
-files, units, timetable, deadlines and published grades.
+files, units, timetable and deadlines.
 
 v2 is a rebuild of v1 (`multi-user` branch, up to v1.9.0). It keeps each tool
 narrow, returns compact JSON, and reports an error instead of a guessed or
@@ -34,18 +34,17 @@ ChatGPT / Claude
 | `get_timetable` | The displayed week (classes, merged periods, Homeroom-style notes) |
 | `get_upcoming` | Upcoming, overdue or past deadlines across classes |
 | `search_tasks` | Title/tag search across up to 10 chosen classes |
-| `get_grades` | Published assessment blocks on a class task list |
 
 ### Retired tools
 
-`get_journal` (class journal reflections) and `get_discussions` (task discussion
-posts and replies) existed in **v2.0.0** and were retired in **v2.1.0**. Their
-page readers were ported from v1 selectors written for an earlier portal layout,
-were never verified against the current portal, and are not planned for use.
-The code is preserved at tag [`v2.0.0`](https://github.com/levnw/managebac-mcp/tree/v2.0.0): `tools/journal.py`,
-`tools/discussions.py` and `sources/managebac/conversations.py`. Rebuilding
-either tool should start from fresh evidence of the current pages, not from
-that code.
+| Tool | Existed in | Retired in | Why | Code preserved at |
+|---|---|---|---|---|
+| `get_journal`, `get_discussions` | v2.0.0 | v2.1.0 | Ported from v1 selectors for an older portal layout; never verified live; not planned for use | [`v2.0.0`](https://github.com/levnw/managebac-mcp/tree/v2.0.0): `tools/journal.py`, `tools/discussions.py`, `sources/managebac/conversations.py` |
+| `get_grades` | v2.0.0 | v2.2.0 | Returned bare task-list scores without the detail needed to show or predict grades, and only recognised exact MYP-era markup, so real grades could be missed | [`v2.1.0`](https://github.com/levnw/managebac-mcp/tree/v2.1.0): `tools/grades.py`, `sources/managebac/grades.py` |
+
+A task's own assessment and teacher feedback are still returned by `get_task`.
+A better grades design is on the backlog (`docs/BACKLOG.md`). Any rebuild should
+start from fresh evidence of the current pages, not from the retired code.
 
 Every tool is read-only, declares strict input and output schemas, and shares
 the same limits (see each tool's description). School-stored files carry a
