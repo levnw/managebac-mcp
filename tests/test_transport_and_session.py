@@ -69,7 +69,7 @@ async def test_session_reuses_one_client_and_keeps_rotated_cookies():
         return made[-1]
     session = ToolSession(ORIGIN, {'start': '1'}, factory)
     for _ in range(3):
-        assert 'tasks' in await session.call('get_tasks', {'class_id': '10'})
+        assert 'tasks' in await session.call('get_tasks', {'class_ids': ['10']})
     assert len(made) == 1
     assert session.cookies.get('rotated') == '1' and session.cookies.get('start') == '1'
     await session.aclose()
@@ -86,7 +86,7 @@ async def test_calls_run_concurrently_up_to_the_cap():
         return tasks_page(0)
     session = ToolSession(ORIGIN, {}, lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
                           max_concurrent=2)
-    calls = [asyncio.create_task(session.call('get_tasks', {'class_id': str(i)})) for i in range(1, 4)]
+    calls = [asyncio.create_task(session.call('get_tasks', {'class_ids': [str(i)]})) for i in range(1, 4)]
     await asyncio.sleep(0.05)
     assert peak == 2          # parallel, but bounded
     release.set()
@@ -98,7 +98,7 @@ async def test_calls_run_concurrently_up_to_the_cap():
 async def test_host_diagnostics_are_not_replaced_without_a_report_writer():
     session = ToolSession(ORIGIN, {}, lambda: httpx.AsyncClient(transport=httpx.MockTransport(lambda r: tasks_page(0))))
     with capture('get_tasks', True) as report:
-        await session.call('get_tasks', {'class_id': '10'})
+        await session.call('get_tasks', {'class_ids': ['10']})
     assert any(e['stage'] == 'page.request' for e in report.events)
     await session.aclose()
 
@@ -107,9 +107,9 @@ async def test_session_report_includes_definition_target_and_size(tmp_path):
     seen = []
     session = ToolSession(ORIGIN, {}, lambda: httpx.AsyncClient(transport=httpx.MockTransport(lambda r: tasks_page(0))),
                           developer_mode=True, report_directory=tmp_path)
-    result = await session.call('get_tasks', {'class_id': '10'}, record=lambda report, result: seen.append(report))
+    result = await session.call('get_tasks', {'class_ids': ['10']}, record=lambda report, result: seen.append(report))
     [report] = seen
-    assert report['target'] == {'class_id': '10'} and report['export']['saved']
+    assert report['target'] == {'class_ids': ['10']} and report['export']['saved']
     assert report['tool_definition']['name'] == 'get_tasks' and report['serialized_bytes'] > 0
     assert (tmp_path / report['export']['response_file'].split('/')[-2] / 'response.json').exists()
     await session.aclose()
@@ -120,7 +120,7 @@ async def test_confirmed_expiry_records_session_age_only():
         return httpx.Response(302, headers={'location': '/login'})
     session = ToolSession(ORIGIN, {}, lambda: httpx.AsyncClient(transport=httpx.MockTransport(respond)))
     with capture('get_tasks', True) as report:
-        result = await session.call('get_tasks', {'class_id': '10'})
+        result = await session.call('get_tasks', {'class_ids': ['10']})
     assert result['error']['code'] == 'session_expired'
     [expired] = [e for e in report.events if e['stage'] == 'session.expired_confirmed']
     assert set(expired) == {'stage', 'seconds'} and expired['seconds'] >= 0

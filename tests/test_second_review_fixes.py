@@ -46,13 +46,13 @@ NESTED = ('<main><h2>Tasks (1)</h2><div class="fusion-card-item"><div data-task-
 
 
 async def test_card_with_inner_task_id_is_one_task():
-    result = await call('get_tasks', {'class_id': '10'}, {ROOT + '/core_tasks': NESTED.format(extra='')})
+    result = await call('get_tasks', {'class_ids': ['10']}, {ROOT + '/core_tasks': NESTED.format(extra='')})
     assert [task['id'] for task in result['tasks']] == ['11']
 
 
 async def test_inner_task_id_must_match_the_link():
     html = NESTED.replace('data-task-id="11"', 'data-task-id="99"').format(extra='')
-    result = await call('get_tasks', {'class_id': '10'}, {ROOT + '/core_tasks': html})
+    result = await call('get_tasks', {'class_ids': ['10']}, {ROOT + '/core_tasks': html})
     assert result['error']['code'] == 'identity_mismatch'
 
 

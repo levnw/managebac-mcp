@@ -80,10 +80,11 @@ async def test_task_list_is_compact_and_follows_only_its_pages():
     seen = []
     async with client_for({'/student/classes/10/core_tasks': fixture('tasks/page1.html'),
                            '/student/classes/10/core_tasks?page=2': fixture('tasks/page2.html')}, seen) as c:
-        result = await get_tasks(c, ORIGIN, {'class_id': '10'})
+        result = await get_tasks(c, ORIGIN, {'class_ids': ['10']})
     assert len(seen) == 2
-    assert result['url'] == seen[0] == ORIGIN + '/student/classes/10/core_tasks'
-    assert result['tasks'][0]['url'] != result['url']
+    assert result['classes'] == [{'class_id': '10', 'url': ORIGIN + '/student/classes/10/core_tasks'}]
+    assert seen[0] == result['classes'][0]['url'] != result['tasks'][0]['url']
+    assert all(task['class_id'] == '10' for task in result['tasks'])
     assert [r['id'] for r in result['tasks']] == ['101', '102']
     assert result['tasks'][0]['status'] == 'Not Submitted'
     assert result['tasks'][0]['tags'] == ['Criterion A', 'Complete analysis']
@@ -97,8 +98,8 @@ async def test_task_list_is_compact_and_follows_only_its_pages():
 async def test_empty_task_list_still_has_list_url():
     seen = []
     async with client_for({'/student/classes/10/core_tasks': '<main><h2>Tasks (0)</h2></main>'}, seen) as client:
-        result = await get_tasks(client, ORIGIN, {'class_id': '10'})
-    assert result == {'class_id': '10', 'url': seen[0], 'tasks': []}
+        result = await get_tasks(client, ORIGIN, {'class_ids': ['10']})
+    assert result == {'classes': [{'class_id': '10', 'url': seen[0]}], 'tasks': []}
     validate(result, TASKS.outputSchema)
 
 
@@ -111,8 +112,8 @@ async def test_missing_task_total_is_diagnostics_only(developer_mode):
              '/student/classes/10/core_tasks?page=2': fixture('tasks/page2.html').replace('Tasks (2)', 'Tasks')}
     with capture('get_tasks', developer_mode) as report:
         async with client_for(pages, seen) as client:
-            result = await get_tasks(client, ORIGIN, {'class_id': '10'})
-    assert set(result) == {'class_id', 'url', 'tasks'}
+            result = await get_tasks(client, ORIGIN, {'class_ids': ['10']})
+    assert set(result) == {'classes', 'tasks'}
     assert len(result['tasks']) == 2
     assert 'source_total_unavailable' not in json.dumps(result)
     assert 'warnings' not in TASKS.outputSchema['properties']
@@ -226,7 +227,7 @@ async def test_pagination_count_mismatch_and_foreign_destination_fail():
         pages = {'/student/classes/10/core_tasks': changed,
                  '/student/classes/10/core_tasks?page=2': fixture('tasks/page2.html').replace('Tasks (2)', 'Tasks (3)')}
         async with client_for(pages, seen) as c:
-            result = await get_tasks(c, ORIGIN, {'class_id': '10'})
+            result = await get_tasks(c, ORIGIN, {'class_ids': ['10']})
         assert result['error']['code'] == expected and 'tasks' not in result
 
 

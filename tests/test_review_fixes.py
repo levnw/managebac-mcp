@@ -39,10 +39,9 @@ def test_model_orientation_and_specific_limits():
     server = create_server(lambda *args: None)
     for name in TOOLS: assert name in server.instructions
     assert 'node tree' not in server.instructions
-    for name in ('get_unit', 'get_timetable'):
-        assert '1 page,' in TOOLS[name].DEFINITION.description
-        assert '50 pages' not in TOOLS[name].DEFINITION.description
-    assert 'per class' in TOOLS['search_tasks'].DEFINITION.description
+    assert '1 page,' in TOOLS['get_timetable'].DEFINITION.description
+    assert '50 pages' not in TOOLS['get_timetable'].DEFINITION.description
+    assert 'per class' in TOOLS['get_tasks'].DEFINITION.description
 
 
 @pytest.mark.parametrize('name,args,path,html,key', CASES)
@@ -57,11 +56,11 @@ async def test_explicit_schemas_reject_extra_and_wrong_fields(name,args,path,htm
     with pytest.raises(ValidationError): validate(result, TOOLS[name].DEFINITION.outputSchema)
 
 
-async def test_search_report_records_ids_not_search_text(tmp_path):
+async def test_filter_report_records_ids_not_filter_text(tmp_path):
     def factory():
         return httpx.AsyncClient(transport=httpx.MockTransport(lambda req:httpx.Response(200,text=TASK,headers={'content-type':'text/html'})))
     session = ToolSession(ORIGIN,{},factory,True,tmp_path)
-    await session.call('search_tasks',{'class_ids':['10'],'query':'private search phrase'})
+    await session.call('get_tasks',{'class_ids':['10'],'title':'private search phrase'})
     report = json.loads(next(tmp_path.glob('*/report.json')).read_text())
     assert report['target'] == {'class_ids':['10']}
     assert 'private search phrase' not in json.dumps(report)

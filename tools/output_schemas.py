@@ -25,11 +25,7 @@ FIELDS = {'type': 'object', 'additionalProperties': S}
 TASK_FIELDS = {'id': ID, 'title': S, 'url': URL, 'due_display': S, 'due_source': S,
                'status': S, 'assessment_type': S, 'tags': array(S), 'fields': FIELDS}
 TASK = obj(TASK_FIELDS, ('id', 'title', 'url'))
-SCOPED_TASK = obj({**TASK_FIELDS, 'class_id': ID, 'due_group': S}, ('id', 'class_id', 'title', 'url'))
-UNIT_SUMMARY = obj({'id': ID, 'title': S, 'url': URL, 'start_display': S, 'duration': S,
-                    'status': {'enum': ['current', 'completed', 'upcoming']}}, ('id', 'title', 'url'))
-UNIT = obj({'id': ID, 'class_id': ID, 'url': URL, 'fields': FIELDS,
-            'sections': array(obj({'title': S, **CONTENT}, ('title',)))}, ('id', 'class_id', 'url'))
+TASK_IN_CLASS = obj({**TASK_FIELDS, 'class_id': ID}, ('id', 'class_id', 'title', 'url'))
 SLOT = obj({'day_display': S, 'period': S, 'period_end': S, 'class_name': S, 'class_id': ID,
             'time_display': S, 'details': array(S)}, ('day_display', 'period', 'class_name'))
 NOTE = obj({'day_display': S, 'period': S, 'period_end': S, 'text': S}, ('day_display', 'period', 'text'))

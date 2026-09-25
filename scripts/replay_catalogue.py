@@ -12,11 +12,8 @@ sys.path.insert(0, str(ROOT))
 from tools.session import ToolSession
 
 CASES = [
-    ('get_units', {'class_id': '10'}, '/student/classes/10/units', 'units'),
-    ('get_unit', {'class_id': '10', 'unit_id': '7'}, '/student/classes/10/units/7/popup', 'unit'),
     ('get_timetable', {}, '/student/timetables', 'timetable'),
-    ('get_upcoming', {}, '/student/tasks_and_deadlines?view=upcoming', 'upcoming'),
-    ('search_tasks', {'class_ids': ['10'], 'tag': 'Homework'}, '/student/classes/10/core_tasks', 'task_list'),
+    ('get_tasks', {'class_ids': ['10'], 'tag': 'Homework'}, '/student/classes/10/core_tasks', 'task_list'),
 ]
 
 

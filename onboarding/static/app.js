@@ -115,7 +115,8 @@ async function loadToolWorkbench() {
     const args = {};
     for (const name of tool.inputSchema.required || []) {
       args[name] = name === 'class_id' ? el('inspect-class').value :
-        name === 'task_id' ? el('inspect-task').value : name === 'class_ids' ? [] : '';
+        name === 'task_id' ? el('inspect-task').value :
+        name === 'class_ids' ? [el('inspect-class').value].filter(Boolean) : '';
     }
     el('tool-arguments').value = JSON.stringify(args, null, 2);
   };
@@ -192,7 +193,7 @@ el('form').addEventListener('submit', () => {
 });
 async function inspectTool(name, options = {}) {
   if (busy || !el('inspect-class').value) return;
-  const args = {class_id:el('inspect-class').value};
+  const args = name === 'get_tasks' ? {class_ids:[el('inspect-class').value]} : {class_id:el('inspect-class').value};
   if (name === 'get_task') args.task_id = el('inspect-task').value;
   if (name === 'get_class_files') Object.assign(args, options);
   busy = true; enable(); inspectControls();
@@ -256,7 +257,7 @@ el('audit-tasks').onclick = async () => {
       if (checked.has(item.id)) continue;
       checked.add(item.id); classes++;
       log(`Class ${classes}/${list.classes.length}: ${item.name}`);
-      const listing = await api('/api/tools/get_tasks', {class_id:item.id});
+      const listing = await api('/api/tools/get_tasks', {class_ids:[item.id]});
       if (!check(listing, 'Task list')) continue;
       log(`  ${listing.tasks.length} tasks listed`);
       for (const task of listing.tasks) {

@@ -25,7 +25,7 @@ def identifier(value: str) -> str:
 def destination(origin: str, path: str) -> str:
     parsed = urlsplit(path)
     allowed = (re.fullmatch(r'/student/classes/[0-9]{1,20}/[A-Za-z0-9_/-]+', parsed.path)
-               or parsed.path in ('/student/classes/my', '/student/timetables', '/student/tasks_and_deadlines'))
+               or parsed.path in ('/student/classes/my', '/student/timetables'))
     if (school_origin(origin) != origin or not allowed or parsed.scheme or parsed.netloc
             or parsed.fragment or any(ord(c) < 32 for c in path) or '..' in path or '\\' in path):
         raise FlowError('unsafe_destination', 'The requested school page could not be validated.')

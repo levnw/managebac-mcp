@@ -1,8 +1,8 @@
 # ManageBac MCP — v2
 
 A read-only connector that lets ChatGPT (and other MCP clients such as Claude)
-read a student's own ManageBac portal: classes, tasks, task details, class
-files, units, timetable and deadlines.
+read a student's own ManageBac portal: classes, tasks (with filters), task
+details, class files and the timetable.
 
 v2 is a rebuild of v1 (`multi-user` branch, up to v1.9.0). It keeps each tool
 narrow, returns compact JSON, and reports an error instead of a guessed or
@@ -27,19 +27,19 @@ ChatGPT / Claude
 | Tool | Reads |
 |---|---|
 | `get_classes` | Enrolled classes (all list pages, total verified) |
-| `get_tasks` | One class's task list |
+| `get_tasks` | Tasks for 1–10 classes, with optional title, tag and status filters |
 | `get_task` | One task: Markdown instructions, media, tables, teacher resources, submission evidence, feedback |
 | `get_class_files` | A class Files folder, optionally recursive |
-| `get_units` / `get_unit` | Unit list / one unit's sections |
 | `get_timetable` | The displayed week (classes, merged periods, Homeroom-style notes) |
-| `get_upcoming` | Upcoming, overdue or past deadlines across classes |
-| `search_tasks` | Title/tag search across up to 10 chosen classes |
 
 ### Retired tools
 
 | Tool | Existed in | Retired in | Why | Code preserved at |
 |---|---|---|---|---|
 | `get_journal`, `get_discussions` | v2.0.0 | v2.1.0 | Ported from v1 selectors for an older portal layout; never verified live; not planned for use | [`v2.0.0`](https://github.com/levnw/managebac-mcp/tree/v2.0.0): `tools/journal.py`, `tools/discussions.py`, `sources/managebac/conversations.py` |
+| `get_units`, `get_unit` | v2.0.0 | v2.3.0 | Not needed for the owner's use; never verified live | [`v2.2.0`](https://github.com/levnw/managebac-mcp/tree/v2.2.0): `tools/units.py`, `tools/unit.py`, `sources/managebac/units.py` |
+| `get_upcoming` | v2.0.0 | v2.3.0 | Redundant with `get_tasks` plus filters; never verified live | [`v2.2.0`](https://github.com/levnw/managebac-mcp/tree/v2.2.0): `tools/upcoming.py`, `sources/managebac/upcoming.py` |
+| `search_tasks` | v2.0.0 | v2.3.0 | Merged into `get_tasks` as optional filters (`title`, `tag`, `status`) | [`v2.2.0`](https://github.com/levnw/managebac-mcp/tree/v2.2.0): `tools/search_tasks.py` |
 | `get_grades` | v2.0.0 | v2.2.0 | Returned bare task-list scores without the detail needed to show or predict grades, and only recognised exact MYP-era markup, so real grades could be missed | [`v2.1.0`](https://github.com/levnw/managebac-mcp/tree/v2.1.0): `tools/grades.py`, `sources/managebac/grades.py` |
 
 A task's own assessment and teacher feedback are still returned by `get_task`.

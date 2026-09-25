@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.3.0 — 2026-09-25
+
+### Changed (breaking for callers of get_tasks)
+- `get_tasks` now takes `class_ids` (1–10 classes) instead of one `class_id`,
+  with optional filters that apply together: `title` (substring), `tag`
+  (exact tag or assessment type) and `status` (exact, e.g. "Pending").
+  Output: `classes` (each class's task-list URL) and `tasks`, each carrying its
+  `class_id`. Every selected class is read completely or the call fails.
+- There is no upcoming/past date filter: task lists usually show a weekday and
+  time without a date, so the server cannot tell them apart reliably.
+
+### Retired
+- `search_tasks` (merged into `get_tasks`), `get_upcoming` (redundant with
+  `get_tasks` and its filters), `get_units` and `get_unit` (not needed; never
+  verified live). Code remains at tag `v2.2.0`. The deadlines page is no longer
+  an allowed destination. The connector now exposes five tools:
+  `get_classes`, `get_tasks`, `get_task`, `get_class_files`, `get_timetable`.
+
+### Verified
+- 214 automated tests; both replay scripts run.
+
 ## 2.2.0 — 2026-09-25
 
 ### Retired

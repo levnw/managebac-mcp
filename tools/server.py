@@ -11,13 +11,13 @@ def create_server(call_tool):
     server = Server('managebac_mcp')
     server.instructions = (
         'ManageBac classes contain tasks and a separate Files section. Start with get_classes, '
-        'then get_tasks for compact task references; use get_task for selected task instructions. '
+        'then get_tasks for 1–10 classes, with optional title, tag or status filters; use get_task '
+        'for one task\'s instructions, resources, submission, assessment and feedback. '
         'get_class_files reads the class Files directory; child folders require an explicit call '
         'or recursive=true. Task resources, student submissions and class files are distinct. '
-        'get_units lists units; get_unit reads one selected unit. '
         'get_timetable reads the displayed week and preserves non-class schedule notes. '
-        'get_upcoming reads consolidated upcoming, overdue or past deadlines without crawling classes. '
-        'search_tasks searches titles/tags in explicitly selected class_ids. '
+        'Due dates are shown as ManageBac displays them, often a weekday and time without a date; '
+        'do not invent dates. '
         'Rich content uses compact text with media/table references, not DOM trees. '
         'An image/file/link reference does not mean its contents were read. School-stored files carry a stable '
         'file_id; this is a URL-derived reference, not a download capability or guaranteed permanent ID. '

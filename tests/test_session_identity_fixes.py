@@ -26,7 +26,7 @@ async def test_inconclusive_check_does_not_confirm_expiry_or_discard_client(prof
     session = ToolSession(ORIGIN, {'session':'test-cookie'}, lambda:httpx.AsyncClient(transport=httpx.MockTransport(handle)))
     try:
         with capture('get_tasks', True) as report:
-            result = await session.call('get_tasks', {'class_id':'10'})
+            result = await session.call('get_tasks', {'class_ids': ['10']})
         assert result['error']['code'] == 'session_verification_unavailable'
         assert not any(e['stage'] == 'session.expired_confirmed' for e in report.events)
         assert any(e['stage'] == 'session.verification_unavailable' for e in report.events)
@@ -46,7 +46,7 @@ async def test_only_positive_login_evidence_confirms_expiry(profile):
     session = ToolSession(ORIGIN, {}, lambda:httpx.AsyncClient(transport=httpx.MockTransport(handle)))
     try:
         with capture('get_tasks',True) as report:
-            result = await session.call('get_tasks',{'class_id':'10'})
+            result = await session.call('get_tasks',{'class_ids': ['10']})
         assert result['error']['code'] == 'session_expired'
         assert len([e for e in report.events if e['stage']=='session.expired_confirmed']) == 1
     finally: await session.aclose()
