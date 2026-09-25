@@ -2,7 +2,7 @@
 
 A read-only connector that lets ChatGPT (and other MCP clients such as Claude)
 read a student's own ManageBac portal: classes, tasks, task details, class
-files, units, journal, discussions, timetable, deadlines and published grades.
+files, units, timetable, deadlines and published grades.
 
 v2 is a rebuild of v1 (`multi-user` branch, up to v1.9.0). It keeps each tool
 narrow, returns compact JSON, and reports an error instead of a guessed or
@@ -31,12 +31,21 @@ ChatGPT / Claude
 | `get_task` | One task: Markdown instructions, media, tables, teacher resources, submission evidence, feedback |
 | `get_class_files` | A class Files folder, optionally recursive |
 | `get_units` / `get_unit` | Unit list / one unit's sections |
-| `get_journal` | Journal reflections for one class |
-| `get_discussions` | Posts and replies for one task |
 | `get_timetable` | The displayed week (classes, merged periods, Homeroom-style notes) |
 | `get_upcoming` | Upcoming, overdue or past deadlines across classes |
 | `search_tasks` | Title/tag search across up to 10 chosen classes |
 | `get_grades` | Published assessment blocks on a class task list |
+
+### Retired tools
+
+`get_journal` (class journal reflections) and `get_discussions` (task discussion
+posts and replies) existed in **v2.0.0** and were retired in **v2.1.0**. Their
+page readers were ported from v1 selectors written for an earlier portal layout,
+were never verified against the current portal, and are not planned for use.
+The code is preserved at tag [`v2.0.0`](https://github.com/levnw/managebac-mcp/tree/v2.0.0): `tools/journal.py`,
+`tools/discussions.py` and `sources/managebac/conversations.py`. Rebuilding
+either tool should start from fresh evidence of the current pages, not from
+that code.
 
 Every tool is read-only, declares strict input and output schemas, and shares
 the same limits (see each tool's description). School-stored files carry a

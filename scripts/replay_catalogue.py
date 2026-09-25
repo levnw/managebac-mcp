@@ -14,8 +14,6 @@ from tools.session import ToolSession
 CASES = [
     ('get_units', {'class_id': '10'}, '/student/classes/10/units', 'units'),
     ('get_unit', {'class_id': '10', 'unit_id': '7'}, '/student/classes/10/units/7/popup', 'unit'),
-    ('get_journal', {'class_id': '10'}, '/student/classes/10/learner_portfolio/reflections', 'journal'),
-    ('get_discussions', {'class_id': '10', 'task_id': '11'}, '/student/classes/10/core_tasks/11/discussions', 'discussions'),
     ('get_timetable', {}, '/student/timetables', 'timetable'),
     ('get_upcoming', {}, '/student/tasks_and_deadlines?view=upcoming', 'upcoming'),
     ('search_tasks', {'class_ids': ['10'], 'tag': 'Homework'}, '/student/classes/10/core_tasks', 'grades'),

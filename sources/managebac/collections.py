@@ -16,7 +16,7 @@ async def collect(client, origin, path, parser, *, max_pages=MAX_PAGES, max_reco
     Repeated IDs mean the list changed, unless `merge_identical` allows a page
     to repeat an identical record (observed on enrolled-class pages).
     """
-    current, visited, records, index, total, weight = origin + path, set(), [], {}, None, 0
+    current, visited, records, index, total = origin + path, set(), [], {}, None
     while current:
         if current in visited or len(visited) >= max_pages:
             raise FlowError('pagination_loop', f'The listing repeats or exceeds {max_pages} pages.')
@@ -37,8 +37,7 @@ async def collect(client, origin, path, parser, *, max_pages=MAX_PAGES, max_reco
                 raise FlowError('list_changed', 'Duplicate or conflicting records were found; no partial result was returned.')
             index[key] = row
             records.append(row)
-            weight += 1 + len(row.get('replies', []))
-        if weight > max_records:
+        if len(records) > max_records:
             raise FlowError('result_too_large', f'The listing exceeds {max_records} records.')
         if total is not None and len(records) > total:
             raise FlowError('count_mismatch', 'More records were read than the source reports. No partial list was returned.')

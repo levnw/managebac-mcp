@@ -1,9 +1,9 @@
 """Single catalogue for registration, session dispatch and developer workbench."""
-from . import classes, tasks, task, class_files, units, unit, journal, discussions, timetable, upcoming
+from . import classes, tasks, task, class_files, units, unit, timetable, upcoming
 from . import search_tasks, grades
 
 TOOLS = {module.DEFINITION.name: module for module in
-         (classes, tasks, task, class_files, units, unit, journal, discussions, timetable, upcoming,
+         (classes, tasks, task, class_files, units, unit, timetable, upcoming,
           search_tasks, grades)}
 
 

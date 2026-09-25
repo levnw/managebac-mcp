@@ -30,9 +30,6 @@ UNIT_SUMMARY = obj({'id': ID, 'title': S, 'url': URL, 'start_display': S, 'durat
                     'status': {'enum': ['current', 'completed', 'upcoming']}}, ('id', 'title', 'url'))
 UNIT = obj({'id': ID, 'class_id': ID, 'url': URL, 'fields': FIELDS,
             'sections': array(obj({'title': S, **CONTENT}, ('title',)))}, ('id', 'class_id', 'url'))
-JOURNAL = obj({'id': ID, 'date_display': S, 'learning_outcomes': array(S), **CONTENT}, ('id',))
-REPLY = obj({'author': S, 'posted_at': S, **CONTENT})
-DISCUSSION = obj({'id': ID, **REPLY['properties'], 'replies': array(REPLY)}, ('id',))
 SLOT = obj({'day_display': S, 'period': S, 'period_end': S, 'class_name': S, 'class_id': ID,
             'time_display': S, 'details': array(S)}, ('day_display', 'period', 'class_name'))
 NOTE = obj({'day_display': S, 'period': S, 'period_end': S, 'text': S}, ('day_display', 'period', 'text'))

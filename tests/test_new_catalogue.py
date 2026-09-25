@@ -15,15 +15,13 @@ ROOT = '/student/classes/10'
 def fixture(name):
     return (Path(__file__).parent / 'fixtures/catalogue' / (name + '.html')).read_text()
 
-UNIT, JOURNAL, DISCUSSION, TIMETABLE, UPCOMING, TASK = [fixture(name) for name in
-    ('units', 'journal', 'discussions', 'timetable', 'upcoming', 'grades')]
+UNIT, TIMETABLE, UPCOMING, TASK = [fixture(name) for name in
+    ('units', 'timetable', 'upcoming', 'grades')]
 
 CASES = [
     ('get_units', {'class_id': '10'}, ROOT + '/units', UNIT, 'units'),
     ('get_unit', {'class_id': '10', 'unit_id': '7'}, ROOT + '/units/7/popup',
      fixture('unit'), 'unit'),
-    ('get_journal', {'class_id': '10'}, ROOT + '/learner_portfolio/reflections', JOURNAL, 'entries'),
-    ('get_discussions', {'class_id': '10', 'task_id': '11'}, ROOT + '/core_tasks/11/discussions', DISCUSSION, 'discussions'),
     ('get_timetable', {}, '/student/timetables', TIMETABLE, 'slots'),
     ('get_upcoming', {}, '/student/tasks_and_deadlines?view=upcoming', UPCOMING, 'tasks'),
     ('search_tasks', {'class_ids': ['10'], 'tag': 'Homework'}, ROOT + '/core_tasks', TASK, 'tasks'),
@@ -68,25 +66,12 @@ async def test_unknown_layout_never_empty(name, args, path, html, key):
     assert result['error']['code'] == 'layout_changed'
 
 
-async def test_rich_unit_and_reply_not_duplicated():
+async def test_rich_unit_content():
     name, args, path, html, _ = CASES[1]
     result = (await call(name, args, {path: html}))['unit']['sections'][0]
     assert result['title'] == 'Inquiry'
     assert result['tables'][0]['rows'][0][0]['text'] == 'Cell'
     assert result['media'][0]['url'] == ORIGIN + '/diagram.png'
-    name, args, path, html, _ = CASES[3]
-    post = (await call(name, args, {path: html}))['discussions'][0]
-    assert post['text'] == 'Question' and post['replies'][0]['text'] == 'Answer'
-    assert post['author'] == 'Teacher' and post['replies'][0]['author'] == 'Student'
-
-
-async def test_journal_pagination_and_late_failure():
-    path = ROOT + '/learner_portfolio/reflections'
-    first = JOURNAL + '<a rel="next" href="?page=2">Next</a>'
-    result = await call('get_journal', {'class_id': '10'}, {path: first, path + '?page=2': httpx.Response(500)})
-    assert set(result) == {'error'}
-    result = await call('get_journal', {'class_id': '10'}, {path: first, path + '?page=2': JOURNAL})
-    assert result['error']['code'] == 'list_changed'
 
 
 async def test_upcoming_retains_view_and_rejects_changed_filter():
@@ -131,7 +116,7 @@ async def test_user_agent_consistent_and_report_all_tools(tmp_path):
 
 def test_catalogue_has_one_tool_per_capability():
     assert set(TOOLS) == {'get_classes', 'get_tasks', 'get_task', 'get_class_files', 'get_units',
-                          'get_unit', 'get_journal', 'get_discussions', 'get_timetable',
+                          'get_unit', 'get_timetable',
                           'get_upcoming', 'search_tasks', 'get_grades'}
 
 
@@ -158,8 +143,6 @@ async def test_redirect_does_not_discard_verified_account_session():
 
 @pytest.mark.parametrize('name,args,path,message,key', [
     ('get_units', {'class_id': '10'}, ROOT + '/units', 'No units', 'units'),
-    ('get_journal', {'class_id': '10'}, ROOT + '/learner_portfolio/reflections', 'No reflections yet', 'entries'),
-    ('get_discussions', {'class_id': '10', 'task_id': '11'}, ROOT + '/core_tasks/11/discussions', 'No comments yet', 'discussions'),
 ])
 async def test_explicit_empty_states(name, args, path, message, key):
     result = await call(name, args, {path: '<div class="empty-state">' + message + '</div>'})

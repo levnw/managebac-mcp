@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.1.0 — 2026-09-25
+
+### Retired
+- `get_journal` and `get_discussions` are removed from the catalogue, with
+  their page reader (`sources/managebac/conversations.py`), schemas, fixtures
+  and tests. They were ported from v1 selectors for an older portal layout,
+  never verified live, and are not planned for use. The code remains available
+  at tag `v2.0.0`. The connector now exposes ten tools.
+
+### Changed
+- The shared list engine counts records only; the discussion-reply weighting
+  it carried is gone with the tool.
+- Server instructions no longer mention the retired tools.
+
+### Verified
+- 262 automated tests.
+
 ## 2.0.0 — 2026-09-25
 
 First release of the v2 rebuild. v1 (`multi-user`, up to v1.9.0) is unchanged.

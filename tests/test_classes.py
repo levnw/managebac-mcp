@@ -144,7 +144,8 @@ async def test_real_mcp_list_and_call_in_memory():
         return result
     async with create_connected_server_and_client_session(create_server(scoped_call)) as session:
         listing=await session.list_tools()
-        assert [t.name for t in listing.tools][0]=='get_classes' and len(listing.tools)==12
+        from tools.catalogue import TOOLS
+        assert [t.name for t in listing.tools]==list(TOOLS)
         result=await session.call_tool('get_classes',{})
         assert not result.isError
         assert result.content == []
