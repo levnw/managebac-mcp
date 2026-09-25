@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.6.2 — 2026-09-26
+
+### Fixed (from live evidence, 25 Sep 19:22 UTC)
+- Class Files pages with no files ("No files — No files have been uploaded
+  yet.", six DP classes) are an empty listing instead of `layout_changed`.
+- Rejected arguments now name the argument and the rule (never the value), e.g.
+  `class_id: String should match pattern …`, so the model can correct its call.
+
+### Added
+- Developer reports record argument names (never values) and which tasks
+  `open` requested, so rejected or detail calls are attributable.
+
+### Live-verified since 2.6.1
+- Task detail layer: 30 tasks opened across all DP classes, no failures.
+- Status, level and tags on 32 tasks in 10 classes.
+- `open`: Lesson_1._Introduction.pdf and Brain.pptx delivered to the card.
+
+248 automated tests.
+
 ## 2.6.1 — 2026-09-25
 
 ### Fixed (from the first live v2.6 session)

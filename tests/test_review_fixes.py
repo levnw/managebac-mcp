@@ -62,5 +62,5 @@ async def test_filter_report_records_ids_not_filter_text(tmp_path):
     session = ToolSession(ORIGIN,{},factory,True,tmp_path)
     await session.call('get_tasks',{'class_ids':['10'],'title':'private search phrase'})
     report = json.loads(next(tmp_path.glob('*/report.json')).read_text())
-    assert report['target'] == {'class_ids':['10']}
+    assert report['target'] == {'class_ids':['10'], 'argument_names': ['class_ids', 'title']}
     assert 'private search phrase' not in json.dumps(report)

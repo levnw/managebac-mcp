@@ -28,8 +28,13 @@ async def execute(model, arguments, operation, *, max_bytes=None, timeout=None):
             raise FlowError('result_too_large', f'The response exceeds {size_label(max_bytes)}. Select a smaller scope; no data was silently truncated.')
         event('retrieval.complete')
         return result
-    except ValidationError:
-        code, message = 'invalid_arguments', 'Check required fields, allowed values and limits in the tool schema. IDs must be numeric strings; extra arguments are not accepted.'
+    except ValidationError as exc:
+        # Name the offending argument (never its value) so the model can correct the call.
+        first = exc.errors()[0] if exc.errors() else {}
+        where = '.'.join(str(part) for part in first.get('loc', ()) if not isinstance(part, int)) or 'arguments'
+        reason = str(first.get('msg', 'invalid')).removeprefix('Value error, ')[:160].rstrip('.')
+        code, message = 'invalid_arguments', (f'{where}: {reason}. Check the tool schema; IDs are numeric strings '
+                                              'and file_ids look like f_ followed by 16 hex digits.')
     except FlowError as exc:
         code, message = exc.code, exc.message
     except TimeoutError:

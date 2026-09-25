@@ -96,7 +96,7 @@ async def test_failed_report_records_only_safe_target_ids(tmp_path):
     session = ToolSession(ORIGIN, {}, lambda: client_for({'/student/classes/10/files': httpx.Response(500)}, []), True, tmp_path)
     await session.call('get_files', {'class_id':'10'})
     report = json.loads(next(tmp_path.glob('*/report.json')).read_text())
-    assert report['target'] == {'class_id':'10'}
+    assert report['target'] == {'class_id':'10', 'argument_names': ['class_id']}
     assert 'arguments' not in report
 
 

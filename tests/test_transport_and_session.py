@@ -109,7 +109,7 @@ async def test_session_report_includes_definition_target_and_size(tmp_path):
                           developer_mode=True, report_directory=tmp_path)
     result = await session.call('get_tasks', {'class_ids': ['10']}, record=lambda report, result: seen.append(report))
     [report] = seen
-    assert report['target'] == {'class_ids': ['10']} and report['export']['saved']
+    assert report['target'] == {'class_ids': ['10'], 'argument_names': ['class_ids']} and report['export']['saved']
     assert report['tool_definition']['name'] == 'get_tasks' and report['serialized_bytes'] > 0
     assert (tmp_path / report['export']['response_file'].split('/')[-2] / 'response.json').exists()
     await session.aclose()

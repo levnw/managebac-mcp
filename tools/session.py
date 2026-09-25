@@ -28,6 +28,15 @@ def report_target(arguments) -> dict:
     if (isinstance(class_ids, list) and 1 <= len(class_ids) <= 10
             and all(isinstance(value, str) and re.fullmatch(r'[0-9]{1,20}', value) for value in class_ids)):
         target['class_ids'] = class_ids
+    opened = arguments.get('open')
+    if isinstance(opened, list):
+        tasks = [ref.get('task_id') for ref in opened if isinstance(ref, dict)]
+        if tasks and all(isinstance(t, str) and re.fullmatch(r'[0-9]{1,20}', t) for t in tasks):
+            target['opened_task_ids'] = tasks[:10]
+        else:
+            target['opened_count'] = len(opened)
+    # Argument names only (never values), to diagnose rejected calls.
+    target['argument_names'] = sorted(str(key)[:40] for key in list(arguments)[:12])
     return target
 
 

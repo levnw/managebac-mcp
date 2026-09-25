@@ -127,3 +127,19 @@ async def test_reports_never_store_file_bytes(tmp_path):
     assert '_meta' not in saved and saved['_meta_omitted'] == {'files': 1}
     assert base64.b64encode(PDF).decode() not in json.dumps(saved)
     await session.aclose()
+
+
+async def test_empty_files_page_as_seen_live_is_an_empty_listing():
+    """Live (25 Sep, six classes): 'No files' / 'No files have been uploaded yet.'"""
+    page = ('<main><section class="f-hero"><h1>IB DP Physics 2</h1></section><section class="f-layout-main__content f-surface">'
+            '<h2>Files</h2><div class="h4">No files</div><p>No files have been uploaded yet.</p></section></main>')
+    transport = httpx.MockTransport(lambda r: httpx.Response(200, text=page, headers={'content-type': 'text/html'}))
+    result = await run({'class_id': '10'}, transport)
+    assert result['files'] == [] and result['folders'] == []
+    validate(result, TOOLS['get_files'].DEFINITION.outputSchema)
+
+
+async def test_rejected_arguments_name_the_field_not_the_value():
+    result = await run({'class_id': '10', 'task_id': '101', 'open': ['Brain.pptx']}, school())
+    assert result['error']['code'] == 'invalid_arguments' and 'open takes distinct file_ids' in result['error']['message']
+    assert 'Brain.pptx' not in result['error']['message']
