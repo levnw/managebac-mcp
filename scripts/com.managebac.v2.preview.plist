@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.managebac.v2.preview</string>
+  <key>ProgramArguments</key><array>
+    <string>/Users/server/Desktop/ManageBac-V2/Working/.venv/bin/python</string>
+    <string>-m</string><string>uvicorn</string><string>onboarding.app:app</string>
+    <string>--host</string><string>127.0.0.1</string>
+    <string>--port</string><string>8765</string><string>--no-access-log</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/server/Desktop/ManageBac-V2/Working</string>
+  <key>EnvironmentVariables</key><dict><key>MBV2_DEVELOPER_MODE</key><string>1</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+</dict></plist>

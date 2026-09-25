@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ManageBac V2 · Setup</title>
+<style>body{font:16px system-ui;background:#f5f6f8;color:#202631;margin:0}main{max-width:500px;margin:48px auto;padding:28px;background:white;border:1px solid #ddd;border-radius:12px}label{display:block;margin:18px 0 6px}input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #aaa;border-radius:6px;font:inherit}button{padding:11px 18px;cursor:pointer;font:inherit}button:disabled{cursor:default;opacity:.5}#submit{margin-top:20px;width:100%}nav{display:flex;gap:8px}nav button[aria-pressed=true]{background:#243e6d;color:white}small,.muted{color:#596475}#logo{max-width:90px;max-height:80px}#error{color:#a22020;white-space:pre-wrap}li{margin:12px 0}.running:before{content:'◌ ';display:inline-block;animation:spin 1s linear infinite}.passed:before{content:'✓ ';color:green}.failed:before{content:'× ';color:#a22020}.unverified:before{content:'? ';color:#956000}dialog{max-width:420px;border:1px solid #aaa;border-radius:10px;padding:24px}dialog::backdrop{background:#0005}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.running:before{animation:none}}</style></head>
+<body><main><small>ManageBac V2 · Local development</small><p><img id="logo" alt="School logo" hidden></p><h1 id="school">Connect your school</h1>
+<p>Use your existing ManageBac account. Sign up here creates a V2 connection profile, not a new school account.</p>
+<nav aria-label="Account action"><button id="signup" aria-pressed="true">Sign up</button><button id="login" aria-pressed="false">Sign in</button></nav>
+<form id="form"><label for="email">ManageBac email</label><input id="email" type="email" autocomplete="username" required maxlength="254"><p id="discovery" role="status">Your email will be sent to ManageBac to find your school.</p>
+<label for="password">ManageBac password</label><input id="password" type="password" autocomplete="current-password" required maxlength="1024"><button id="submit" disabled>Sign up</button></form>
+<p id="error" role="alert"></p><section aria-label="Login status" aria-live="polite"><ul id="checks"></ul></section><p id="result"></p>
+<details><summary>Inspect login result</summary><pre id="records"></pre></details>
+<section><h2>Classes tool</h2><p>Run separately after signing in. All enrolled-class list pages are collected in one response. No task, journal or individual class pages are opened.</p><button id="get-classes" disabled>Get classes</button><p id="class-status" role="status"></p><pre id="class-output" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section>
+<section><p id="developer-status">Developer mode: off</p><button id="get-report" disabled>Show developer reports</button><pre id="report-output" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section>
+<button disabled id="connect">Connect to ChatGPT — not available yet</button><p class="muted">Login verifies your session only. Get classes runs on request. Cookies stay in temporary server memory for this setup session; passwords are not stored. No automatic readiness checks or ChatGPT connection yet.</p>
+<dialog id="overview"><h2>How setup works</h2><p>We find your school using your email, then sign into ManageBac with your password and verify that the account session is signed in.</p><p>You’ll see whether sign-in could be verified. This does not submit coursework or send messages. V2 saves your email, school locally; it does not store your password.</p><button id="understood">Understood — sign up</button><button id="cancel">Cancel</button></dialog>
+<section><h2>Task and file inspector</h2>
+<p><button id="audit-tasks">Run all-task audit</button></p>
+<p>After signing in, this checks every enrolled class and every listed task, one request at a time. It does not download attachments or submit anything. Developer mode saves each response on Atlas.</p>
+<pre id="audit-status" role="status" style="white-space:pre-wrap"></pre>
+<p>Sign in and click Get classes above. Then choose a class. These are live, read-only requests; nothing is sent to ChatGPT.</p>
+<label for="inspect-class">Class</label><select id="inspect-class" disabled><option value="">Get classes first</option></select>
+<p><button id="inspect-tasks" disabled>Get tasks</button> <button id="inspect-files" disabled>Get class files</button></p>
+<section aria-label="Class file browser">
+<label><input type="checkbox" id="files-recursive"> Include all descendant folders (more requests)</label>
+<p><button id="files-root" disabled>Class files root</button> <button id="files-up" disabled>Parent folder</button></p>
+<p id="files-location" role="status">Choose a class and get its files.</p>
+<p>Opening a folder retrieves its listing only. File links open the source in a new tab; they may require school access or expire. This does not give ChatGPT the file contents.</p>
+<ul id="files-folders"></ul><ul id="files-items"></ul>
+</section>
+<label for="inspect-task">Task</label><select id="inspect-task" disabled><option value="">Get tasks first</option></select>
+<p><button id="inspect-detail" disabled>Get selected task</button></p>
+<p id="inspect-status" role="status"></p>
+<button id="inspect-download" disabled>Download response.json</button>
+<p>The JSON below is the tool payload ChatGPT would receive, without protocol wrapping. Downloads save on the computer running your browser. Images and files are references, not read contents. Keep downloads private.</p>
+<pre id="inspect-output" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></section>
+<section><h2>All tools workbench</h2>
+<p>Working builds, not live-verified capabilities. Choose a tool, review its instructions and arguments, then run a read-only request. Results appear in the inspector above and can be downloaded there.</p>
+<label for="tool-picker">Tool</label><select id="tool-picker"><option>Loading tools…</option></select>
+<p id="tool-description"></p><details><summary>Input schema</summary><pre id="tool-schema" style="white-space:pre-wrap"></pre></details>
+<label for="tool-arguments">Arguments (JSON)</label><textarea id="tool-arguments" rows="6" style="width:100%">{}</textarea>
+<button id="run-tool" disabled>Run selected tool</button><p id="tool-workbench-status" role="status"></p>
+</section>
+</main><script src="/app.js"></script><script src="/file-browser.js"></script></body></html>

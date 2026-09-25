@@ -1,0 +1,10 @@
+# Private evidence and state never enter version control.
+Test Reports/
+*.db
+*.key
+.env*
+# Generated
+__pycache__/
+.pytest_cache/
+.venv/
+.DS_Store
