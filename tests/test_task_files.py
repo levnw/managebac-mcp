@@ -6,8 +6,15 @@ import httpx
 from jsonschema import validate
 
 from tools.tasks import get_tasks, DEFINITION as TASKS
-from tools.task import get_task, DEFINITION as TASK
-from tools.class_files import get_class_files, DEFINITION as FILES
+from tools.files import get_files as get_class_files, DEFINITION as FILES
+
+
+async def get_task(client, origin, args):
+    """Open one task through get_tasks' detail layer (the retired get_task's shape, for these tests)."""
+    result = await get_tasks(client, origin, {'open': [args]})
+    if 'error' in result: return result
+    item = result['tasks'][0]
+    return {'error': item['error']} if 'error' in item else {'task': item}
 from tools.session import ToolSession
 from tools.catalogue import definitions
 from sources.managebac.task_detail import parse_detail
@@ -44,10 +51,10 @@ async def test_named_mcp_registration_uses_exact_payload_and_errors():
             listing = await session.list_tools()
             from tools.catalogue import TOOLS
             assert {t.name for t in listing.tools} == set(TOOLS)
-            response = await session.call_tool('get_task', {'class_id': '10', 'task_id': '101'})
+            response = await session.call_tool('get_tasks', {'open': [{'class_id': '10', 'task_id': '101'}]})
             assert response.content == [] and not response.isError
-            assert response.structuredContent == {'task': compact_task(parse_detail(fixture('tasks/detail.html'), ORIGIN, '10', '101'))}
-            invalid = await session.call_tool('get_task', {'class_id': '../other', 'task_id': '101'})
+            assert response.structuredContent == {'tasks': [compact_task(parse_detail(fixture('tasks/detail.html'), ORIGIN, '10', '101'))]}
+            invalid = await session.call_tool('get_tasks', {'open': [{'class_id': '../other', 'task_id': '101'}]})
             assert invalid.isError
             assert len(seen) == 1
 
@@ -156,7 +163,7 @@ async def test_task_detail_preserves_meaning_and_performs_one_request():
     assert 'stealSecrets' not in json.dumps(result) and 'javascript:' not in json.dumps(result)
     assert not any('/school-logo' in a['url'] for a in assets.values())
     assert 'warnings' not in task
-    validate(result, TASK.outputSchema)
+    validate({'tasks': [result['task']]}, TASKS.outputSchema)
 
 
 @pytest.mark.asyncio
@@ -286,11 +293,11 @@ async def test_session_isolation_and_developer_exact_output(tmp_path):
             return httpx.Response(200,text=fixture('tasks/detail.html'))
         return httpx.AsyncClient(transport=httpx.MockTransport(handle))
     session = ToolSession(ORIGIN, {'session':'only-this-account'}, factory, True, tmp_path/'reports')
-    result = await session.call('get_task', {'class_id':'10','task_id':'101'})
+    result = await session.call('get_tasks', {'open': [{'class_id':'10','task_id':'101'}]})
     exports = list((tmp_path/'reports').glob('*/response.json'))
     assert len(exports) == 1 and json.loads(exports[0].read_text()) == result
     assert 'only-this-account' not in exports[0].read_text()
-    assert {'get_classes','get_tasks','get_task','get_class_files'} <= {t.name for t in definitions()}
+    assert {t.name for t in definitions()} == {'get_classes','get_tasks','get_files','get_timetable'}
 
 
 def test_rich_text_notes_reach_developer_reports_not_output():

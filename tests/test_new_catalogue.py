@@ -105,7 +105,7 @@ async def test_user_agent_consistent_and_report_all_tools(tmp_path):
 
 
 def test_catalogue_has_one_tool_per_capability():
-    assert set(TOOLS) == {'get_classes', 'get_tasks', 'get_task', 'get_class_files', 'get_timetable'}
+    assert set(TOOLS) == {'get_classes', 'get_tasks', 'get_files', 'get_timetable'}
 
 
 async def test_redirect_does_not_discard_verified_account_session():

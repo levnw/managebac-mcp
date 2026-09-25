@@ -24,19 +24,25 @@ ChatGPT / Claude
 
 ## Tools
 
-| Tool | Reads |
-|---|---|
-| `get_classes` | Enrolled classes (all list pages, total verified) |
-| `get_tasks` | Tasks for 1–10 classes, with optional title, tag and status filters |
-| `get_task` | One task: Markdown instructions, media, tables, teacher resources, submission evidence, feedback |
-| `get_class_files` | A class Files folder, optionally recursive |
-| `get_timetable` | The displayed week (classes, merged periods, Homeroom-style notes) |
+Tools work in layers: list first, then open what you picked.
+
+| Tool | Layer | Input | Returns |
+|---|---|---|---|
+| `get_classes` | | none | Enrolled classes (all list pages, total verified) |
+| `get_tasks` | list | `class_ids` (1–10), optional `title`, `tag`, `status` | Task summaries, each with its class |
+| | detail | `open`: up to 10 `{class_id, task_id}` | Markdown instructions, media, tables, teacher resources, submission, assessment, feedback; per-task errors |
+| `get_files` | class | `class_id`, optional `folder_id`, `recursive` | The class Files section: files and folders |
+| | task | `class_id`, `task_id` | Files attached to one task, labelled `description`, `teacher_resource` or `submission` |
+| `get_timetable` | | none | The displayed week (classes, merged periods, Homeroom-style notes) |
+
+A deeper files layer that returns a file's contents does not exist yet.
 
 ### Retired tools
 
 | Tool | Existed in | Retired in | Why | Code preserved at |
 |---|---|---|---|---|
 | `get_journal`, `get_discussions` | v2.0.0 | v2.1.0 | Ported from v1 selectors for an older portal layout; never verified live; not planned for use | [`v2.0.0`](https://github.com/levnw/managebac-mcp/tree/v2.0.0): `tools/journal.py`, `tools/discussions.py`, `sources/managebac/conversations.py` |
+| `get_task`, `get_class_files` | v2.0.0 | v2.4.0 | Merged into layers: `get_tasks` detail (`open`) and `get_files` class layer | [`v2.3.1`](https://github.com/levnw/managebac-mcp/tree/v2.3.1): `tools/task.py`, `tools/class_files.py` |
 | `get_units`, `get_unit` | v2.0.0 | v2.3.0 | Not needed for the owner's use; never verified live | [`v2.2.0`](https://github.com/levnw/managebac-mcp/tree/v2.2.0): `tools/units.py`, `tools/unit.py`, `sources/managebac/units.py` |
 | `get_upcoming` | v2.0.0 | v2.3.0 | Redundant with `get_tasks` plus filters; never verified live | [`v2.2.0`](https://github.com/levnw/managebac-mcp/tree/v2.2.0): `tools/upcoming.py`, `sources/managebac/upcoming.py` |
 | `search_tasks` | v2.0.0 | v2.3.0 | Merged into `get_tasks` as optional filters (`title`, `tag`, `status`) | [`v2.2.0`](https://github.com/levnw/managebac-mcp/tree/v2.2.0): `tools/search_tasks.py` |

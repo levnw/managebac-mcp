@@ -1,7 +1,7 @@
 """Single catalogue for registration, session dispatch and developer workbench."""
-from . import classes, tasks, task, class_files, timetable
+from . import classes, tasks, files, timetable
 
-TOOLS = {module.DEFINITION.name: module for module in (classes, tasks, task, class_files, timetable)}
+TOOLS = {module.DEFINITION.name: module for module in (classes, tasks, files, timetable)}
 
 
 def definitions():

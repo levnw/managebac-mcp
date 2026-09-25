@@ -286,7 +286,7 @@ wheels = [
 
 [[package]]
 name = "managebac-v2"
-version = "2.3.1"
+version = "2.4.0"
 source = { virtual = "." }
 dependencies = [
     { name = "beautifulsoup4" },

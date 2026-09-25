@@ -193,9 +193,13 @@ el('form').addEventListener('submit', () => {
 });
 async function inspectTool(name, options = {}) {
   if (busy || !el('inspect-class').value) return;
-  const args = name === 'get_tasks' ? {class_ids:[el('inspect-class').value]} : {class_id:el('inspect-class').value};
-  if (name === 'get_task') args.task_id = el('inspect-task').value;
-  if (name === 'get_class_files') Object.assign(args, options);
+  // Workbench buttons map onto the layered tools: task list, one task's detail, class files.
+  const classId = el('inspect-class').value;
+  const view = name;
+  const args = view === 'get_tasks' ? {class_ids:[classId]}
+    : view === 'task_detail' ? {open:[{class_id:classId, task_id:el('inspect-task').value}]}
+    : {class_id:classId, ...options};
+  name = view === 'task_detail' ? 'get_tasks' : name;
   busy = true; enable(); inspectControls();
   for (const id of ['email','password','get-classes','inspect-class','inspect-task']) el(id).disabled = true;
   inspectPayload = null; el('inspect-output').textContent = ''; el('inspect-download').disabled = true;
@@ -206,8 +210,8 @@ async function inspectTool(name, options = {}) {
     el('inspect-output').textContent = JSON.stringify(payload, null, 2);
     el('inspect-download').disabled = false;
     el('inspect-status').textContent = payload.error ? payload.error.message : 'Response ready. Review or download the exact JSON below.';
-    if (name === 'get_tasks') choices('inspect-task', payload.tasks || [], 'Choose a task');
-    if (name === 'get_class_files') window.classFileBrowser?.render(payload);
+    if (view === 'get_tasks') choices('inspect-task', payload.tasks || [], 'Choose a task');
+    if (view === 'get_files') window.classFileBrowser?.render(payload);
     if (payload.error?.code === 'session_expired') {
       choices('inspect-class', [], 'Sign in again, then get classes');
       choices('inspect-task', [], 'Get tasks first');
@@ -223,8 +227,8 @@ async function inspectTool(name, options = {}) {
   }
 }
 el('inspect-tasks').onclick = () => inspectTool('get_tasks');
-el('inspect-files').onclick = () => inspectTool('get_class_files', {recursive:el('files-recursive').checked});
-el('inspect-detail').onclick = () => inspectTool('get_task');
+el('inspect-files').onclick = () => inspectTool('get_files', {recursive:el('files-recursive').checked});
+el('inspect-detail').onclick = () => inspectTool('task_detail');
 el('inspect-download').onclick = () => {
   if (!inspectPayload) return;
   const url = URL.createObjectURL(new Blob([JSON.stringify(inspectPayload,null,2)+'\n'], {type:'application/json'}));
@@ -261,7 +265,8 @@ el('audit-tasks').onclick = async () => {
       if (!check(listing, 'Task list')) continue;
       log(`  ${listing.tasks.length} tasks listed`);
       for (const task of listing.tasks) {
-        const result = await api('/api/tools/get_task', {class_id:item.id,task_id:task.id});
+        const opened = await api('/api/tools/get_tasks', {open:[{class_id:item.id, task_id:task.id}]});
+        const result = opened.error ? opened : (opened.tasks[0].error ? {error: opened.tasks[0].error} : opened.tasks[0]);
         tasks++;
         if (check(result, `  Task ${task.id} (${task.title})`)) log(`  OK ${task.id}: ${task.title}`);
       }

@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from jsonschema import validate
 from sources.managebac.rich_text import RichText, file_id
 from tools.task_output import TaskView
-from tools.class_files import get_class_files, DEFINITION as FILES
+from tools.files import get_files as get_class_files, DEFINITION as FILES
 
 ORIGIN = 'https://es.managebac.com'
 PAGE = ORIGIN + '/student/classes/10/core_tasks/101'

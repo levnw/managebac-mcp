@@ -1,4 +1,4 @@
-// A view of get_class_files JSON, never a second scraper or a binary proxy.
+// A view of get_files (class layer) JSON, never a second scraper or a binary proxy.
 (() => {
   let current = null, loaded = false, disabled = true;
   const folders = new Map();
@@ -17,7 +17,7 @@
   }
   function openFolder(id) {
     if (disabled) return;
-    inspectTool('get_class_files', {...(id ? {folder_id:id} : {}), recursive:recursive.checked});
+    inspectTool('get_files', {...(id ? {folder_id:id} : {}), recursive:recursive.checked});
   }
   root.onclick = () => openFolder(null);
   up.onclick = () => openFolder(folders.get(current)?.parent_id || null);

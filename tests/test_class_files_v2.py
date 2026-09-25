@@ -4,7 +4,7 @@ import httpx
 import pytest
 from jsonschema import validate, ValidationError
 from diagnostics import capture
-from tools.class_files import get_class_files, DEFINITION
+from tools.files import get_files as get_class_files, DEFINITION
 from test_task_files import client_for, fixture, ORIGIN
 
 
@@ -94,7 +94,7 @@ def test_schema_rejects_unplanned_file_fields():
 async def test_failed_report_records_only_safe_target_ids(tmp_path):
     from tools.session import ToolSession
     session = ToolSession(ORIGIN, {}, lambda: client_for({'/student/classes/10/files': httpx.Response(500)}, []), True, tmp_path)
-    await session.call('get_class_files', {'class_id':'10'})
+    await session.call('get_files', {'class_id':'10'})
     report = json.loads(next(tmp_path.glob('*/report.json')).read_text())
     assert report['target'] == {'class_id':'10'}
     assert 'arguments' not in report
@@ -137,9 +137,9 @@ async def test_files_through_mcp_match_plain_payload():
     async with client_for(pages, []) as client:
         async def call(name, arguments):
             return await invoke(name, client, ORIGIN, arguments)
-        expected = await call('get_class_files', {'class_id':'10'})
+        expected = await call('get_files', {'class_id':'10'})
         async with create_connected_server_and_client_session(create_server(call)) as session:
-            response = await session.call_tool('get_class_files', {'class_id':'10'})
+            response = await session.call_tool('get_files', {'class_id':'10'})
             assert not response.isError and response.content == []
             assert response.structuredContent == expected
 

@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.4.0 — 2026-09-25
+
+### Changed (breaking)
+- Tools work in layers. `get_task` is merged into **`get_tasks`**: pass
+  `class_ids` (+ optional `title`, `tag`, `status`) to list, or `open` with up to
+  10 `{class_id, task_id}` pairs for full details in one call. A task that cannot
+  be read is returned with its own error; signed-out or rate-limited sessions
+  still fail the whole call.
+- `get_class_files` becomes **`get_files`**: `class_id` (+ `folder_id`,
+  `recursive`) for the class Files section, or `class_id` + `task_id` for the
+  files attached to one task, each labelled `description`, `teacher_resource` or
+  `submission`, with the same stable `file_id` used everywhere.
+- The connector now exposes four tools: `get_classes`, `get_tasks`, `get_files`,
+  `get_timetable`. Retired code remains at tag `v2.3.1`.
+
+### Not included
+- A file-contents layer. File contents are still not downloaded or read.
+
+### Verified
+- 220 automated tests; both replay scripts run.
+
 ## 2.3.1 — 2026-09-25
 
 ### Removed

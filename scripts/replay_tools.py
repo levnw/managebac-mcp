@@ -39,9 +39,10 @@ async def main():
         developer_mode=True, report_directory=output)
     for name, arguments in [
         ('get_tasks', {'class_ids': ['10']}),
-        ('get_task', {'class_id': '10', 'task_id': '101'}),
-        ('get_class_files', {'class_id': '10'}),
-        ('get_class_files', {'class_id': '10', 'recursive': True}),
+        ('get_tasks', {'open': [{'class_id': '10', 'task_id': '101'}]}),
+        ('get_files', {'class_id': '10'}),
+        ('get_files', {'class_id': '10', 'recursive': True}),
+        ('get_files', {'class_id': '10', 'task_id': '101'}),
     ]:
         response = await session.call(name, arguments)
         if 'error' in response:
