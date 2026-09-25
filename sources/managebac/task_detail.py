@@ -132,6 +132,13 @@ def parse_detail(html, origin, class_id, task_id):
             if root is not None: root.decompose()
     result = {'id': task_id, 'class_id': class_id, 'title': title, 'url': origin + path,
               **metadata(details), 'description': rich.parse(description)}
+    # Observed (saved page, 25 Sep): the due date badge sits in the task header card
+    # (.core-task-show > .fusion-card-item), outside the metadata block.
+    if 'due_month_day' not in result:
+        badge = next((b for b in scope.select('.date-badge')
+                      if not any(root is not None and inside(b, root) for root in sections.values())), None)
+        month, day = (text(badge.select_one('.month')), text(badge.select_one('.day'))) if badge else ('', '')
+        if month and day: result['due_month_day'] = f'{month} {day}'
     dropbox = sections['submissions']
     # Only a recognized dropbox or a form posting within this task is evidence.
     # Generic help text mentioning upload/dropbox is deliberately ignored.
@@ -183,6 +190,10 @@ def parse_detail(html, origin, class_id, task_id):
             for field, selector in {'author': '.author-name', 'posted_display': '.posted-date', 'title': '.resource-title'}.items():
                 node = content.select_one(selector)
                 if text(node): item[field] = text(node); node.decompose()
+            # Legacy evidence: submission rows label their upload time "Uploaded <date>".
+            uploaded = next((n for n in content.select('label') if text(n).startswith('Uploaded')), None)
+            if key == 'submissions' and 'posted_display' not in item and uploaded is not None:
+                item['posted_display'] = text(uploaded); uploaded.decompose()
             previews = []
             for node in content.select('[data-pdf-preview-url-value]'):
                 raw = node['data-pdf-preview-url-value']

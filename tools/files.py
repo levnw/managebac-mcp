@@ -12,6 +12,8 @@ from .file_output import compact_files
 from .output_schemas import array, obj, ID, S, URL, FILE, FILE_ID, FOLDER
 from .retrieval import execute
 from .tasks import read_task
+from .dates import ISO_DATE, shown_date, iso_day, valid_range, within
+from .output_schemas import DATE
 
 NUMERIC = r'^[0-9]{1,20}$'
 ATTACHMENT_KINDS = {'file', 'image', 'preview'}   # links and embedded players are not files
@@ -24,28 +26,36 @@ class Arguments(NoArguments):
     folder_id: str | None = Field(default=None, pattern=NUMERIC,
                                   description='Class layer: a folder ID from this tool; omit for the Files root.')
     recursive: bool = Field(default=False, description='Class layer: also read every descendant folder.')
+    date_from: str = Field(default='', pattern=f'{ISO_DATE}|^$',
+                           description='Optional: file dated on or after YYYY-MM-DD (class files: last modified; task files: posted).')
+    date_to: str = Field(default='', pattern=f'{ISO_DATE}|^$', description='Optional: file dated on or before YYYY-MM-DD.')
 
     @model_validator(mode='after')
     def one_layer(self):
         if self.task_id and (self.folder_id or self.recursive):
             raise ValueError('folder_id and recursive apply to class files, not to a task.')
+        valid_range(self.date_from, self.date_to)
         return self
 
 
 TASK_FILE = obj({'source': {'enum': ['description', 'teacher_resource', 'submission']},
                  'kind': {'enum': sorted(ATTACHMENT_KINDS)}, 'name': S, 'file_id': FILE_ID, 'url': URL,
-                 'size_display': S, 'resource_title': S, 'author': S, 'posted_display': S}, ('source', 'kind'))
+                 'size_display': S, 'resource_title': S, 'author': S, 'posted_display': S, 'posted_date': DATE},
+                ('source', 'kind'))
 
 DEFINITION = definition('get_files', Arguments,
     'Files in layers. CLASS layer (class_id, optional folder_id and recursive): the class Files section, with '
     'files (name, stable file_id, url when it does not expire, native id, size, modified time, uploader, tags, '
     'description) and folders; a folder listed without recursive has not been opened. TASK layer (class_id + '
-    'task_id): the files attached to that task, labelled by source: description (in the instructions), '
-    'teacher_resource, or submission (the student\'s own uploads). Every school-stored file has a stable file_id '
-    'across both layers. File contents are not read or downloaded; expiring download links are omitted, so '
+    'task_id): every file attached to that task, labelled by source: description (in the instructions), '
+    'teacher_resource, or submission (files the student uploaded to that task; these are the student\'s own work). '
+    'Optional date_from/date_to (YYYY-MM-DD) filter by date: last modified for class files, posted date for task '
+    'files; files whose date could not be read are listed in undated, never silently dropped. Every school-stored '
+    'file has a stable file_id across both layers. File contents are not read or downloaded; expiring download links are omitted, so '
     'send the student to the returned url. file_id is ManageBac-derived, not a ChatGPT file ID.',
     {'class_id': ID, 'task_id': ID, 'folder_id': ID, 'url': URL, 'recursive': {'type': 'boolean'},
-     'files': array({'anyOf': [FILE, TASK_FILE]}), 'folders': array(FOLDER)},
+     'files': array({'anyOf': [FILE, TASK_FILE]}), 'folders': array(FOLDER),
+     'undated': array(obj({'name': S, 'file_id': FILE_ID, 'source': S}, ('name',)))},
     required=['class_id', 'url', 'files'], title='Get files', invoking='Reading files…', invoked='Read files',
     limits='class layer: 50 pages, 1000 entries; task layer: one 2 MB task page')
 
@@ -58,6 +68,8 @@ def task_files(task: dict) -> list[dict]:
             if item.get('kind') in ATTACHMENT_KINDS and (source != 'description' or item['kind'] == 'file'):
                 entry = {'source': source, **{k: item[k] for k in ('kind', 'name', 'file_id', 'url', 'size_display') if k in item}}
                 entry.update({k: v for k, v in context.items() if v})
+                posted = shown_date(entry.get('posted_display', ''))
+                if posted: entry['posted_date'] = posted
                 found.append(entry)
     add('description', task.get('media'))
     for resource in task.get('teacher_resources', []):
@@ -112,10 +124,24 @@ async def class_files(client, origin, args) -> dict:
     return result
 
 
+def by_date(result: dict, args, date_of) -> dict:
+    """Apply the date filter; files without a readable date go to undated, never vanish."""
+    if not (args.date_from or args.date_to): return result
+    kept, undated = [], []
+    for item in result['files']:
+        day = date_of(item)
+        if day is None:
+            undated.append({'name': item.get('name', '(unnamed)'), **{k: item[k] for k in ('file_id', 'source') if k in item}})
+        elif within(day, args.date_from, args.date_to):
+            kept.append(item)
+    return {**result, 'files': kept, **({'undated': undated} if undated else {})}
+
+
 async def get_files(client, origin: str, arguments: dict):
     async def run(args):
         if args.task_id:
             task = await read_task(client, origin, args.class_id, args.task_id)
-            return {'class_id': args.class_id, 'task_id': args.task_id, 'url': task['url'], 'files': task_files(task)}
-        return await class_files(client, origin, args)
+            result = {'class_id': args.class_id, 'task_id': args.task_id, 'url': task['url'], 'files': task_files(task)}
+            return by_date(result, args, lambda item: item.get('posted_date'))
+        return by_date(await class_files(client, origin, args), args, lambda item: iso_day(item.get('updated_at')))
     return await execute(Arguments, arguments, run)

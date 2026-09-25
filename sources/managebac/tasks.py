@@ -24,6 +24,12 @@ def metadata(scope) -> dict:
         if value: output[field] = value
     when = scope.select_one('.due-date time[datetime], time.due-date[datetime], .task-due-date time[datetime]')
     if when: output['due_source'] = when['datetime']
+    # Observed (saved task page, 25 Sep): <div class="date-badge"><div class="month">Sep</div>
+    # <div class="day">17</div></div>. Month and day only; the year is not shown.
+    badge = scope.select_one('.date-badge')
+    if badge is not None:
+        month, day = text(badge.select_one('.month')), text(badge.select_one('.day'))
+        if month and day: output['due_month_day'] = f'{month} {day}'
     tags = list(dict.fromkeys(text(n) for n in scope.select('.task-tags .tag, .tags .tag, [data-task-tag]') if text(n)))
     if tags: output['tags'] = tags
     # Preserve source labels/values without guessing a year, timezone or scale.

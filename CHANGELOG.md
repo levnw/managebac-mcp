@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.5.0 — 2026-09-25
+
+### Added
+- Date filters `date_from` / `date_to` (YYYY-MM-DD) on `get_tasks` (list layer,
+  by due date) and `get_files` (class files by last modified; task files by
+  posted date). Items without a readable date are listed in `undated`.
+- `due_date` on tasks, read from the task's date badge (month and day; the year
+  is the one closest to today, since ManageBac does not show it). Verified on a
+  saved real task page: badge "Sep 17" matches "Thursday at 11:00 PM".
+- `posted_date` on task files, from "Posted … on Sep 16, 2026" for teacher
+  resources and "Uploaded …" for the student's own submissions.
+- `get_files`' task layer now states plainly that submissions are the student's
+  own uploaded files.
+
+### Verified
+- 230 automated tests. Not yet verified live: that class task-list rows carry
+  the same date badge as the task page (developer reports will show it).
+
 ## 2.4.0 — 2026-09-25
 
 ### Changed (breaking)

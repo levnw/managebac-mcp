@@ -29,11 +29,16 @@ Tools work in layers: list first, then open what you picked.
 | Tool | Layer | Input | Returns |
 |---|---|---|---|
 | `get_classes` | | none | Enrolled classes (all list pages, total verified) |
-| `get_tasks` | list | `class_ids` (1–10), optional `title`, `tag`, `status` | Task summaries, each with its class |
+| `get_tasks` | list | `class_ids` (1–10), optional `title`, `tag`, `status`, `date_from`, `date_to` | Task summaries with `due_date`, each with its class |
 | | detail | `open`: up to 10 `{class_id, task_id}` | Markdown instructions, media, tables, teacher resources, submission, assessment, feedback; per-task errors |
-| `get_files` | class | `class_id`, optional `folder_id`, `recursive` | The class Files section: files and folders |
-| | task | `class_id`, `task_id` | Files attached to one task, labelled `description`, `teacher_resource` or `submission` |
+| `get_files` | class | `class_id`, optional `folder_id`, `recursive`, `date_from`, `date_to` | The class Files section: files and folders |
+| | task | `class_id`, `task_id`, optional `date_from`, `date_to` | Every file attached to one task, labelled `description`, `teacher_resource` or `submission` (your own uploads), with `posted_date` |
 | `get_timetable` | | none | The displayed week (classes, merged periods, Homeroom-style notes) |
+
+Dates: ManageBac shows a task's due month and day without a year, so `due_date`
+uses the year closest to today. Files use their real dates (last modified for
+class files, posted or uploaded for task files). With a date filter, anything
+without a readable date is returned in `undated`, never silently dropped.
 
 A deeper files layer that returns a file's contents does not exist yet.
 

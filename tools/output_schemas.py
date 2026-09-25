@@ -22,7 +22,8 @@ CELL = obj({'text': S, 'header': {'type': 'boolean'}, 'rowspan': {'type': 'integ
 TABLE = obj({'id': S, 'rows': array(array(CELL)), 'caption': S}, ('id', 'rows'))
 CONTENT = {'text': S, 'media': array(MEDIA), 'tables': array(TABLE)}
 FIELDS = {'type': 'object', 'additionalProperties': S}
-TASK_FIELDS = {'id': ID, 'title': S, 'url': URL, 'due_display': S, 'due_source': S,
+DATE = {'type': 'string', 'format': 'date'}
+TASK_FIELDS = {'id': ID, 'title': S, 'url': URL, 'due_display': S, 'due_source': S, 'due_date': DATE,
                'status': S, 'assessment_type': S, 'tags': array(S), 'fields': FIELDS}
 TASK_IN_CLASS = obj({**TASK_FIELDS, 'class_id': ID}, ('id', 'class_id', 'title', 'url'))
 SLOT = obj({'day_display': S, 'period': S, 'period_end': S, 'class_name': S, 'class_id': ID,
@@ -36,7 +37,7 @@ RESOURCE = obj({'author': S, 'posted_display': S, 'title': S, **CONTENT,
 SUBMISSION = obj({'box': {'enum': ['present', 'not_detected']},
                   'upload_control': {'enum': ['enabled', 'disabled']},
                   'files': array(RESOURCE), 'details': CONTENT_OBJECT}, ('box',))
-TASK_DETAIL = obj({'id': ID, 'class_id': ID, 'title': S, 'url': URL, 'due': S, 'status': S,
+TASK_DETAIL = obj({'id': ID, 'class_id': ID, 'title': S, 'url': URL, 'due': S, 'due_date': DATE, 'status': S,
                    'assessment_type': S, 'tags': array(S), 'fields': FIELDS,
                    'description': {'type': 'string', 'description': 'Faithful compact Markdown; media/table markers refer to the arrays alongside this text.'},
                    'media': array(MEDIA), 'tables': array(TABLE),
