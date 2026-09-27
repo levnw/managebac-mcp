@@ -29,15 +29,9 @@ class ClassResult(BaseModel):
 
 
 DEFINITION = definition('get_classes', Arguments,
-    'List all enrolled classes for the signed-in student in one JSON response: '
-    'classes contains IDs, full displayed names and links only. Takes no arguments. '
-    'Reads every enrolled-class list page internally and validates the total before returning. '
-    'Does not retrieve tasks, units, teachers, journals or files, browse other classes, or log in. '
-    'On failure returns an error instead of an incomplete class list. Never infer no classes from an error.',
+    "List the student's classes with their IDs and names. Use the IDs with the other tools.",
     {'classes': array(CLASS)}, title='Get classes',
-    invoking='Reading your classes…', invoked='Read your classes',
-    limits=f'{MAX_PAGES} pages, {MAX_CLASSES} classes', max_bytes=MAX_RESULT_BYTES,
-    timeout=TOTAL_TIMEOUT_SECONDS)
+    invoking='Reading your classes…', invoked='Read your classes',)
 
 
 async def get_classes(client, origin: str, arguments: dict) -> dict:

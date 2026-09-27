@@ -27,14 +27,14 @@ class TaskRef(NoArguments):
 
 class Arguments(NoArguments):
     class_ids: list[str] = Field(default=[], max_length=MAX_CLASSES,
-                                 description='List layer: class IDs from get_classes (1–10).')
-    title: str = Field(default='', max_length=100, description='List filter: case-insensitive substring of the task title.')
-    tag: str = Field(default='', max_length=100, description='List filter: exact tag or assessment type, case-insensitive.')
-    status: str = Field(default='', max_length=50, description='List filter: exact status as shown, e.g. "Pending".')
-    date_from: str = Field(default='', pattern=f'{ISO_DATE}|^$', description='List filter: due on or after this date (YYYY-MM-DD).')
-    date_to: str = Field(default='', pattern=f'{ISO_DATE}|^$', description='List filter: due on or before this date (YYYY-MM-DD).')
+                                 description='Class IDs from get_classes (up to 10) to list tasks from.')
+    title: str = Field(default='', max_length=100, description='Only tasks whose title contains this text.')
+    tag: str = Field(default='', max_length=100, description='Only tasks with this tag or assessment type, e.g. "Formative".')
+    status: str = Field(default='', max_length=50, description='Only tasks with this status as ManageBac shows it, e.g. "Pending".')
+    date_from: str = Field(default='', pattern=f'{ISO_DATE}|^$', description='Only tasks due on or after this day (YYYY-MM-DD).')
+    date_to: str = Field(default='', pattern=f'{ISO_DATE}|^$', description='Only tasks due on or before this day (YYYY-MM-DD).')
     open: list[TaskRef] = Field(default=[], max_length=MAX_OPEN,
-                                description='Detail layer: up to 10 {class_id, task_id} pairs taken from a task list.')
+                                description='Up to 10 tasks to open, as {class_id, task_id} from a task list.')
 
     @model_validator(mode='after')
     def one_layer(self):
@@ -55,24 +55,16 @@ TASK_ERROR = obj({'class_id': ID, 'task_id': ID, 'error': obj({'code': S, 'messa
                  ('class_id', 'task_id', 'error'))
 
 DEFINITION = definition('get_tasks', Arguments,
-    'Tasks in two layers. LIST: pass class_ids (1–10) and optional filters (title substring, exact tag, exact '
-    'status, due date_from/date_to as YYYY-MM-DD; all apply together) to get IDs, titles, links, due_date, the '
-    'due text, status, assessment type and tags, each with its class_id; classes gives each class task-list url. '
-    'ManageBac shows a due month and day without a year, so due_date uses the year closest to today. With a date '
-    'filter, tasks whose due date could not be read are listed in undated, never silently dropped. Every selected class is '
-    'read completely or the call fails. DETAIL: pass open with up to 10 {class_id, task_id} pairs from a list to '
-    'get each task\'s compact Markdown instructions, media and tables, teacher_resources, submission evidence and '
-    'files, assessment and feedback. A task that cannot be read appears with its own error; signed-out or '
-    'rate-limited sessions fail the whole call. The due text (e.g. "Friday at 6:00 PM") is kept as shown. '
-    'File and image references are not read; school-stored files carry a '
-    'stable file_id and expiring download links are omitted (see get_files). submission.box=not_detected does not '
-    'mean closed; upload_control describes a visible control only. Omitted sections are not evidence of absence.',
+    "The student's tasks (assignments). Two ways to call it:\n"
+    '- class_ids: list the tasks in up to 10 classes, with due date, status and tags. Optional filters narrow the list.\n'
+    '- open: full details of up to 10 tasks: instructions, teacher resources, the student\'s submission, '
+    'assessment and feedback.\n'
+    'ManageBac shows due dates without a year; due_date uses the nearest year.',
     {'classes': array(obj({'class_id': ID, 'url': {**URL, 'description': 'The class task list in ManageBac.'}},
                           ('class_id', 'url'))),
      'tasks': array({'anyOf': [TASK_IN_CLASS, TASK_DETAIL, TASK_ERROR]}),
      'undated': array(obj({'class_id': ID, 'id': ID, 'title': S}, ('class_id', 'id', 'title')))},
-    required=['tasks'], title='Get tasks', invoking='Reading tasks…', invoked='Read tasks',
-    limits='list: 10 classes, 50 pages per class, 1000 tasks; detail: 10 tasks, one 2 MB page each')
+    required=['tasks'], title='Get tasks', invoking='Reading tasks…', invoked='Read tasks')
 
 
 def matches(task, args) -> bool:

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.8.1 — 2026-09-27
+
+### Changed
+- **Plain, short tool descriptions.** Each says what the tool does and the
+  ways to call it (get_files: 2,688 → 444 characters; all four: 5,218 →
+  1,050). The per-description "Limits: … JSON … seconds" and safety
+  boilerplate are gone; argument details are in each argument's own
+  description; server instructions are cut to five sentences.
+- What to do about a problem is now in the result that reports it, where
+  ChatGPT reads it at the right moment: `attach_instead` messages (2.7.1),
+  `incomplete` parts, and a new `note` on truncated file text.
+
 ## 2.8.0 — 2026-09-27
 
 ### Added

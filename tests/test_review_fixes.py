@@ -35,13 +35,14 @@ async def test_all_new_tools_return_visible_mcp_errors(name,args,path,html,key):
         assert response.content[0].text == 'access_denied: This page is not available to your account.'
 
 
-def test_model_orientation_and_specific_limits():
+def test_descriptions_are_short_and_plain():
     server = create_server(lambda *args: None)
-    for name in TOOLS: assert name in server.instructions
-    assert 'node tree' not in server.instructions
-    assert '1 page,' in TOOLS['get_timetable'].DEFINITION.description
-    assert '50 pages' not in TOOLS['get_timetable'].DEFINITION.description
-    assert 'per class' in TOOLS['get_tasks'].DEFINITION.description
+    assert 'get_classes' in server.instructions and len(server.instructions) < 700
+    for name, module in TOOLS.items():
+        description = module.DEFINITION.description
+        assert len(description) < 600, name           # what it does and when; details live elsewhere
+        assert 'layer' not in description.lower() and 'Limits:' not in description
+    assert 'other weeks are not available' in TOOLS['get_timetable'].DEFINITION.description
 
 
 @pytest.mark.parametrize('name,args,path,html,key', CASES)

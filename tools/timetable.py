@@ -5,10 +5,10 @@ from .retrieval import execute
 from .output_schemas import array, SLOT, NOTE
 
 DEFINITION = definition('get_timetable', NoArguments,
-    'Read the currently displayed timetable. Day and time labels remain exactly as displayed; '
-    'do not infer a year or timezone. Does not claim to retrieve a requested historical or future week.',
+    "The student's timetable for the week ManageBac is currently showing (other weeks are not available). "
+    'Days and times are exactly as ManageBac shows them.',
     {'url': STRING, 'days': {'type': 'array', 'items': STRING}, 'slots': array(SLOT), 'notes': array(NOTE)},
-    required=['url', 'days', 'slots'], limits='1 page, 1000 class slots and notes combined',
+    required=['url', 'days', 'slots'],
     title='Get timetable', invoking='Reading your timetable…', invoked='Read your timetable')
 
 
