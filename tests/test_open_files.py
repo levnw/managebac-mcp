@@ -206,3 +206,20 @@ async def test_rejected_arguments_name_the_field_not_the_value():
     result = await run({'class_id': '10', 'task_id': '101', 'open': ['Brain.pptx']}, school())
     assert result['error']['code'] == 'invalid_arguments' and 'open takes distinct file_ids' in result['error']['message']
     assert 'Brain.pptx' not in result['error']['message']
+
+
+async def test_a_file_over_the_limit_asks_the_student_to_attach_it():
+    ids = await ids_for(school())
+    big = httpx.Response(200, content=b'x', headers={'content-type': 'application/pdf', 'content-length': '23400000'})
+    result = await run({'class_id': '10', 'task_id': '101', 'open': [ids['Lab instructions.pdf']]},
+                       school({'/uploads/asset/file/501/lab.pdf': big}))
+    [opened] = result['files']
+    assert opened['error']['code'] == 'file_too_large' and opened['attach_instead'] is True
+    assert opened['download_from'] == ORIGIN + TASK
+    assert '23.4 MB' in opened['error']['message'] and 'attach it to this chat' in opened['error']['message']
+    validate(result, TOOLS['get_files'].DEFINITION.outputSchema)
+
+
+async def test_errors_the_student_cannot_fix_by_attaching_do_not_ask_for_it():
+    result = await run({'class_id': '10', 'task_id': '101', 'open': ['f_0000000000000000']}, school())
+    assert 'attach_instead' not in result['files'][0]

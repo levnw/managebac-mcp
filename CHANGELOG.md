@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.7.1 — 2026-09-27
+
+### Changed
+- A file this tool cannot read (over 10 MB, no text layer such as an image or
+  scanned PDF, or unconvertible) now carries `attach_instead: true` and
+  `download_from` (the task or folder page), and its error message tells
+  ChatGPT the next step: say why in one sentence, then ask the student to
+  download the file and attach it to the chat, where ChatGPT reads it directly.
+  Previously ChatGPT only said the file could not be opened. The same rule is
+  in the tool description and server instructions. Oversized files state
+  their size (e.g. "23.4 MB, over the 10 MB limit") when ManageBac reports it.
+
 ## 2.7.0 — 2026-09-27
 
 ### Changed

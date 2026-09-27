@@ -52,6 +52,9 @@ links were tried and are not read by ChatGPT (see CHANGELOG 2.7.0).
 
 - Images and scanned PDFs have no text layer: they return `no_text_layer`, and
   the model is told not to guess their contents. No OCR or image model is used.
+- Files the tool cannot read (over 10 MB, no text layer, unconvertible) carry
+  `attach_instead` and `download_from`; the error tells ChatGPT to say why and
+  ask the student to download the file and attach it to the chat.
 - Text from all opened files shares 180 KB. Short files are kept whole; long
   ones are cut and marked `truncated: true` with their full `text_chars`.
 - Conversion runs in-process, one file at a time, off the event loop. Nothing is

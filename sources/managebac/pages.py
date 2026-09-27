@@ -203,12 +203,12 @@ async def fetch_file(client, origin: str, url: str) -> tuple[bytes, str]:
             content_type = response.headers.get('content-type', '').split(';')[0].strip().lower()
             declared = response.headers.get('content-length', '')
             if declared.isdecimal() and int(declared) > MAX_FILE_BYTES:
-                raise FlowError('file_too_large', 'The file is larger than 10 MB; open it in ManageBac instead.')
+                raise FlowError('file_too_large', f'The file is {int(declared) / 1_000_000:.1f} MB, over the 10 MB limit.')
             parts, size = [], 0
             async for part in response.aiter_bytes():
                 size += len(part)
                 if size > MAX_FILE_BYTES:
-                    raise FlowError('file_too_large', 'The file is larger than 10 MB; open it in ManageBac instead.')
+                    raise FlowError('file_too_large', 'The file is over the 10 MB limit.')
                 parts.append(part)
         finally:
             await response.aclose()
