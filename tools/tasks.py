@@ -1,4 +1,5 @@
 """Tasks in two layers: list 1–10 classes (with filters), or open up to 10 chosen tasks."""
+import asyncio
 import httpx
 from pydantic import Field, model_validator
 from sources.managebac.collections import collect, MAX_RECORDS
@@ -15,6 +16,7 @@ from .dates import ISO_DATE, month_day, valid_range, within
 MAX_CLASSES = MAX_OPEN = 10
 NUMERIC = r'^[0-9]{1,20}$'
 # These end the whole call: retrying other tasks cannot succeed.
+PARALLEL_PAGES = 4   # task pages opened at once in the detail layer
 FATAL = {'session_expired', 'rate_limited', 'unsafe_destination'}
 
 
@@ -97,15 +99,16 @@ async def read_task(client, origin: str, class_id: str, task_id: str) -> dict:
 async def get_tasks(client, origin: str, arguments: dict):
     async def run(args):
         if args.open:
-            details = []
-            for ref in args.open:
-                try:
-                    details.append(await read_task(client, origin, ref.class_id, ref.task_id))
-                except FlowError as exc:
-                    if exc.code in FATAL: raise
-                    details.append({'class_id': ref.class_id, 'task_id': ref.task_id,
-                                    'error': {'code': exc.code, 'message': exc.message}})
-            return {'tasks': details}
+            gate = asyncio.Semaphore(PARALLEL_PAGES)
+            async def one(ref):
+                async with gate:
+                    try:
+                        return await read_task(client, origin, ref.class_id, ref.task_id)
+                    except FlowError as exc:
+                        if exc.code in FATAL: raise
+                        return {'class_id': ref.class_id, 'task_id': ref.task_id,
+                                'error': {'code': exc.code, 'message': exc.message}}
+            return {'tasks': list(await asyncio.gather(*(one(ref) for ref in args.open)))}
         classes, found, undated = [], [], []
         dated = bool(args.date_from or args.date_to)
         for class_id in args.class_ids:

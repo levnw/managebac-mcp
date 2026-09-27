@@ -31,7 +31,8 @@ Tools work in layers: list first, then open what you picked.
 | `get_classes` | | none | Enrolled classes (all list pages, total verified) |
 | `get_tasks` | list | `class_ids` (1–10), optional `title`, `tag`, `status`, `date_from`, `date_to` | Task summaries with `due_date`, each with its class |
 | | detail | `open`: up to 10 `{class_id, task_id}` | Markdown instructions, media, tables, teacher resources, submission, assessment, feedback; per-task errors |
-| `get_files` | class | `class_id`, optional `folder_id`, `recursive`, `date_from`, `date_to` | The class Files section: files and folders |
+| `get_files` | everywhere | none; optional `class_ids`, `date_from`, `date_to` | Every file in every class and task in one call, grouped by class and task; unread parts in `incomplete` |
+| | class | `class_id`, optional `folder_id`, `recursive`, `date_from`, `date_to` | The class Files section: files and folders |
 | | task | `class_id`, `task_id`, optional `date_from`, `date_to` | Every file attached to one task, labelled `description`, `teacher_resource` or `submission` (your own uploads), with `posted_date` |
 | | open | `class_id`, optional `task_id` or `folder_id`, `open`: up to 5 `file_id`s | Each file's contents as text (Markdown), or an error saying why there is none |
 | `get_timetable` | | none | The displayed week (classes, merged periods, Homeroom-style notes) |

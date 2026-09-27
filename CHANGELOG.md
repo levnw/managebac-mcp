@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.8.0 — 2026-09-27
+
+### Added
+- **`get_files` everywhere layer.** Omit `class_id` (optionally pass
+  `class_ids`, `date_from`, `date_to`) to list every file in one call: each
+  class's Files section (all folders) and every task's attachments
+  (description, teacher resource, the student's own submissions), grouped by
+  class and task, with the same `file_id`s `open` uses. Live, "list all my
+  files" took ChatGPT about 57 calls and 70 s (10 of them repeats); it is now
+  one call.
+- Pages are read 4 at a time, each once. After 40 s no new page starts;
+  anything not read (or failing, e.g. one broken task page) is listed in
+  `incomplete`, and ChatGPT is told not to call the list complete. A
+  signed-out session still fails the whole call.
+
+### Changed
+- `get_tasks` detail layer opens its (up to 10) tasks 4 at a time instead of
+  one after another. Output order is unchanged.
+
 ## 2.7.1 — 2026-09-27
 
 ### Changed
