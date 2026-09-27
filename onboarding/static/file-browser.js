@@ -14,6 +14,7 @@
     up.disabled = value || !loaded || !current || !folders.has(current);
     recursive.disabled = value;
     for (const button of folderList.querySelectorAll('button')) button.disabled = value;
+    for (const button of fileList.querySelectorAll('button')) button.disabled = value;
   }
   function openFolder(id) {
     if (disabled) return;
@@ -61,7 +62,16 @@
       else if (file.size_display) parts.push(file.size_display);
       if (file.uploaded_by) parts.push(`by ${file.uploaded_by}`);
       info.textContent = parts.length ? ` — ${parts.join(' · ')}` : '';
-      li.append(info); fileList.append(li);
+      li.append(info);
+      if (file.file_id) {
+        const open = document.createElement('button');
+        open.textContent = 'Read text';
+        open.onclick = () => inspectTool('get_files', {
+          ...(file.folder_id ? {folder_id:file.folder_id} : {}), open:[file.file_id]
+        });
+        li.append(open);
+      }
+      fileList.append(li);
     }
     setBusy(disabled);
   }

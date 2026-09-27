@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.7.0 — 2026-09-27
+
+### Changed
+- **`get_files open` returns each file's text.** Chosen files are downloaded
+  with the student's session and converted with markitdown (PDF, Word,
+  PowerPoint with slide numbers, Excel/CSV as tables, HTML, plain text). The
+  text is in the tool result, the one place ChatGPT's model reliably reads.
+  Rows are `status: read` with `text`, or `status: error` with a reason.
+- Images and scanned PDFs return `no_text_layer` instead of guessed content;
+  damaged files return `conversion_failed`; unknown formats
+  `unsupported_format`.
+- All opened files share 180 KB of text: short files whole, long ones cut and
+  marked `truncated` with their full `text_chars`. No new conversion starts
+  after 30 s (`time_budget`), keeping a call inside the 60 s tool limit.
+
+### Removed (tried, not read by ChatGPT)
+- The 2.6 files card (`window.openai.uploadFile`): removed when ChatGPT did not
+  read the added files; the stale card may still be cached until the connector
+  is refreshed.
+- Temporary `resource_link` download URLs (`tools/file_delivery.py`) and the
+  live file index as MCP resources (`tools/file_index.py`, `resource_uri`).
+  Live test 26–27 Sep: ChatGPT neither listed nor read the resources and could
+  not open the links. Both remain in Git history (commits b90276c, 362f327).
+
+### Dependencies
+- `markitdown[pdf,docx,pptx,xlsx]` 0.1.8 (MIT) and its pinned dependencies.
+
 ## 2.6.2 — 2026-09-26
 
 ### Fixed (from live evidence, 25 Sep 19:22 UTC)

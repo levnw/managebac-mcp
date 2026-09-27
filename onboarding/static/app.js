@@ -211,7 +211,7 @@ async function inspectTool(name, options = {}) {
     el('inspect-download').disabled = false;
     el('inspect-status').textContent = payload.error ? payload.error.message : 'Response ready. Review or download the exact JSON below.';
     if (view === 'get_tasks') choices('inspect-task', payload.tasks || [], 'Choose a task');
-    if (view === 'get_files') window.classFileBrowser?.render(payload);
+    if (view === 'get_files' && !options.open) window.classFileBrowser?.render(payload);
     if (payload.error?.code === 'session_expired') {
       choices('inspect-class', [], 'Sign in again, then get classes');
       choices('inspect-task', [], 'Get tasks first');

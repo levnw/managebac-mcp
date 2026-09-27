@@ -49,3 +49,14 @@ test('unsafe links, failed requests and changing classes cannot leave stale list
   view.reset();
   assert.equal(elements.get('files-root').disabled,true);
 });
+test('file-text requests retain the scope from recursive listings', () => {
+  const {view,elements,calls} = browser();
+  view.render({files:[{name:'Lesson.pdf',file_id:'f_0123456789abcdef',folder_id:'7'}],
+    folders:[],recursive:true});
+  const button = elements.get('files-items').children[0].children.at(-1);
+  assert.equal(button.textContent,'Read text');
+  button.onclick();
+  assert.equal(calls[0].name,'get_files');
+  assert.equal(calls[0].args.folder_id,'7');
+  assert.equal(calls[0].args.open[0],'f_0123456789abcdef');
+});

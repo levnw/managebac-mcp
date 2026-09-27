@@ -112,4 +112,5 @@ def layout_evidence(**fields):
     report = current.get()
     if report is None: return
     for key, values in fields.items():
-        report.layout[key] = [str(v)[:300 if key == "interface_text" else 80] for v in list(values)[:12]]
+        limit = 30 if key.startswith('tile_') else 12
+        report.layout[key] = [str(v)[:300 if key == "interface_text" else 80] for v in list(values)[:limit]]

@@ -2,6 +2,7 @@
 import re
 from urllib.parse import urljoin, urlsplit
 from onboarding.transport import FlowError, school_origin
+from diagnostics import layout_evidence
 from .pages import document, listing_url, next_page, text
 
 ROUTE = '/student/classes/my'
@@ -31,6 +32,15 @@ def parse_page(html: str, origin: str, current: str | None = None):
         if not m or school_origin(link) != origin or p.query or p.fragment or not name or len(name) > 300:
             raise FlowError('invalid_class', 'A class record could not be validated.')
         rows.append({'id': m[1], 'name': name, 'url': origin + p.path})
+    if tiles:
+        # Developer evidence (one tile) to locate teacher names before extracting them.
+        first = tiles[0]
+        layout_evidence(
+            tile_text=[f"{'.'.join([n.name, *n.get('class', [])])}: {own}" for n in first.select('*')
+                       if (own := ' '.join(t.strip() for t in n.find_all(string=True, recursive=False) if t.strip()))],
+            tile_attributes=[f"{'.'.join([n.name, *n.get('class', [])])} {attr}={n[attr]}" for n in first.select('*')
+                             for attr in ('title', 'alt', 'aria-label', 'data-bs-title', 'data-original-title')
+                             if n.get(attr)])
     if not rows and totals[0] != 0:
         raise FlowError('layout_changed', 'ManageBac reports classes but no class records could be extracted.')
     return rows, totals[0], next_page(page, origin, ROUTE, current or origin + ROUTE)

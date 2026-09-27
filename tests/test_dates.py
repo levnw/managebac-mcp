@@ -94,7 +94,7 @@ async def test_task_files_have_posted_dates_including_submissions():
     mine = await call('get_files', {'class_id': '10', 'task_id': '101', 'date_from': '2026-09-15'}, {LIST + '/101': html})
     # The upload and the teacher-feedback preview attached to it (kind preview).
     assert [(f['source'], f['kind']) for f in mine['files']] == [('submission', 'file'), ('submission', 'preview')]
-    assert [u['name'] for u in mine['undated']] == ['Lab instructions.pdf']   # instructions file has no date
+    assert [u['name'] for u in mine['undated']] == ['A beaker warming over a flame', 'Lab instructions.pdf']
     validate(mine, TOOLS['get_files'].DEFINITION.outputSchema)
 
 

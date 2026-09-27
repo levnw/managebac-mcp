@@ -76,10 +76,7 @@ class ToolSession:
         with capture(name, self.developer_mode) as diagnostic:
             result = await self._run(name, arguments)
         if diagnostic:
-            # Reports keep what the model saw; widget-only bytes are summarised, not stored.
-            saved = {k: v for k, v in result.items() if k != '_meta'}
-            if '_meta' in result:
-                saved['_meta_omitted'] = {'files': len(result['_meta'].get('managebac/files', []))}
+            saved = result
             report = diagnostic.export()
             target = report_target(arguments)
             if target: report['target'] = target

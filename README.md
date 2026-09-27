@@ -33,7 +33,7 @@ Tools work in layers: list first, then open what you picked.
 | | detail | `open`: up to 10 `{class_id, task_id}` | Markdown instructions, media, tables, teacher resources, submission, assessment, feedback; per-task errors |
 | `get_files` | class | `class_id`, optional `folder_id`, `recursive`, `date_from`, `date_to` | The class Files section: files and folders |
 | | task | `class_id`, `task_id`, optional `date_from`, `date_to` | Every file attached to one task, labelled `description`, `teacher_resource` or `submission` (your own uploads), with `posted_date` |
-| | open | `class_id` + `task_id` or `folder_id`, `open`: up to 5 `file_id`s | Downloads those files for the **files card**, whose *Add to chat* button hands each one to ChatGPT's own file upload |
+| | open | `class_id`, optional `task_id` or `folder_id`, `open`: up to 5 `file_id`s | Each file's contents as text (Markdown), or an error saying why there is none |
 | `get_timetable` | | none | The displayed week (classes, merged periods, Homeroom-style notes) |
 
 Dates: ManageBac shows a task's due month and day without a year, so `due_date`
@@ -41,17 +41,27 @@ uses the year closest to today. Files use their real dates (last modified for
 class files, posted or uploaded for task files). With a date filter, anything
 without a readable date is returned in `undated`, never silently dropped.
 
-### Adding files to the chat
+### Reading files
 
-`get_files` shows a files card in ChatGPT (MCP Apps resource
-`ui://managebac/files-v1.html`). *Add to chat* downloads the file through the
-signed-in tool call (`open` layer) and passes it, unconverted, to
-`window.openai.uploadFile`, so it becomes an ordinary ChatGPT file. The bytes
-travel only in widget-only `_meta`; the model sees name, type, size and status.
-Downloads are resolved against the task or folder page the student named, are
-HTTPS-only to ManageBac or its storage (S3, CloudFront), strip school cookies
-from any other host, and are capped at 10 MB per file and 15 MB per call.
-Developer reports never store file bytes.
+`get_files open` downloads the chosen files with the student's session and
+converts each one to text with [markitdown](https://github.com/microsoft/markitdown):
+PDF, Word, PowerPoint (slide by slide), Excel and CSV (as tables), HTML and
+plain text. The text is returned in the tool result, because that is what
+ChatGPT's model reliably sees; tool-returned images, MCP resources and download
+links were tried and are not read by ChatGPT (see CHANGELOG 2.7.0).
+
+- Images and scanned PDFs have no text layer: they return `no_text_layer`, and
+  the model is told not to guess their contents. No OCR or image model is used.
+- Text from all opened files shares 180 KB. Short files are kept whole; long
+  ones are cut and marked `truncated: true` with their full `text_chars`.
+- Conversion runs in-process, one file at a time, off the event loop. Nothing is
+  stored or sent anywhere else. No new conversion starts after 30 seconds, so a
+  call stays inside the 60-second tool limit (`time_budget` for the rest).
+- Downloads are resolved against the task or folder page the student named, are
+  HTTPS-only to ManageBac or its storage (S3, CloudFront), strip school cookies
+  from any other host, and are capped at 10 MB per file and 15 MB per call.
+- Developer reports record the result, including extracted text, never the bytes.
+  **Read text** next to a class file in the local workbench shows the same result.
 
 ### Retired tools
 
@@ -70,7 +80,8 @@ start from fresh evidence of the current pages, not from the retired code.
 
 Every tool is read-only, declares strict input and output schemas, and shares
 the same limits (see each tool's description). School-stored files carry a
-stable opaque `file_id`; expiring signed download links are never returned.
+stable opaque `file_id`; expiring upstream signed links are omitted from
+listings. Opening a file issues a new short-lived link from our host.
 
 ## Guarantees
 
@@ -112,6 +123,7 @@ The public test connector (OAuth, encrypted account state, Cloudflare tunnel)
 lives outside this repository. It imports an approved copy of `diagnostics.py`,
 `onboarding/{transport,auth}.py`, `sources/` and `tools/`, and calls
 `create_server(call_tool)` with an account-scoped `call_tool(name, arguments)`.
+Changes in Working reach the public connector only through an Approved snapshot.
 
 ## Documentation
 

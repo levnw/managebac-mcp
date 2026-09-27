@@ -52,7 +52,7 @@ async def test_task_layer_lists_attachments_by_source():
     for item in result['files']:
         by_source.setdefault(item['source'], []).append(item)
         assert item['kind'] in ('file', 'image', 'preview')
-    assert [f['name'] for f in by_source['description']] == ['Lab instructions.pdf']
+    assert [f['name'] for f in by_source['description']] == ['A beaker warming over a flame', 'Lab instructions.pdf']
     assert by_source['teacher_resource'][0]['resource_title'] == 'Worksheet'
     assert by_source['submission'][0]['name'] == 'My answer.pdf'
     assert all(f['file_id'].startswith('f_') for f in result['files'])
