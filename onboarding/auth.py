@@ -17,8 +17,11 @@ class Authenticator(Transport):
         csrf = page.select_one('meta[name="csrf-token"]')
         if not form or not csrf:
             raise FlowError("unsupported_signin", "This school's sign-in form needs review, possibly for SSO or two-factor authentication.")
-        response = await client.post(origin + "/sessions", data={"login": email,
-            "password": password, "authenticity_token": csrf.get("content", ""), "commit": "Sign in"})
+        data = {"login": email, "password": password, "authenticity_token": csrf.get("content", ""), "commit": "Sign in"}
+        # ManageBac's own "Remember me for 30 days" box; without it idle sessions end within hours.
+        if form.select_one('input[type="checkbox"][name="remember_me"]'):
+            data["remember_me"] = "1"
+        response = await client.post(origin + "/sessions", data=data)
         self.check_rejection(response)
         # Do not follow the form's potentially academic landing page. Use the
         # observed account profile solely to establish an authenticated session.

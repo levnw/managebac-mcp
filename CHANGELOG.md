@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.8.2 — 2026-09-27
+
+### Fixed
+- **Sessions no longer end after a few idle hours.** ManageBac's sign-in
+  form has "Remember me for 30 days"; we never ticked it, so ManageBac gave a
+  short session that expired after idling (live: 3 h 46 m idle on 27 Sep, and
+  7.5 h on 25 Sep). Sign-in now sends `remember_me=1` when the school's form
+  offers the box (the test host's sign-in and the local workbench). Still one
+  password POST, never retried. Takes effect at the next sign-in.
+- The host logs, at sign-in, whether the box was sent and the names and
+  lifetimes of lasting cookies (never values), to confirm the 30-day cookie.
+
 ## 2.8.1 — 2026-09-27
 
 ### Changed
